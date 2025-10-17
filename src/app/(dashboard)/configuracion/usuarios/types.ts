@@ -27,3 +27,4 @@ export interface EditUserData extends CreateUserData {
   fechaCreacion: string
 }
 
+

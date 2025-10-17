@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+
 import { 
   Box, 
   Typography, 
@@ -44,10 +45,8 @@ import {
   CreditCard as CreditCardIcon,
   History as HistoryIcon,
   Phone as PhoneIcon,
-  Close as CloseIcon,
   AttachFile as AttachFileIcon,
   Save as SaveIcon,
-  Cancel as CancelIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   Payment as PaymentIcon
@@ -260,6 +259,7 @@ export default function ClientesPage() {
         id: Date.now().toString(),
         ...formularioCliente as Cliente
       }
+
       setClientes(prev => [...prev, nuevoCliente])
     } else if (tipoDialogo === 'editar' && clienteSeleccionado) {
       setClientes(prev => prev.map(cliente => 
@@ -268,6 +268,7 @@ export default function ClientesPage() {
           : cliente
       ))
     }
+
     cerrarDialogo()
   }
 

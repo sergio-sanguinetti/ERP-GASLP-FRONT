@@ -2,8 +2,6 @@
 
 import React, { useState } from 'react'
 
-import Head from 'next/head'
-
 import {
   Box,
   Typography,
@@ -12,8 +10,6 @@ import {
   Grid,
   Button,
   Chip,
-  Alert,
-  AlertTitle,
   Divider,
   Paper,
   Table,
@@ -35,28 +31,8 @@ import {
   MenuItem,
   Switch,
   FormControlLabel,
-  LinearProgress,
-  Avatar,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  ListItemAvatar,
-  Badge,
-  Tabs,
-  Tab,
   InputAdornment,
   Checkbox,
-  RadioGroup,
-  Radio,
-  FormLabel,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent,
   DialogContentText
 } from '@mui/material'
 import {
@@ -65,22 +41,15 @@ import {
   Delete as DeleteIcon,
   Visibility as VisibilityIcon,
   Save as SaveIcon,
-  Cancel as CancelIcon,
   Search as SearchIcon,
-  FilterList as FilterListIcon,
   Payment as PaymentIcon,
   CreditCard as CreditCardIcon,
   AccountBalance as AccountBalanceIcon,
   Receipt as ReceiptIcon,
   AttachMoney as AttachMoneyIcon,
-  CheckCircle as CheckCircleIcon,
   Warning as WarningIcon,
-  Info as InfoIcon,
-  ExpandMore as ExpandMoreIcon,
   Refresh as RefreshIcon,
-  Download as DownloadIcon,
-  Print as PrintIcon,
-  Share as ShareIcon
+  Download as DownloadIcon
 } from '@mui/icons-material'
 
 // Tipos de datos
@@ -251,8 +220,6 @@ export default function ConfiguracionFormasPagoPage() {
     tipo: '',
     activa: ''
   })
-
-  const [tabValue, setTabValue] = useState(0)
 
   const abrirDialogo = (tipo: 'crear' | 'editar' | 'eliminar' | 'ver', formaPago?: FormaPago) => {
     setTipoDialogo(tipo)
@@ -1003,10 +970,10 @@ export default function ConfiguracionFormasPagoPage() {
             </Box>
           </DialogTitle>
           <DialogContent>
-            <DialogContentText>
-              ¿Estás seguro de que deseas eliminar la forma de pago "{formaPagoSeleccionada?.nombre}"? Esta acción no se
-              puede deshacer.
-            </DialogContentText>
+             <DialogContentText>
+               ¿Estás seguro de que deseas eliminar la forma de pago &quot;{formaPagoSeleccionada?.nombre}&quot;? Esta acción no se
+               puede deshacer.
+             </DialogContentText>
           </DialogContent>
           <DialogActions>
             <Button onClick={cerrarDialogo}>Cancelar</Button>
