@@ -135,6 +135,8 @@ interface OperacionTerminal {
   monto: number
   folioTerminal: string
   fecha: string
+  folioValidacion?: string
+  archivoValidacion?: string
 }
 
 interface OperacionTransferencia {
@@ -143,6 +145,8 @@ interface OperacionTransferencia {
   folioBancario: string
   banco: string
   fecha: string
+  folioValidacion?: string
+  archivoValidacion?: string
 }
 
 interface OperacionCheque {
@@ -151,6 +155,8 @@ interface OperacionCheque {
   numeroCheque: string
   banco: string
   fecha: string
+  folioValidacion?: string
+  archivoValidacion?: string
 }
 
 interface ResumenCortes {
@@ -343,6 +349,118 @@ interface AperturaCierreCaja {
   cortesPendientes: number
 }
 
+interface DepositoBancario {
+  id: string
+  repartidorId: string
+  repartidorNombre: string
+  folioRepartidor: string
+  folioFisico?: string
+  monto: number
+  fechaDeposito: string
+  horaDeposito: string
+  estado: 'pendiente-validacion' | 'validado' | 'diferencia'
+  comprobanteRecibido: boolean
+  fotoComprobante?: string
+  observaciones?: string
+  validadoPor?: string
+  fechaValidacion?: string
+}
+
+interface DepositoMultiple {
+  id: string
+  repartidorId: string
+  repartidorNombre: string
+  montoTotal: number
+  depositos: DepositoBancario[]
+  estado: 'pendiente-validacion' | 'validado' | 'diferencia'
+  fechaCreacion: string
+}
+
+// Datos de ejemplo para depósitos bancarios
+const depositosBancarios: DepositoBancario[] = [
+  {
+    id: '1',
+    repartidorId: '1',
+    repartidorNombre: 'José Luis González',
+    folioRepartidor: 'DEP123456789',
+    folioFisico: 'DEP123456789',
+    monto: 8000,
+    fechaDeposito: '2024-01-25',
+    horaDeposito: '14:30',
+    estado: 'validado',
+    comprobanteRecibido: true,
+    validadoPor: 'María González',
+    fechaValidacion: '2024-01-25 15:00'
+  },
+  {
+    id: '2',
+    repartidorId: '3',
+    repartidorNombre: 'Carlos Mendoza Silva',
+    folioRepartidor: 'DEP987654321',
+    folioFisico: 'DEP987654322',
+    monto: 12000,
+    fechaDeposito: '2024-01-25',
+    horaDeposito: '16:20',
+    estado: 'diferencia',
+    comprobanteRecibido: true,
+    observaciones: 'Folio físico diferente al reportado',
+    validadoPor: 'María González',
+    fechaValidacion: '2024-01-25 17:00'
+  },
+  {
+    id: '3',
+    repartidorId: '2',
+    repartidorNombre: 'María Elena Ruiz',
+    folioRepartidor: 'DEP555666777',
+    monto: 7000,
+    fechaDeposito: '2024-01-25',
+    horaDeposito: '15:45',
+    estado: 'pendiente-validacion',
+    comprobanteRecibido: false
+  }
+]
+
+const depositosMultiples: DepositoMultiple[] = [
+  {
+    id: '1',
+    repartidorId: '1',
+    repartidorNombre: 'José Luis González',
+    montoTotal: 12500,
+    depositos: [
+      {
+        id: '1',
+        repartidorId: '1',
+        repartidorNombre: 'José Luis González',
+        folioRepartidor: 'DEP123456789',
+        folioFisico: 'DEP123456789',
+        monto: 8000,
+        fechaDeposito: '2024-01-25',
+        horaDeposito: '14:30',
+        estado: 'validado',
+        comprobanteRecibido: true,
+        validadoPor: 'María González',
+        fechaValidacion: '2024-01-25 15:00'
+      },
+      {
+        id: '2',
+        repartidorId: '1',
+        repartidorNombre: 'José Luis González',
+        folioRepartidor: 'DEP987654321',
+        folioFisico: 'DEP987654321',
+        monto: 4500,
+        fechaDeposito: '2024-01-25',
+        horaDeposito: '14:45',
+        estado: 'validado',
+        comprobanteRecibido: true,
+        validadoPor: 'María González',
+        fechaValidacion: '2024-01-25 15:15'
+      }
+    ],
+    estado: 'validado',
+    fechaCreacion: '2024-01-25'
+  }
+]
+
 // Datos de ejemplo para historial
 const historialAperturaCierre: AperturaCierreCaja[] = [
   {
@@ -391,13 +509,14 @@ const historialAperturaCierre: AperturaCierreCaja[] = [
 
 export default function CorteCajaPage() {
   const [vistaActual, setVistaActual] = useState<
-    'dashboard' | 'validacion' | 'admin' | 'apertura-cierre' | 'historial'
+    'dashboard' | 'validacion' | 'admin' | 'apertura-cierre' | 'historial' | 'depositos'
   >('dashboard')
   const [repartidorSeleccionado, setRepartidorSeleccionado] = useState<RepartidorCorte | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
-  const [tipoDialogo, setTipoDialogo] = useState<'validacion' | 'observaciones' | 'apertura' | 'cierre'>('validacion')
+  const [tipoDialogo, setTipoDialogo] = useState<'validacion' | 'observaciones' | 'apertura' | 'cierre' | 'validar-deposito'>('validacion')
   const [modoAuxiliar, setModoAuxiliar] = useState(false)
   const [pasoActual, setPasoActual] = useState(0)
+  const [depositoSeleccionado, setDepositoSeleccionado] = useState<DepositoBancario | null>(null)
 
   const [validaciones, setValidaciones] = useState({
     efectivo: false,
@@ -406,6 +525,12 @@ export default function CorteCajaPage() {
     transferencias: false,
     cheques: false,
     reporteFisico: false
+  })
+
+  const [foliosArchivosValidacion, setFoliosArchivosValidacion] = useState({
+    terminal: { folio: '', archivo: '' },
+    transferencias: { folio: '', archivo: '' },
+    cheques: { folio: '', archivo: '' }
   })
 
   const [observaciones, setObservaciones] = useState('')
@@ -425,6 +550,21 @@ export default function CorteCajaPage() {
     setTipoDialogo('validacion')
     setDialogoAbierto(true)
     setPasoActual(0)
+  }
+
+  const abrirValidacionDeposito = (deposito: DepositoBancario) => {
+    setDepositoSeleccionado(deposito)
+    setTipoDialogo('validar-deposito')
+    setDialogoAbierto(true)
+  }
+
+  const getEstadoDepositoColor = (estado: string) => {
+    switch (estado) {
+      case 'validado': return 'success'
+      case 'pendiente-validacion': return 'warning'
+      case 'diferencia': return 'error'
+      default: return 'default'
+    }
   }
 
   const abrirDialogoCaja = (tipo: 'apertura' | 'cierre') => {
@@ -467,6 +607,7 @@ export default function CorteCajaPage() {
   const cerrarDialogo = () => {
     setDialogoAbierto(false)
     setRepartidorSeleccionado(null)
+    setDepositoSeleccionado(null)
     setPasoActual(0)
     setValidaciones({
       efectivo: false,
@@ -476,12 +617,27 @@ export default function CorteCajaPage() {
       cheques: false,
       reporteFisico: false
     })
+    setFoliosArchivosValidacion({
+      terminal: { folio: '', archivo: '' },
+      transferencias: { folio: '', archivo: '' },
+      cheques: { folio: '', archivo: '' }
+    })
     setObservaciones('')
     setEstadoFinal('')
   }
 
   const manejarValidacion = (campo: string, valor: boolean) => {
     setValidaciones(prev => ({ ...prev, [campo]: valor }))
+  }
+
+  const manejarCambioFolioArchivo = (tipo: 'terminal' | 'transferencias' | 'cheques', campo: 'folio' | 'archivo', valor: string) => {
+    setFoliosArchivosValidacion(prev => ({
+      ...prev,
+      [tipo]: {
+        ...prev[tipo],
+        [campo]: valor
+      }
+    }))
   }
 
   const getEstadoIcon = (estado: string) => {
@@ -557,6 +713,13 @@ export default function CorteCajaPage() {
             startIcon={<HistoryIcon />}
           >
             Historial Caja
+          </Button>
+          <Button
+            variant={vistaActual === 'depositos' ? 'contained' : 'outlined'}
+            onClick={() => setVistaActual('depositos')}
+            startIcon={<AccountBalanceIcon />}
+          >
+            Validación Depósitos
           </Button>
           <Button
             variant={vistaActual === 'admin' ? 'contained' : 'outlined'}
@@ -1190,6 +1353,218 @@ export default function CorteCajaPage() {
         </Box>
       )}
 
+      {/* Vista de Validación de Depósitos Bancarios */}
+      {vistaActual === 'depositos' && (
+        <Box>
+          <Typography variant='h6' gutterBottom>
+            Validación de Depósitos Bancarios
+          </Typography>
+
+          {/* Resumen de Depósitos */}
+          <Grid container spacing={3} sx={{ mb: 4 }}>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Typography variant='h6' gutterBottom>
+                    Total Depositado
+                  </Typography>
+                  <Typography variant='h4' color='primary'>
+                    ${depositosBancarios.reduce((sum, d) => sum + d.monto, 0).toLocaleString()}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Typography variant='h6' gutterBottom>
+                    Depósitos Validados
+                  </Typography>
+                  <Typography variant='h4' color='success.main'>
+                    {depositosBancarios.filter(d => d.estado === 'validado').length}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Typography variant='h6' gutterBottom>
+                    Pendientes Validación
+                  </Typography>
+                  <Typography variant='h4' color='warning.main'>
+                    {depositosBancarios.filter(d => d.estado === 'pendiente-validacion').length}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Typography variant='h6' gutterBottom>
+                    Con Diferencias
+                  </Typography>
+                  <Typography variant='h4' color='error.main'>
+                    {depositosBancarios.filter(d => d.estado === 'diferencia').length}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* Tabla de Depósitos */}
+          <Card>
+            <CardContent>
+              <Typography variant='h6' gutterBottom>
+                Depósitos Bancarios
+              </Typography>
+              
+              <TableContainer component={Paper} variant='outlined'>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Repartidor</TableCell>
+                      <TableCell>Folio Repartidor</TableCell>
+                      <TableCell>Folio Físico</TableCell>
+                      <TableCell align='right'>Monto</TableCell>
+                      <TableCell>Fecha/Hora</TableCell>
+                      <TableCell align='center'>Estado</TableCell>
+                      <TableCell align='center'>Comprobante</TableCell>
+                      <TableCell align='center'>Acciones</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {depositosBancarios.map((deposito) => (
+                      <TableRow key={deposito.id} hover>
+                        <TableCell>
+                          <Typography variant='subtitle2' fontWeight='bold'>
+                            {deposito.repartidorNombre}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant='body2' fontWeight='bold'>
+                            {deposito.folioRepartidor}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant='body2' fontWeight='bold'>
+                            {deposito.folioFisico || '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align='right'>
+                          <Typography variant='h6' color='primary'>
+                            ${deposito.monto.toLocaleString()}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Box>
+                            <Typography variant='body2'>
+                              {new Date(deposito.fechaDeposito).toLocaleDateString('es-MX')}
+                            </Typography>
+                            <Typography variant='caption' color='text.secondary'>
+                              {deposito.horaDeposito}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell align='center'>
+                          <Chip
+                            label={deposito.estado.replace('-', ' ').toUpperCase()}
+                            color={getEstadoDepositoColor(deposito.estado) as any}
+                            size='small'
+                          />
+                        </TableCell>
+                        <TableCell align='center'>
+                          <Chip
+                            label={deposito.comprobanteRecibido ? 'RECIBIDO' : 'PENDIENTE'}
+                            color={deposito.comprobanteRecibido ? 'success' : 'warning'}
+                            size='small'
+                          />
+                        </TableCell>
+                        <TableCell align='center'>
+                          <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            <Tooltip title='Validar depósito'>
+                              <IconButton 
+                                size='small'
+                                onClick={() => abrirValidacionDeposito(deposito)}
+                              >
+                                <CheckCircleIcon />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title='Ver detalles'>
+                              <IconButton size='small'>
+                                <VisibilityIcon />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </CardContent>
+          </Card>
+
+          {/* Depósitos Múltiples */}
+          <Card sx={{ mt: 3 }}>
+            <CardContent>
+              <Typography variant='h6' gutterBottom>
+                Depósitos Múltiples
+              </Typography>
+              
+              <TableContainer component={Paper} variant='outlined'>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Repartidor</TableCell>
+                      <TableCell align='right'>Monto Total</TableCell>
+                      <TableCell align='center'>Cantidad Depósitos</TableCell>
+                      <TableCell align='center'>Estado</TableCell>
+                      <TableCell align='center'>Acciones</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {depositosMultiples.map((depositoMultiple) => (
+                      <TableRow key={depositoMultiple.id} hover>
+                        <TableCell>
+                          <Typography variant='subtitle2' fontWeight='bold'>
+                            {depositoMultiple.repartidorNombre}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align='right'>
+                          <Typography variant='h6' color='primary'>
+                            ${depositoMultiple.montoTotal.toLocaleString()}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align='center'>
+                          <Typography variant='h6'>
+                            {depositoMultiple.depositos.length}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align='center'>
+                          <Chip
+                            label={depositoMultiple.estado.replace('-', ' ').toUpperCase()}
+                            color={getEstadoDepositoColor(depositoMultiple.estado) as any}
+                            size='small'
+                          />
+                        </TableCell>
+                        <TableCell align='center'>
+                          <Tooltip title='Ver detalles'>
+                            <IconButton size='small'>
+                              <VisibilityIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </CardContent>
+          </Card>
+        </Box>
+      )}
+
       {/* Modal de Validación Individual */}
       <Dialog open={dialogoAbierto} onClose={cerrarDialogo} maxWidth='lg' fullWidth>
         <DialogTitle>
@@ -1348,41 +1723,203 @@ export default function CorteCajaPage() {
                       Pendientes de Validar
                     </Typography>
 
-                    <Box sx={{ mb: 3 }}>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={validaciones.terminal}
-                            onChange={e => manejarValidacion('terminal', e.target.checked)}
-                          />
-                        }
-                        label={`Pago terminal: $${repartidorSeleccionado.formasPago.terminal.monto.toLocaleString()}`}
-                      />
-                    </Box>
+                    {/* Pago Terminal */}
+                    {repartidorSeleccionado.formasPago.terminal.monto > 0 && (
+                      <Card variant='outlined' sx={{ mb: 3 }}>
+                        <CardContent>
+                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  checked={validaciones.terminal}
+                                  onChange={e => manejarValidacion('terminal', e.target.checked)}
+                                />
+                              }
+                              label={
+                                <Typography variant='h6' color='primary'>
+                                  Pago terminal: ${repartidorSeleccionado.formasPago.terminal.monto.toLocaleString()}
+                                </Typography>
+                              }
+                            />
+                          </Box>
+                          
+                          <Grid container spacing={2}>
+                            <Grid item xs={12} md={6}>
+                              <TextField
+                                fullWidth
+                                label='Folio de validación'
+                                placeholder='Ingrese el folio del comprobante'
+                                value={foliosArchivosValidacion.terminal.folio}
+                                onChange={e => manejarCambioFolioArchivo('terminal', 'folio', e.target.value)}
+                                disabled={!validaciones.terminal}
+                                required={validaciones.terminal}
+                              />
+                            </Grid>
+                            <Grid item xs={12} md={6}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <TextField
+                                  fullWidth
+                                  label='Archivo adjunto'
+                                  placeholder='Seleccionar archivo'
+                                  value={foliosArchivosValidacion.terminal.archivo}
+                                  disabled
+                                />
+                                <Button
+                                  variant='outlined'
+                                  component='label'
+                                  disabled={!validaciones.terminal}
+                                  startIcon={<AddIcon />}
+                                >
+                                  Adjuntar
+                                  <input
+                                    type='file'
+                                    hidden
+                                    onChange={e => {
+                                      const file = e.target.files?.[0]
+                                      if (file) {
+                                        manejarCambioFolioArchivo('terminal', 'archivo', file.name)
+                                      }
+                                    }}
+                                  />
+                                </Button>
+                              </Box>
+                            </Grid>
+                          </Grid>
+                        </CardContent>
+                      </Card>
+                    )}
 
-                    <Box sx={{ mb: 3 }}>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={validaciones.transferencias}
-                            onChange={e => manejarValidacion('transferencias', e.target.checked)}
-                          />
-                        }
-                        label={`Transferencias: $${repartidorSeleccionado.formasPago.transferencias.monto.toLocaleString()}`}
-                      />
-                    </Box>
+                    {/* Transferencias */}
+                    {repartidorSeleccionado.formasPago.transferencias.monto > 0 && (
+                      <Card variant='outlined' sx={{ mb: 3 }}>
+                        <CardContent>
+                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  checked={validaciones.transferencias}
+                                  onChange={e => manejarValidacion('transferencias', e.target.checked)}
+                                />
+                              }
+                              label={
+                                <Typography variant='h6' color='success.main'>
+                                  Transferencias: ${repartidorSeleccionado.formasPago.transferencias.monto.toLocaleString()}
+                                </Typography>
+                              }
+                            />
+                          </Box>
+                          
+                          <Grid container spacing={2}>
+                            <Grid item xs={12} md={6}>
+                              <TextField
+                                fullWidth
+                                label='Folio de validación'
+                                placeholder='Ingrese el folio del comprobante'
+                                value={foliosArchivosValidacion.transferencias.folio}
+                                onChange={e => manejarCambioFolioArchivo('transferencias', 'folio', e.target.value)}
+                                disabled={!validaciones.transferencias}
+                                required={validaciones.transferencias}
+                              />
+                            </Grid>
+                            <Grid item xs={12} md={6}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <TextField
+                                  fullWidth
+                                  label='Archivo adjunto'
+                                  placeholder='Seleccionar archivo'
+                                  value={foliosArchivosValidacion.transferencias.archivo}
+                                  disabled
+                                />
+                                <Button
+                                  variant='outlined'
+                                  component='label'
+                                  disabled={!validaciones.transferencias}
+                                  startIcon={<AddIcon />}
+                                >
+                                  Adjuntar
+                                  <input
+                                    type='file'
+                                    hidden
+                                    onChange={e => {
+                                      const file = e.target.files?.[0]
+                                      if (file) {
+                                        manejarCambioFolioArchivo('transferencias', 'archivo', file.name)
+                                      }
+                                    }}
+                                  />
+                                </Button>
+                              </Box>
+                            </Grid>
+                          </Grid>
+                        </CardContent>
+                      </Card>
+                    )}
 
-                    <Box sx={{ mb: 3 }}>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={validaciones.cheques}
-                            onChange={e => manejarValidacion('cheques', e.target.checked)}
-                          />
-                        }
-                        label={`Cheques: $${repartidorSeleccionado.formasPago.cheques.monto.toLocaleString()}`}
-                      />
-                    </Box>
+                    {/* Cheques */}
+                    {repartidorSeleccionado.formasPago.cheques.monto > 0 && (
+                      <Card variant='outlined' sx={{ mb: 3 }}>
+                        <CardContent>
+                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  checked={validaciones.cheques}
+                                  onChange={e => manejarValidacion('cheques', e.target.checked)}
+                                />
+                              }
+                              label={
+                                <Typography variant='h6' color='warning.main'>
+                                  Cheques: ${repartidorSeleccionado.formasPago.cheques.monto.toLocaleString()}
+                                </Typography>
+                              }
+                            />
+                          </Box>
+                          
+                          <Grid container spacing={2}>
+                            <Grid item xs={12} md={6}>
+                              <TextField
+                                fullWidth
+                                label='Folio de validación'
+                                placeholder='Ingrese el folio del comprobante'
+                                value={foliosArchivosValidacion.cheques.folio}
+                                onChange={e => manejarCambioFolioArchivo('cheques', 'folio', e.target.value)}
+                                disabled={!validaciones.cheques}
+                                required={validaciones.cheques}
+                              />
+                            </Grid>
+                            <Grid item xs={12} md={6}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <TextField
+                                  fullWidth
+                                  label='Archivo adjunto'
+                                  placeholder='Seleccionar archivo'
+                                  value={foliosArchivosValidacion.cheques.archivo}
+                                  disabled
+                                />
+                                <Button
+                                  variant='outlined'
+                                  component='label'
+                                  disabled={!validaciones.cheques}
+                                  startIcon={<AddIcon />}
+                                >
+                                  Adjuntar
+                                  <input
+                                    type='file'
+                                    hidden
+                                    onChange={e => {
+                                      const file = e.target.files?.[0]
+                                      if (file) {
+                                        manejarCambioFolioArchivo('cheques', 'archivo', file.name)
+                                      }
+                                    }}
+                                  />
+                                </Button>
+                              </Box>
+                            </Grid>
+                          </Grid>
+                        </CardContent>
+                      </Card>
+                    )}
 
                     <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
                       <Button onClick={() => setPasoActual(1)}>Anterior</Button>
@@ -1763,6 +2300,173 @@ export default function CorteCajaPage() {
             disabled={formularioCaja.montoFinal <= 0 || formularioCaja.efectivoFisico <= 0}
           >
             Cerrar Caja
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal Validación de Depósito */}
+      <Dialog open={dialogoAbierto && tipoDialogo === 'validar-deposito'} onClose={cerrarDialogo} maxWidth='md' fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AccountBalanceIcon color='primary' />
+            Validación de Depósito Bancario
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {depositoSeleccionado && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant='h6' gutterBottom>
+                Repartidor: {depositoSeleccionado.repartidorNombre}
+              </Typography>
+              
+              <Card variant='outlined' sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant='h6' gutterBottom>
+                    Información del Depósito
+                  </Typography>
+                  
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant='body2' color='text.secondary'>
+                        Folio reportado por repartidor
+                      </Typography>
+                      <Typography variant='h6' fontWeight='bold'>
+                        {depositoSeleccionado.folioRepartidor}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant='body2' color='text.secondary'>
+                        Monto depositado
+                      </Typography>
+                      <Typography variant='h6' color='primary'>
+                        ${depositoSeleccionado.monto.toLocaleString()}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant='body2' color='text.secondary'>
+                        Fecha y hora del depósito
+                      </Typography>
+                      <Typography variant='body2'>
+                        {new Date(depositoSeleccionado.fechaDeposito).toLocaleDateString('es-MX')} - {depositoSeleccionado.horaDeposito}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Typography variant='body2' color='text.secondary'>
+                        Estado actual
+                      </Typography>
+                      <Chip
+                        label={depositoSeleccionado.estado.replace('-', ' ').toUpperCase()}
+                        color={getEstadoDepositoColor(depositoSeleccionado.estado) as any}
+                        size='small'
+                      />
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+
+              <Typography variant='h6' gutterBottom>
+                Validación del Auxiliar
+              </Typography>
+              
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label='Folio en comprobante físico'
+                    placeholder='Capturar folio del comprobante físico'
+                    required
+                    helperText='Campo obligatorio para validar'
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label='Monto verificado'
+                    type='number'
+                    defaultValue={depositoSeleccionado.monto}
+                    InputProps={{
+                      startAdornment: <InputAdornment position='start'>$</InputAdornment>
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <FormControlLabel
+                    control={<Checkbox />}
+                    label='Comprobante físico recibido'
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <Button
+                    variant='outlined'
+                    startIcon={<AddIcon />}
+                    sx={{ mb: 2 }}
+                  >
+                    Subir foto del ticket físico
+                  </Button>
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label='Observaciones'
+                    multiline
+                    rows={3}
+                    placeholder='Observaciones sobre la validación...'
+                  />
+                </Grid>
+              </Grid>
+
+              {/* Comparación de Folios */}
+              <Card variant='outlined' sx={{ mt: 3 }}>
+                <CardContent>
+                  <Typography variant='h6' gutterBottom>
+                    Comparación de Folios
+                  </Typography>
+                  
+                  <TableContainer component={Paper} variant='outlined'>
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Concepto</TableCell>
+                          <TableCell align='center'>Folio Repartidor</TableCell>
+                          <TableCell align='center'>Folio Físico</TableCell>
+                          <TableCell align='center'>Estado</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell>Folio de Depósito</TableCell>
+                          <TableCell align='center'>{depositoSeleccionado.folioRepartidor}</TableCell>
+                          <TableCell align='center'>
+                            <TextField
+                              size='small'
+                              placeholder='Capturar folio físico'
+                            />
+                          </TableCell>
+                          <TableCell align='center'>
+                            <Chip
+                              label='PENDIENTE'
+                              color='warning'
+                              size='small'
+                            />
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </CardContent>
+              </Card>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cerrarDialogo}>
+            Cancelar
+          </Button>
+          <Button variant='contained' color='error'>
+            Marcar Diferencia
+          </Button>
+          <Button variant='contained' color='success'>
+            Validar Depósito
           </Button>
         </DialogActions>
       </Dialog>

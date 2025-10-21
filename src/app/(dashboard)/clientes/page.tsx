@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import QRCode from 'qrcode'
 
 import { 
   Box, 
@@ -36,7 +37,8 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemIcon
+  ListItemIcon,
+  Avatar
 } from '@mui/material'
 import { 
   Add as AddIcon, 
@@ -49,10 +51,36 @@ import {
   Save as SaveIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
-  Payment as PaymentIcon
+  Payment as PaymentIcon,
+  Person as PersonIcon,
+  Email as EmailIcon,
+  LocationOn as LocationIcon,
+  Business as BusinessIcon,
+  Home as HomeIcon,
+  LocalShipping as ShippingIcon,
+  Receipt as ReceiptIcon,
+  Close as CloseIcon,
+  QrCode as QrCodeIcon,
+  Print as PrintIcon
 } from '@mui/icons-material'
 
 // Tipos de datos
+interface Domicilio {
+  id: string
+  tipo: 'principal' | 'facturacion' | 'entrega' | 'otro'
+  calle: string
+  numeroExterior: string
+  numeroInterior?: string
+  colonia: string
+  municipio: string
+  estado: string
+  codigoPostal: string
+  referencia?: string
+  activo: boolean
+  codigoQR: string
+  fechaCreacionQR: string
+}
+
 interface Cliente {
   id: string
   nombre: string
@@ -77,6 +105,7 @@ interface Cliente {
   fechaRegistro: string
   ultimaModificacion: string
   estadoCliente: 'activo' | 'suspendido' | 'inactivo'
+  domicilios?: Domicilio[]
 }
 
 // Datos específicos de México
@@ -92,6 +121,31 @@ const rutasMexico = [
   'Ruta Centro', 'Ruta Norte', 'Ruta Sur', 'Ruta Occidente', 'Ruta Oriente',
   'Ruta Sureste', 'Ruta Noreste', 'Ruta Noroeste', 'Ruta Suroeste'
 ]
+
+// Función para generar códigos QR únicos
+const generarCodigoQR = (clienteId: string, domicilioId: string): string => {
+  const prefijo = clienteId.padStart(3, '0')
+  const sufijo = domicilioId.split('-')[1] || 'A'
+  return `QR${prefijo}${sufijo}`
+}
+
+// Función para generar fecha de creación de QR
+const generarFechaQR = (): string => {
+  return new Date().toISOString().split('T')[0]
+}
+
+// Función para generar contenido del QR
+const generarContenidoQR = (cliente: Cliente, domicilio: Domicilio): string => {
+  return JSON.stringify({
+    clienteId: cliente.id,
+    clienteNombre: `${cliente.nombre} ${cliente.apellidoPaterno} ${cliente.apellidoMaterno}`,
+    domicilioId: domicilio.id,
+    domicilioDireccion: `${domicilio.calle} ${domicilio.numeroExterior}${domicilio.numeroInterior ? ` Int. ${domicilio.numeroInterior}` : ''}, ${domicilio.colonia}, ${domicilio.municipio}`,
+    codigoQR: domicilio.codigoQR,
+    tipoDomicilio: domicilio.tipo,
+    fechaGeneracion: new Date().toISOString()
+  })
+}
 
 // Datos de ejemplo con información completa de México
 const clientesEjemplo: Cliente[] = [
@@ -118,7 +172,67 @@ const clientesEjemplo: Cliente[] = [
     pagosEspecialesAutorizados: true,
     fechaRegistro: '2024-01-15',
     ultimaModificacion: '2024-01-20',
-    estadoCliente: 'activo'
+    estadoCliente: 'activo',
+    domicilios: [
+      {
+        id: '1-1',
+        tipo: 'principal',
+        calle: 'Av. Insurgentes Sur',
+        numeroExterior: '123',
+        numeroInterior: 'A',
+        colonia: 'Roma Norte',
+        municipio: 'Cuauhtémoc',
+        estado: 'Ciudad de México',
+        codigoPostal: '06700',
+        referencia: 'Entre calles Álvaro Obregón y Orizaba',
+        activo: true,
+        codigoQR: 'QR0011',
+        fechaCreacionQR: '2024-01-15'
+      },
+      {
+        id: '1-2',
+        tipo: 'facturacion',
+        calle: 'Calle Orizaba',
+        numeroExterior: '45',
+        colonia: 'Roma Norte',
+        municipio: 'Cuauhtémoc',
+        estado: 'Ciudad de México',
+        codigoPostal: '06700',
+        referencia: 'Oficina contable',
+        activo: true,
+        codigoQR: 'QR0012',
+        fechaCreacionQR: '2024-01-15'
+      },
+      {
+        id: '1-3',
+        tipo: 'entrega',
+        calle: 'Av. Chapultepec',
+        numeroExterior: '789',
+        numeroInterior: 'B',
+        colonia: 'Condesa',
+        municipio: 'Cuauhtémoc',
+        estado: 'Ciudad de México',
+        codigoPostal: '06140',
+        referencia: 'Bodega de almacén',
+        activo: true,
+        codigoQR: 'QR0013',
+        fechaCreacionQR: '2024-01-15'
+      },
+      {
+        id: '1-4',
+        tipo: 'otro',
+        calle: 'Calle Álvaro Obregón',
+        numeroExterior: '567',
+        colonia: 'Roma Norte',
+        municipio: 'Cuauhtémoc',
+        estado: 'Ciudad de México',
+        codigoPostal: '06700',
+        referencia: 'Oficina de ventas',
+        activo: true,
+        codigoQR: 'QR0014',
+        fechaCreacionQR: '2024-01-20'
+      }
+    ]
   },
   {
     id: '2',
@@ -140,7 +254,65 @@ const clientesEjemplo: Cliente[] = [
     pagosEspecialesAutorizados: false,
     fechaRegistro: '2024-01-10',
     ultimaModificacion: '2024-01-18',
-    estadoCliente: 'activo'
+    estadoCliente: 'activo',
+    domicilios: [
+      {
+        id: '2-1',
+        tipo: 'principal',
+        calle: 'Calle Morelos',
+        numeroExterior: '456',
+        colonia: 'Centro',
+        municipio: 'Guadalajara',
+        estado: 'Jalisco',
+        codigoPostal: '44100',
+        referencia: 'Cerca del mercado',
+        activo: true,
+        codigoQR: 'QR0021',
+        fechaCreacionQR: '2024-01-10'
+      },
+      {
+        id: '2-2',
+        tipo: 'entrega',
+        calle: 'Av. López Mateos',
+        numeroExterior: '1234',
+        colonia: 'Americana',
+        municipio: 'Guadalajara',
+        estado: 'Jalisco',
+        codigoPostal: '44160',
+        referencia: 'Negocio familiar',
+        activo: true,
+        codigoQR: 'QR0022',
+        fechaCreacionQR: '2024-01-10'
+      },
+      {
+        id: '2-3',
+        tipo: 'facturacion',
+        calle: 'Calle Libertad',
+        numeroExterior: '789',
+        colonia: 'Centro',
+        municipio: 'Guadalajara',
+        estado: 'Jalisco',
+        codigoPostal: '44100',
+        referencia: 'Contador público',
+        activo: true,
+        codigoQR: 'QR0023',
+        fechaCreacionQR: '2024-01-12'
+      },
+      {
+        id: '2-4',
+        tipo: 'otro',
+        calle: 'Av. Vallarta',
+        numeroExterior: '2345',
+        colonia: 'Americana',
+        municipio: 'Guadalajara',
+        estado: 'Jalisco',
+        codigoPostal: '44160',
+        referencia: 'Bodega secundaria',
+        activo: false,
+        codigoQR: 'QR0024',
+        fechaCreacionQR: '2024-01-15'
+      }
+    ]
   },
   {
     id: '3',
@@ -162,7 +334,51 @@ const clientesEjemplo: Cliente[] = [
     pagosEspecialesAutorizados: true,
     fechaRegistro: '2024-01-05',
     ultimaModificacion: '2024-01-22',
-    estadoCliente: 'activo'
+    estadoCliente: 'activo',
+    domicilios: [
+      {
+        id: '3-1',
+        tipo: 'principal',
+        calle: 'Blvd. López Mateos',
+        numeroExterior: '789',
+        colonia: 'Del Valle',
+        municipio: 'Monterrey',
+        estado: 'Nuevo León',
+        codigoPostal: '66220',
+        referencia: 'Casa principal',
+        activo: true,
+        codigoQR: 'QR0031',
+        fechaCreacionQR: '2024-01-05'
+      },
+      {
+        id: '3-2',
+        tipo: 'entrega',
+        calle: 'Av. Constitución',
+        numeroExterior: '1234',
+        colonia: 'Centro',
+        municipio: 'Monterrey',
+        estado: 'Nuevo León',
+        codigoPostal: '64000',
+        referencia: 'Oficina comercial',
+        activo: true,
+        codigoQR: 'QR0032',
+        fechaCreacionQR: '2024-01-08'
+      },
+      {
+        id: '3-3',
+        tipo: 'facturacion',
+        calle: 'Calle Hidalgo',
+        numeroExterior: '567',
+        colonia: 'Centro',
+        municipio: 'Monterrey',
+        estado: 'Nuevo León',
+        codigoPostal: '64000',
+        referencia: 'Servicios contables',
+        activo: true,
+        codigoQR: 'QR0033',
+        fechaCreacionQR: '2024-01-10'
+      }
+    ]
   },
   {
     id: '4',
@@ -184,7 +400,79 @@ const clientesEjemplo: Cliente[] = [
     pagosEspecialesAutorizados: true,
     fechaRegistro: '2024-01-12',
     ultimaModificacion: '2024-01-25',
-    estadoCliente: 'suspendido'
+    estadoCliente: 'suspendido',
+    domicilios: [
+      {
+        id: '4-1',
+        tipo: 'principal',
+        calle: 'Av. Reforma',
+        numeroExterior: '321',
+        colonia: 'Centro',
+        municipio: 'Puebla',
+        estado: 'Puebla',
+        codigoPostal: '72000',
+        referencia: 'Oficina principal',
+        activo: true,
+        codigoQR: 'QR0041',
+        fechaCreacionQR: '2024-01-12'
+      },
+      {
+        id: '4-2',
+        tipo: 'facturacion',
+        calle: 'Calle 5 de Mayo',
+        numeroExterior: '123',
+        colonia: 'Centro',
+        municipio: 'Puebla',
+        estado: 'Puebla',
+        codigoPostal: '72000',
+        referencia: 'Contador',
+        activo: true,
+        codigoQR: 'QR0042',
+        fechaCreacionQR: '2024-01-12'
+      },
+      {
+        id: '4-3',
+        tipo: 'entrega',
+        calle: 'Av. Juárez',
+        numeroExterior: '456',
+        colonia: 'La Paz',
+        municipio: 'Puebla',
+        estado: 'Puebla',
+        codigoPostal: '72160',
+        referencia: 'Bodega',
+        activo: false,
+        codigoQR: 'QR0043',
+        fechaCreacionQR: '2024-01-15'
+      },
+      {
+        id: '4-4',
+        tipo: 'otro',
+        calle: 'Calle 16 de Septiembre',
+        numeroExterior: '789',
+        colonia: 'Centro',
+        municipio: 'Puebla',
+        estado: 'Puebla',
+        codigoPostal: '72000',
+        referencia: 'Sucursal comercial',
+        activo: true,
+        codigoQR: 'QR0044',
+        fechaCreacionQR: '2024-01-18'
+      },
+      {
+        id: '4-5',
+        tipo: 'entrega',
+        calle: 'Blvd. Atlixco',
+        numeroExterior: '2345',
+        colonia: 'San Manuel',
+        municipio: 'Puebla',
+        estado: 'Puebla',
+        codigoPostal: '72520',
+        referencia: 'Almacén principal',
+        activo: true,
+        codigoQR: 'QR0045',
+        fechaCreacionQR: '2024-01-20'
+      }
+    ]
   },
   {
     id: '5',
@@ -206,21 +494,79 @@ const clientesEjemplo: Cliente[] = [
     pagosEspecialesAutorizados: false,
     fechaRegistro: '2024-01-08',
     ultimaModificacion: '2024-01-19',
-    estadoCliente: 'activo'
+    estadoCliente: 'activo',
+    domicilios: [
+      {
+        id: '5-1',
+        tipo: 'principal',
+        calle: 'Calle 60',
+        numeroExterior: '654',
+        colonia: 'Centro',
+        municipio: 'Mérida',
+        estado: 'Yucatán',
+        codigoPostal: '97000',
+        referencia: 'Casa familiar',
+        activo: true,
+        codigoQR: 'QR0051',
+        fechaCreacionQR: '2024-01-08'
+      },
+      {
+        id: '5-2',
+        tipo: 'entrega',
+        calle: 'Calle 47',
+        numeroExterior: '321',
+        colonia: 'Centro',
+        municipio: 'Mérida',
+        estado: 'Yucatán',
+        codigoPostal: '97000',
+        referencia: 'Tienda',
+        activo: true,
+        codigoQR: 'QR0052',
+        fechaCreacionQR: '2024-01-08'
+      },
+      {
+        id: '5-3',
+        tipo: 'facturacion',
+        calle: 'Calle 65',
+        numeroExterior: '987',
+        colonia: 'Centro',
+        municipio: 'Mérida',
+        estado: 'Yucatán',
+        codigoPostal: '97000',
+        referencia: 'Oficina administrativa',
+        activo: true,
+        codigoQR: 'QR0053',
+        fechaCreacionQR: '2024-01-10'
+      },
+      {
+        id: '5-4',
+        tipo: 'otro',
+        calle: 'Av. Itzáes',
+        numeroExterior: '456',
+        colonia: 'Centro',
+        municipio: 'Mérida',
+        estado: 'Yucatán',
+        codigoPostal: '97000',
+        referencia: 'Bodega de productos',
+        activo: true,
+        codigoQR: 'QR0054',
+        fechaCreacionQR: '2024-01-12'
+      }
+    ]
   }
 ]
 
 export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>(clientesEjemplo)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
-  const [tipoDialogo, setTipoDialogo] = useState<'importar' | 'agregar' | 'editar' | 'credito' | 'historial'>('agregar')
+  const [tipoDialogo, setTipoDialogo] = useState<'importar' | 'agregar' | 'editar' | 'credito' | 'historial' | 'detalles'>('agregar')
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null)
   const [formularioCliente, setFormularioCliente] = useState<Partial<Cliente>>({})
   const [archivoSeleccionado, setArchivoSeleccionado] = useState<File | null>(null)
   const [progresoImportacion, setProgresoImportacion] = useState(0)
   const [importando, setImportando] = useState(false)
 
-  const abrirDialogo = (tipo: 'importar' | 'agregar' | 'editar' | 'credito' | 'historial', cliente?: Cliente) => {
+  const abrirDialogo = (tipo: 'importar' | 'agregar' | 'editar' | 'credito' | 'historial' | 'detalles', cliente?: Cliente) => {
     setTipoDialogo(tipo)
     setClienteSeleccionado(cliente || null)
     
@@ -357,7 +703,12 @@ export default function ClientesPage() {
               </TableHead>
               <TableBody>
                 {clientes.map((cliente) => (
-                  <TableRow key={cliente.id} hover>
+                  <TableRow 
+                    key={cliente.id} 
+                    hover 
+                    onClick={() => abrirDialogo('detalles', cliente)}
+                    sx={{ cursor: 'pointer' }}
+                  >
                     <TableCell>
                       <Box>
                         <Typography variant="subtitle2" fontWeight="bold">
@@ -413,17 +764,35 @@ export default function ClientesPage() {
                     <TableCell align="center">
                       <Box sx={{ display: 'flex', gap: 0.5 }}>
                         <Tooltip title="Editar">
-                          <IconButton size="small" onClick={() => abrirDialogo('editar', cliente)}>
+                          <IconButton 
+                            size="small" 
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              abrirDialogo('editar', cliente)
+                            }}
+                          >
                             <EditIcon />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Control de Crédito">
-                          <IconButton size="small" onClick={() => abrirDialogo('credito', cliente)}>
+                          <IconButton 
+                            size="small" 
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              abrirDialogo('credito', cliente)
+                            }}
+                          >
                             <CreditCardIcon />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Historial">
-                          <IconButton size="small" onClick={() => abrirDialogo('historial', cliente)}>
+                          <IconButton 
+                            size="small" 
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              abrirDialogo('historial', cliente)
+                            }}
+                          >
                             <HistoryIcon />
                           </IconButton>
                         </Tooltip>
@@ -956,6 +1325,416 @@ export default function ClientesPage() {
                   />
                 </ListItem>
               </List>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cerrarDialogo}>
+            Cerrar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal Detalles del Cliente */}
+      <Dialog open={dialogoAbierto && tipoDialogo === 'detalles'} onClose={cerrarDialogo} maxWidth="lg" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PersonIcon />
+              Detalles del Cliente - {clienteSeleccionado ? obtenerNombreCompleto(clienteSeleccionado) : ''}
+            </Box>
+            <IconButton onClick={cerrarDialogo} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {clienteSeleccionado && (
+            <Box>
+              {/* Información Personal */}
+              <Card variant="outlined" sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PersonIcon />
+                    Información Personal
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Nombre Completo
+                      </Typography>
+                      <Typography variant="body1" fontWeight="bold">
+                        {obtenerNombreCompleto(clienteSeleccionado)}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Estado del Cliente
+                      </Typography>
+                      <Chip
+                        label={clienteSeleccionado.estadoCliente.charAt(0).toUpperCase() + clienteSeleccionado.estadoCliente.slice(1)}
+                        color={getEstadoColor(clienteSeleccionado.estadoCliente) as any}
+                        size="small"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <EmailIcon fontSize="small" />
+                          Email
+                        </Box>
+                      </Typography>
+                      <Typography variant="body1">
+                        {clienteSeleccionado.email || 'No especificado'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <PhoneIcon fontSize="small" />
+                          Teléfono Principal
+                        </Box>
+                      </Typography>
+                      <Typography variant="body1">
+                        {clienteSeleccionado.telefono}
+                      </Typography>
+                    </Grid>
+                    {clienteSeleccionado.telefonoSecundario && (
+                      <Grid item xs={12} sm={6}>
+                        <Typography variant="body2" color="text.secondary">
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <PhoneIcon fontSize="small" />
+                            Teléfono Secundario
+                          </Box>
+                        </Typography>
+                        <Typography variant="body1">
+                          {clienteSeleccionado.telefonoSecundario}
+                        </Typography>
+                      </Grid>
+                    )}
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        RFC
+                      </Typography>
+                      <Typography variant="body1">
+                        {clienteSeleccionado.rfc || 'No especificado'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        CURP
+                      </Typography>
+                      <Typography variant="body1">
+                        {clienteSeleccionado.curp || 'No especificado'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Fecha de Registro
+                      </Typography>
+                      <Typography variant="body1">
+                        {new Date(clienteSeleccionado.fechaRegistro).toLocaleDateString('es-MX')}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Última Modificación
+                      </Typography>
+                      <Typography variant="body1">
+                        {new Date(clienteSeleccionado.ultimaModificacion).toLocaleDateString('es-MX')}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+
+              {/* Información de Crédito */}
+              <Card variant="outlined" sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CreditCardIcon />
+                    Información de Crédito
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={4}>
+                      <Typography variant="body2" color="text.secondary">
+                        Límite de Crédito
+                      </Typography>
+                      <Typography variant="h6" color="primary">
+                        ${clienteSeleccionado.limiteCredito.toLocaleString()}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <Typography variant="body2" color="text.secondary">
+                        Saldo Actual
+                      </Typography>
+                      <Typography 
+                        variant="h6" 
+                        color={clienteSeleccionado.saldoActual > clienteSeleccionado.limiteCredito * 0.8 ? 'error' : 'success'}
+                      >
+                        ${clienteSeleccionado.saldoActual.toLocaleString()}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <Typography variant="body2" color="text.secondary">
+                        Crédito Disponible
+                      </Typography>
+                      <Typography variant="h6" color="success.main">
+                        ${(clienteSeleccionado.limiteCredito - clienteSeleccionado.saldoActual).toLocaleString()}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Pagos Especiales
+                      </Typography>
+                      <Chip
+                        label={clienteSeleccionado.pagosEspecialesAutorizados ? 'Autorizado' : 'No Autorizado'}
+                        color={clienteSeleccionado.pagosEspecialesAutorizados ? 'success' : 'default'}
+                        size="small"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Ruta Asignada
+                      </Typography>
+                      <Chip label={clienteSeleccionado.ruta} size="small" variant="outlined" />
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+
+              {/* Domicilios */}
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <LocationIcon />
+                    Domicilios Registrados ({clienteSeleccionado.domicilios?.length || 0})
+                  </Typography>
+                  {clienteSeleccionado.domicilios && clienteSeleccionado.domicilios.length > 0 ? (
+                    <Grid container spacing={2}>
+                      {clienteSeleccionado.domicilios.map((domicilio) => (
+                        <Grid item xs={12} md={6} key={domicilio.id}>
+                          <Card variant="outlined" sx={{ height: '100%' }}>
+                            <CardContent>
+                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  {domicilio.tipo === 'principal' && <HomeIcon color="primary" />}
+                                  {domicilio.tipo === 'facturacion' && <ReceiptIcon color="secondary" />}
+                                  {domicilio.tipo === 'entrega' && <ShippingIcon color="success" />}
+                                  {domicilio.tipo === 'otro' && <BusinessIcon color="action" />}
+                                  <Typography variant="subtitle2" fontWeight="bold">
+                                    {domicilio.tipo.charAt(0).toUpperCase() + domicilio.tipo.slice(1)}
+                                  </Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Chip
+                                    label={domicilio.activo ? 'Activo' : 'Inactivo'}
+                                    color={domicilio.activo ? 'success' : 'default'}
+                                    size="small"
+                                  />
+                                  <Chip
+                                    icon={<QrCodeIcon />}
+                                    label={domicilio.codigoQR}
+                                    color="primary"
+                                    variant="outlined"
+                                    size="small"
+                                  />
+                                </Box>
+                              </Box>
+                              <Typography variant="body2" color="text.secondary" gutterBottom>
+                                Dirección Completa
+                              </Typography>
+                              <Typography variant="body1" sx={{ mb: 1 }}>
+                                {domicilio.calle} {domicilio.numeroExterior}
+                                {domicilio.numeroInterior && ` Int. ${domicilio.numeroInterior}`}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                {domicilio.colonia}, {domicilio.municipio}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                {domicilio.estado}, C.P. {domicilio.codigoPostal}
+                              </Typography>
+                              {domicilio.referencia && (
+                                <>
+                                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                    Referencia:
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    {domicilio.referencia}
+                                  </Typography>
+                                </>
+                              )}
+                              
+                              <Divider sx={{ my: 2 }} />
+                              
+                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Código QR Único
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  Creado: {new Date(domicilio.fechaCreacionQR).toLocaleDateString('es-MX')}
+                                </Typography>
+                              </Box>
+                              
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                                <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
+                                  <QrCodeIcon />
+                                </Avatar>
+                                <Box>
+                                  <Typography variant="body2" fontWeight="bold">
+                                    {domicilio.codigoQR}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Escanea para cargar datos del cliente y domicilio
+                                  </Typography>
+                                </Box>
+                              </Box>
+                              
+                              <Button
+                                size="small"
+                                variant="contained"
+                                startIcon={<PrintIcon />}
+                                onClick={async () => {
+                                  const contenidoQR = generarContenidoQR(clienteSeleccionado, domicilio)
+                                  try {
+                                    // Generar el código QR como imagen
+                                    const qrDataURL = await QRCode.toDataURL(contenidoQR, {
+                                      width: 300,
+                                      margin: 2,
+                                      color: {
+                                        dark: '#000000',
+                                        light: '#FFFFFF'
+                                      }
+                                    })
+                                    
+                                    const ventanaImpresion = window.open('', '_blank')
+                                    ventanaImpresion?.document.write(`
+                                      <html>
+                                        <head>
+                                          <title>Código QR - ${domicilio.codigoQR}</title>
+                                          <style>
+                                            body { 
+                                              font-family: Arial, sans-serif; 
+                                              margin: 20px; 
+                                              text-align: center;
+                                            }
+                                            .header { margin-bottom: 30px; }
+                                            .qr-container { 
+                                              display: flex; 
+                                              flex-direction: column; 
+                                              align-items: center; 
+                                              margin: 30px 0; 
+                                            }
+                                            .qr-image { 
+                                              border: 2px solid #333; 
+                                              margin: 20px 0; 
+                                            }
+                                            .qr-info { 
+                                              background: #f5f5f5; 
+                                              padding: 20px; 
+                                              border-radius: 8px; 
+                                              margin: 20px 0; 
+                                              text-align: left;
+                                              max-width: 400px;
+                                            }
+                                            .qr-code-text {
+                                              font-family: monospace;
+                                              font-size: 18px;
+                                              font-weight: bold;
+                                              color: #1976d2;
+                                              margin: 10px 0;
+                                            }
+                                            .address-info {
+                                              margin: 10px 0;
+                                            }
+                                            .label {
+                                              font-weight: bold;
+                                              color: #666;
+                                            }
+                                            @media print {
+                                              body { margin: 0; }
+                                              .no-print { display: none; }
+                                            }
+                                          </style>
+                                        </head>
+                                        <body>
+                                          <div class="header">
+                                            <h1>Código QR para Domicilio</h1>
+                                            <div class="qr-code-text">${domicilio.codigoQR}</div>
+                                          </div>
+                                          
+                                          <div class="qr-container">
+                                            <img src="${qrDataURL}" alt="Código QR ${domicilio.codigoQR}" class="qr-image" />
+                                            <p><strong>Escanea este código QR con la app móvil</strong></p>
+                                          </div>
+                                          
+                                          <div class="qr-info">
+                                            <h3>Información del Domicilio</h3>
+                                            <div class="address-info">
+                                              <div class="label">Cliente:</div>
+                                              <div>${obtenerNombreCompleto(clienteSeleccionado)}</div>
+                                            </div>
+                                            <div class="address-info">
+                                              <div class="label">Tipo:</div>
+                                              <div>${domicilio.tipo.charAt(0).toUpperCase() + domicilio.tipo.slice(1)}</div>
+                                            </div>
+                                            <div class="address-info">
+                                              <div class="label">Dirección:</div>
+                                              <div>${domicilio.calle} ${domicilio.numeroExterior}${domicilio.numeroInterior ? ` Int. ${domicilio.numeroInterior}` : ''}</div>
+                                            </div>
+                                            <div class="address-info">
+                                              <div class="label">Colonia:</div>
+                                              <div>${domicilio.colonia}</div>
+                                            </div>
+                                            <div class="address-info">
+                                              <div class="label">Municipio:</div>
+                                              <div>${domicilio.municipio}</div>
+                                            </div>
+                                            <div class="address-info">
+                                              <div class="label">Estado:</div>
+                                              <div>${domicilio.estado}</div>
+                                            </div>
+                                            <div class="address-info">
+                                              <div class="label">Código Postal:</div>
+                                              <div>${domicilio.codigoPostal}</div>
+                                            </div>
+                                            ${domicilio.referencia ? `
+                                            <div class="address-info">
+                                              <div class="label">Referencia:</div>
+                                              <div>${domicilio.referencia}</div>
+                                            </div>
+                                            ` : ''}
+                                          </div>
+                                          
+                                          <div class="no-print">
+                                            <button onclick="window.print()" style="padding: 10px 20px; font-size: 16px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                              Imprimir
+                                            </button>
+                                          </div>
+                                        </body>
+                                      </html>
+                                    `)
+                                    ventanaImpresion?.document.close()
+                                  } catch (error) {
+                                    console.error('Error generando QR:', error)
+                                    alert('Error al generar el código QR')
+                                  }
+                                }}
+                              >
+                                Imprimir QR
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  ) : (
+                    <Alert severity="info">
+                      No hay domicilios registrados para este cliente.
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
             </Box>
           )}
         </DialogContent>

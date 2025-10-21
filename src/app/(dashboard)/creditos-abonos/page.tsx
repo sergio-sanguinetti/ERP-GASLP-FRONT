@@ -70,7 +70,9 @@ import {
   Share as ShareIcon,
   Add as AddIcon,
   Remove as RemoveIcon,
-  Visibility as VisibilityIcon
+  Visibility as VisibilityIcon,
+  Payment as PaymentIcon,
+  Close as CloseIcon
 } from '@mui/icons-material'
 
 // Tipos de datos
@@ -128,6 +130,43 @@ interface HistorialLimite {
   limiteAnterior: number
   limiteNuevo: number
   motivo: string
+}
+
+interface FormaPago {
+  id: string
+  metodo: 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque'
+  monto: number
+  referencia?: string
+  banco?: string
+}
+
+interface Pago {
+  id: string
+  clienteId: string
+  clienteNombre: string
+  notaId?: string
+  numeroNota?: string
+  montoTotal: number
+  formasPago: FormaPago[]
+  fechaPago: string
+  horaPago: string
+  observaciones: string
+  usuarioRegistro: string
+  usuarioAutorizacion?: string
+  estado: 'pendiente' | 'autorizado' | 'rechazado'
+  tipo: 'nota-especifica' | 'abono-general'
+  aplicadoA: string[]
+}
+
+interface PagoPendienteAutorizacion {
+  id: string
+  cliente: string
+  nota: string
+  montoPagado: number
+  formasPago: FormaPago[]
+  registradoPor: string
+  fechaHora: string
+  observaciones: string
 }
 
 // Datos de ejemplo
@@ -272,11 +311,67 @@ const historialLimites: HistorialLimite[] = [
   }
 ]
 
+const pagosPendientesAutorizacion: PagoPendienteAutorizacion[] = [
+  {
+    id: '1',
+    cliente: 'María González Pérez',
+    nota: 'NC-001234',
+    montoPagado: 8500,
+    formasPago: [
+      { id: '1', metodo: 'efectivo', monto: 5000 },
+      { id: '2', metodo: 'transferencia', monto: 2500, referencia: 'TRF123456', banco: 'BBVA' },
+      { id: '3', metodo: 'tarjeta', monto: 1000, referencia: 'TER789012' }
+    ],
+    registradoPor: 'Juan Pérez (Auxiliar)',
+    fechaHora: '2024-01-25 10:30',
+    observaciones: 'Pago completo de la nota'
+  },
+  {
+    id: '2',
+    cliente: 'Roberto Hernández García',
+    nota: 'NC-001235',
+    montoPagado: 3000,
+    formasPago: [
+      { id: '1', metodo: 'efectivo', monto: 3000 }
+    ],
+    registradoPor: 'Ana García (Auxiliar)',
+    fechaHora: '2024-01-25 11:15',
+    observaciones: 'Abono parcial'
+  }
+]
+
+const historialPagos: Pago[] = [
+  {
+    id: '1',
+    clienteId: '1',
+    clienteNombre: 'María González Pérez',
+    notaId: '1',
+    numeroNota: 'NC-001234',
+    montoTotal: 8500,
+    formasPago: [
+      { id: '1', metodo: 'efectivo', monto: 5000 },
+      { id: '2', metodo: 'transferencia', monto: 2500, referencia: 'TRF123456', banco: 'BBVA' },
+      { id: '3', metodo: 'tarjeta', monto: 1000, referencia: 'TER789012' }
+    ],
+    fechaPago: '2024-01-25',
+    horaPago: '10:30',
+    observaciones: 'Pago completo de la nota',
+    usuarioRegistro: 'Juan Pérez',
+    usuarioAutorizacion: 'Carlos Mendoza',
+    estado: 'autorizado',
+    tipo: 'nota-especifica',
+    aplicadoA: ['NC-001234']
+  }
+]
+
 export default function CreditosAbonosPage() {
-  const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'alertas' | 'reportes'>('dashboard')
+  const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'alertas' | 'reportes' | 'pagos-pendientes' | 'historial-pagos'>('dashboard')
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteCredito | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
-  const [tipoDialogo, setTipoDialogo] = useState<'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta'>('modificar-limite')
+  const [tipoDialogo, setTipoDialogo] = useState<'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono'>('modificar-limite')
+  const [notaSeleccionada, setNotaSeleccionada] = useState<NotaCredito | null>(null)
+  const [formasPago, setFormasPago] = useState<FormaPago[]>([])
+  const [montoTotalPago, setMontoTotalPago] = useState(0)
   const [filtros, setFiltros] = useState({
     nombre: '',
     ruta: '',
@@ -288,15 +383,56 @@ export default function CreditosAbonosPage() {
   })
   const [tabValue, setTabValue] = useState(0)
 
-  const abrirDialogo = (tipo: 'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta', cliente?: ClienteCredito) => {
+  const abrirDialogo = (tipo: 'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono', cliente?: ClienteCredito, nota?: NotaCredito) => {
     setTipoDialogo(tipo)
     setClienteSeleccionado(cliente || null)
+    setNotaSeleccionada(nota || null)
+    setFormasPago([])
+    setMontoTotalPago(0)
     setDialogoAbierto(true)
+  }
+
+  const agregarFormaPago = () => {
+    const nuevaFormaPago: FormaPago = {
+      id: Date.now().toString(),
+      metodo: 'efectivo',
+      monto: 0
+    }
+    setFormasPago(prev => [...prev, nuevaFormaPago])
+  }
+
+  const eliminarFormaPago = (id: string) => {
+    setFormasPago(prev => prev.filter(fp => fp.id !== id))
+  }
+
+  const actualizarFormaPago = (id: string, campo: string, valor: any) => {
+    setFormasPago(prev => prev.map(fp => 
+      fp.id === id ? { ...fp, [campo]: valor } : fp
+    ))
+  }
+
+  const calcularTotalPago = () => {
+    const total = formasPago.reduce((sum, fp) => sum + fp.monto, 0)
+    setMontoTotalPago(total)
+    return total
+  }
+
+  const getMetodoPagoColor = (metodo: string) => {
+    switch (metodo) {
+      case 'efectivo': return 'success'
+      case 'transferencia': return 'primary'
+      case 'tarjeta': return 'secondary'
+      case 'cheque': return 'warning'
+      default: return 'default'
+    }
   }
 
   const cerrarDialogo = () => {
     setDialogoAbierto(false)
     setClienteSeleccionado(null)
+    setNotaSeleccionada(null)
+    setFormasPago([])
+    setMontoTotalPago(0)
   }
 
   const manejarCambioFiltros = (campo: string, valor: any) => {
@@ -395,6 +531,20 @@ export default function CreditosAbonosPage() {
             startIcon={<DescriptionIcon />}
           >
             Reportes Financieros
+          </Button>
+          <Button
+            variant={vistaActual === 'pagos-pendientes' ? 'contained' : 'outlined'}
+            onClick={() => setVistaActual('pagos-pendientes')}
+            startIcon={<PaymentIcon />}
+          >
+            Pagos Pendientes
+          </Button>
+          <Button
+            variant={vistaActual === 'historial-pagos' ? 'contained' : 'outlined'}
+            onClick={() => setVistaActual('historial-pagos')}
+            startIcon={<HistoryIcon />}
+          >
+            Historial de Pagos
           </Button>
         </Box>
       </Box>
@@ -674,6 +824,11 @@ export default function CreditosAbonosPage() {
                                 <SendIcon />
                               </IconButton>
                             </Tooltip>
+                            <Tooltip title='Registrar pago'>
+                              <IconButton size='small' onClick={() => abrirDialogo('registrar-pago', cliente)}>
+                                <PaymentIcon />
+                              </IconButton>
+                            </Tooltip>
                           </Box>
                         </TableCell>
                       </TableRow>
@@ -816,13 +971,23 @@ export default function CreditosAbonosPage() {
                                 {nota.diasVencimiento > 0 ? `+${nota.diasVencimiento}` : nota.diasVencimiento}
                               </Typography>
                             </TableCell>
-                            <TableCell align='center'>
+                          <TableCell align='center'>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               <Chip
                                 label={nota.estado.replace('-', ' ').toUpperCase()}
                                 color={getNotaEstadoColor(nota.estado) as any}
                                 size='small'
                               />
-                            </TableCell>
+                              <Tooltip title='Pagar esta nota'>
+                                <IconButton 
+                                  size='small' 
+                                  onClick={() => abrirDialogo('registrar-pago', clienteSeleccionado, nota)}
+                                >
+                                  <PaymentIcon />
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -849,6 +1014,22 @@ export default function CreditosAbonosPage() {
                     onClick={() => abrirDialogo('recordatorio', clienteSeleccionado)}
                   >
                     Enviar Recordatorio
+                  </Button>
+                  <Button
+                    variant='contained'
+                    color='success'
+                    startIcon={<PaymentIcon />}
+                    onClick={() => abrirDialogo('registrar-pago', clienteSeleccionado)}
+                  >
+                    Registrar Pago
+                  </Button>
+                  <Button
+                    variant='outlined'
+                    color='success'
+                    startIcon={<PaymentIcon />}
+                    onClick={() => abrirDialogo('registrar-abono', clienteSeleccionado)}
+                  >
+                    Registrar Abono General
                   </Button>
                   <Button
                     variant='outlined'
@@ -1229,6 +1410,190 @@ export default function CreditosAbonosPage() {
         </Box>
       )}
 
+      {/* Vista de Pagos Pendientes de Autorización */}
+      {vistaActual === 'pagos-pendientes' && (
+        <Box>
+          <Typography variant='h6' gutterBottom>
+            Pagos Pendientes de Autorización
+          </Typography>
+          
+          <Card>
+            <CardContent>
+              <TableContainer component={Paper} variant='outlined'>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Cliente</TableCell>
+                      <TableCell>Nota</TableCell>
+                      <TableCell align='right'>Monto Pagado</TableCell>
+                      <TableCell>Formas de Pago</TableCell>
+                      <TableCell>Registrado por</TableCell>
+                      <TableCell>Fecha/Hora</TableCell>
+                      <TableCell align='center'>Acciones</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {pagosPendientesAutorizacion.map((pago) => (
+                      <TableRow key={pago.id} hover>
+                        <TableCell>
+                          <Typography variant='subtitle2' fontWeight='bold'>
+                            {pago.cliente}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant='subtitle2' fontWeight='bold'>
+                            {pago.nota}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align='right'>
+                          <Typography variant='h6' color='primary'>
+                            ${pago.montoPagado.toLocaleString()}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                            {pago.formasPago.map((forma, index) => (
+                              <Chip
+                                key={index}
+                                label={`${forma.metodo}: $${forma.monto.toLocaleString()}`}
+                                color={getMetodoPagoColor(forma.metodo) as any}
+                                size='small'
+                              />
+                            ))}
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant='body2'>
+                            {pago.registradoPor}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant='body2'>
+                            {pago.fechaHora}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align='center'>
+                          <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            <Tooltip title='Ver detalles'>
+                              <IconButton size='small'>
+                                <VisibilityIcon />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title='Autorizar'>
+                              <IconButton size='small' color='success'>
+                                <CheckCircleIcon />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title='Rechazar'>
+                              <IconButton size='small' color='error'>
+                                <CloseIcon />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </CardContent>
+          </Card>
+        </Box>
+      )}
+
+      {/* Vista de Historial de Pagos */}
+      {vistaActual === 'historial-pagos' && (
+        <Box>
+          <Typography variant='h6' gutterBottom>
+            Historial de Pagos
+          </Typography>
+          
+          <Card>
+            <CardContent>
+              <TableContainer component={Paper} variant='outlined'>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Fecha/Hora</TableCell>
+                      <TableCell>Cliente</TableCell>
+                      <TableCell>Nota</TableCell>
+                      <TableCell align='right'>Monto Total</TableCell>
+                      <TableCell>Formas de Pago</TableCell>
+                      <TableCell>Registrado por</TableCell>
+                      <TableCell>Autorizado por</TableCell>
+                      <TableCell align='center'>Estado</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {historialPagos.map((pago) => (
+                      <TableRow key={pago.id} hover>
+                        <TableCell>
+                          <Box>
+                            <Typography variant='body2'>
+                              {new Date(pago.fechaPago).toLocaleDateString('es-MX')}
+                            </Typography>
+                            <Typography variant='caption' color='text.secondary'>
+                              {pago.horaPago}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant='subtitle2' fontWeight='bold'>
+                            {pago.clienteNombre}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant='subtitle2' fontWeight='bold'>
+                            {pago.numeroNota}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align='right'>
+                          <Typography variant='h6' color='primary'>
+                            ${pago.montoTotal.toLocaleString()}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                            {pago.formasPago.map((forma, index) => (
+                              <Chip
+                                key={index}
+                                label={`${forma.metodo}: $${forma.monto.toLocaleString()}`}
+                                color={getMetodoPagoColor(forma.metodo) as any}
+                                size='small'
+                              />
+                            ))}
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant='body2'>
+                            {pago.usuarioRegistro}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant='body2'>
+                            {pago.usuarioAutorizacion || '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align='center'>
+                          <Chip
+                            label={pago.estado.toUpperCase()}
+                            color={
+                              pago.estado === 'autorizado' ? 'success' :
+                              pago.estado === 'pendiente' ? 'warning' : 'error'
+                            }
+                            size='small'
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </CardContent>
+          </Card>
+        </Box>
+      )}
+
       {/* Modales */}
       <Dialog open={dialogoAbierto} onClose={cerrarDialogo} maxWidth='sm' fullWidth>
         <DialogTitle>
@@ -1236,6 +1601,8 @@ export default function CreditosAbonosPage() {
           {tipoDialogo === 'recordatorio' && 'Enviar Recordatorio'}
           {tipoDialogo === 'bloquear' && 'Bloquear Crédito'}
           {tipoDialogo === 'estado-cuenta' && 'Generar Estado de Cuenta'}
+          {tipoDialogo === 'registrar-pago' && 'Registrar Pago'}
+          {tipoDialogo === 'registrar-abono' && 'Registrar Abono General'}
         </DialogTitle>
         <DialogContent>
           {clienteSeleccionado && (
@@ -1304,6 +1671,123 @@ export default function CreditosAbonosPage() {
                   </FormControl>
                 </Box>
               )}
+
+              {(tipoDialogo === 'registrar-pago' || tipoDialogo === 'registrar-abono') && (
+                <Box>
+                  {notaSeleccionada && (
+                    <Box sx={{ mb: 3, p: 2, bgcolor: 'primary.light', borderRadius: 1 }}>
+                      <Typography variant='h6' gutterBottom>
+                        Nota a Pagar: {notaSeleccionada.numeroNota}
+                      </Typography>
+                      <Typography variant='body2' color='text.secondary'>
+                        Importe de la nota: ${notaSeleccionada.importe.toLocaleString()}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  <Typography variant='h6' gutterBottom>
+                    Formas de Pago
+                  </Typography>
+
+                  {formasPago.map((forma, index) => (
+                    <Card key={forma.id} variant='outlined' sx={{ mb: 2 }}>
+                      <CardContent>
+                        <Grid container spacing={2} alignItems='center'>
+                          <Grid item xs={12} sm={3}>
+                            <FormControl fullWidth>
+                              <InputLabel>Método</InputLabel>
+                              <Select
+                                value={forma.metodo}
+                                onChange={(e) => actualizarFormaPago(forma.id, 'metodo', e.target.value)}
+                                label='Método'
+                              >
+                                <MenuItem value='efectivo'>Efectivo</MenuItem>
+                                <MenuItem value='transferencia'>Transferencia</MenuItem>
+                                <MenuItem value='tarjeta'>Tarjeta</MenuItem>
+                                <MenuItem value='cheque'>Cheque</MenuItem>
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          <Grid item xs={12} sm={3}>
+                            <TextField
+                              fullWidth
+                              label='Monto'
+                              type='number'
+                              value={forma.monto}
+                              onChange={(e) => actualizarFormaPago(forma.id, 'monto', Number(e.target.value))}
+                              InputProps={{
+                                startAdornment: <InputAdornment position='start'>$</InputAdornment>
+                              }}
+                            />
+                          </Grid>
+                          {(forma.metodo === 'transferencia' || forma.metodo === 'cheque') && (
+                            <Grid item xs={12} sm={3}>
+                              <TextField
+                                fullWidth
+                                label='Referencia'
+                                value={forma.referencia || ''}
+                                onChange={(e) => actualizarFormaPago(forma.id, 'referencia', e.target.value)}
+                              />
+                            </Grid>
+                          )}
+                          {(forma.metodo === 'transferencia' || forma.metodo === 'cheque') && (
+                            <Grid item xs={12} sm={2}>
+                              <TextField
+                                fullWidth
+                                label='Banco'
+                                value={forma.banco || ''}
+                                onChange={(e) => actualizarFormaPago(forma.id, 'banco', e.target.value)}
+                              />
+                            </Grid>
+                          )}
+                          <Grid item xs={12} sm={1}>
+                            <IconButton 
+                              color='error' 
+                              onClick={() => eliminarFormaPago(forma.id)}
+                            >
+                              <RemoveIcon />
+                            </IconButton>
+                          </Grid>
+                        </Grid>
+                      </CardContent>
+                    </Card>
+                  ))}
+
+                  <Button 
+                    variant='outlined' 
+                    startIcon={<AddIcon />}
+                    onClick={agregarFormaPago}
+                    sx={{ mb: 2 }}
+                  >
+                    Agregar otra forma de pago
+                  </Button>
+
+                  <Card sx={{ bgcolor: 'success.light', mb: 2 }}>
+                    <CardContent>
+                      <Typography variant='h6' gutterBottom>
+                        Resumen del Pago
+                      </Typography>
+                      <Typography variant='h4' color='primary'>
+                        Total a pagar: ${calcularTotalPago().toLocaleString()}
+                      </Typography>
+                      {notaSeleccionada && (
+                        <Typography variant='body2' color='text.secondary'>
+                          Faltante: ${(notaSeleccionada.importe - calcularTotalPago()).toLocaleString()}
+                        </Typography>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <TextField
+                    fullWidth
+                    label='Observaciones'
+                    multiline
+                    rows={3}
+                    sx={{ mb: 2 }}
+                    placeholder='Observaciones sobre el pago...'
+                  />
+                </Box>
+              )}
             </Box>
           )}
         </DialogContent>
@@ -1316,6 +1800,8 @@ export default function CreditosAbonosPage() {
             {tipoDialogo === 'recordatorio' && 'Enviar Recordatorio'}
             {tipoDialogo === 'bloquear' && 'Bloquear Crédito'}
             {tipoDialogo === 'estado-cuenta' && 'Generar Estado'}
+            {tipoDialogo === 'registrar-pago' && 'Registrar Pago'}
+            {tipoDialogo === 'registrar-abono' && 'Registrar Abono'}
           </Button>
         </DialogActions>
       </Dialog>
