@@ -513,7 +513,9 @@ export default function CorteCajaPage() {
   >('dashboard')
   const [repartidorSeleccionado, setRepartidorSeleccionado] = useState<RepartidorCorte | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
-  const [tipoDialogo, setTipoDialogo] = useState<'validacion' | 'observaciones' | 'apertura' | 'cierre' | 'validar-deposito'>('validacion')
+  const [tipoDialogo, setTipoDialogo] = useState<
+    'validacion' | 'observaciones' | 'apertura' | 'cierre' | 'validar-deposito'
+  >('validacion')
   const [modoAuxiliar, setModoAuxiliar] = useState(false)
   const [pasoActual, setPasoActual] = useState(0)
   const [depositoSeleccionado, setDepositoSeleccionado] = useState<DepositoBancario | null>(null)
@@ -560,10 +562,14 @@ export default function CorteCajaPage() {
 
   const getEstadoDepositoColor = (estado: string) => {
     switch (estado) {
-      case 'validado': return 'success'
-      case 'pendiente-validacion': return 'warning'
-      case 'diferencia': return 'error'
-      default: return 'default'
+      case 'validado':
+        return 'success'
+      case 'pendiente-validacion':
+        return 'warning'
+      case 'diferencia':
+        return 'error'
+      default:
+        return 'default'
     }
   }
 
@@ -630,7 +636,11 @@ export default function CorteCajaPage() {
     setValidaciones(prev => ({ ...prev, [campo]: valor }))
   }
 
-  const manejarCambioFolioArchivo = (tipo: 'terminal' | 'transferencias' | 'cheques', campo: 'folio' | 'archivo', valor: string) => {
+  const manejarCambioFolioArchivo = (
+    tipo: 'terminal' | 'transferencias' | 'cheques',
+    campo: 'folio' | 'archivo',
+    valor: string
+  ) => {
     setFoliosArchivosValidacion(prev => ({
       ...prev,
       [tipo]: {
@@ -1418,7 +1428,7 @@ export default function CorteCajaPage() {
               <Typography variant='h6' gutterBottom>
                 Depósitos Bancarios
               </Typography>
-              
+
               <TableContainer component={Paper} variant='outlined'>
                 <Table>
                   <TableHead>
@@ -1434,7 +1444,7 @@ export default function CorteCajaPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {depositosBancarios.map((deposito) => (
+                    {depositosBancarios.map(deposito => (
                       <TableRow key={deposito.id} hover>
                         <TableCell>
                           <Typography variant='subtitle2' fontWeight='bold'>
@@ -1483,10 +1493,7 @@ export default function CorteCajaPage() {
                         <TableCell align='center'>
                           <Box sx={{ display: 'flex', gap: 0.5 }}>
                             <Tooltip title='Validar depósito'>
-                              <IconButton 
-                                size='small'
-                                onClick={() => abrirValidacionDeposito(deposito)}
-                              >
+                              <IconButton size='small' onClick={() => abrirValidacionDeposito(deposito)}>
                                 <CheckCircleIcon />
                               </IconButton>
                             </Tooltip>
@@ -1511,7 +1518,7 @@ export default function CorteCajaPage() {
               <Typography variant='h6' gutterBottom>
                 Depósitos Múltiples
               </Typography>
-              
+
               <TableContainer component={Paper} variant='outlined'>
                 <Table>
                   <TableHead>
@@ -1524,7 +1531,7 @@ export default function CorteCajaPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {depositosMultiples.map((depositoMultiple) => (
+                    {depositosMultiples.map(depositoMultiple => (
                       <TableRow key={depositoMultiple.id} hover>
                         <TableCell>
                           <Typography variant='subtitle2' fontWeight='bold'>
@@ -1537,9 +1544,7 @@ export default function CorteCajaPage() {
                           </Typography>
                         </TableCell>
                         <TableCell align='center'>
-                          <Typography variant='h6'>
-                            {depositoMultiple.depositos.length}
-                          </Typography>
+                          <Typography variant='h6'>{depositoMultiple.depositos.length}</Typography>
                         </TableCell>
                         <TableCell align='center'>
                           <Chip
@@ -1742,7 +1747,7 @@ export default function CorteCajaPage() {
                               }
                             />
                           </Box>
-                          
+
                           <Grid container spacing={2}>
                             <Grid item xs={12} md={6}>
                               <TextField
@@ -1755,35 +1760,7 @@ export default function CorteCajaPage() {
                                 required={validaciones.terminal}
                               />
                             </Grid>
-                            <Grid item xs={12} md={6}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <TextField
-                                  fullWidth
-                                  label='Archivo adjunto'
-                                  placeholder='Seleccionar archivo'
-                                  value={foliosArchivosValidacion.terminal.archivo}
-                                  disabled
-                                />
-                                <Button
-                                  variant='outlined'
-                                  component='label'
-                                  disabled={!validaciones.terminal}
-                                  startIcon={<AddIcon />}
-                                >
-                                  Adjuntar
-                                  <input
-                                    type='file'
-                                    hidden
-                                    onChange={e => {
-                                      const file = e.target.files?.[0]
-                                      if (file) {
-                                        manejarCambioFolioArchivo('terminal', 'archivo', file.name)
-                                      }
-                                    }}
-                                  />
-                                </Button>
-                              </Box>
-                            </Grid>
+                            <Grid item xs={12} md={6}></Grid>
                           </Grid>
                         </CardContent>
                       </Card>
@@ -1803,12 +1780,13 @@ export default function CorteCajaPage() {
                               }
                               label={
                                 <Typography variant='h6' color='success.main'>
-                                  Transferencias: ${repartidorSeleccionado.formasPago.transferencias.monto.toLocaleString()}
+                                  Transferencias: $
+                                  {repartidorSeleccionado.formasPago.transferencias.monto.toLocaleString()}
                                 </Typography>
                               }
                             />
                           </Box>
-                          
+
                           <Grid container spacing={2}>
                             <Grid item xs={12} md={6}>
                               <TextField
@@ -1820,35 +1798,6 @@ export default function CorteCajaPage() {
                                 disabled={!validaciones.transferencias}
                                 required={validaciones.transferencias}
                               />
-                            </Grid>
-                            <Grid item xs={12} md={6}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <TextField
-                                  fullWidth
-                                  label='Archivo adjunto'
-                                  placeholder='Seleccionar archivo'
-                                  value={foliosArchivosValidacion.transferencias.archivo}
-                                  disabled
-                                />
-                                <Button
-                                  variant='outlined'
-                                  component='label'
-                                  disabled={!validaciones.transferencias}
-                                  startIcon={<AddIcon />}
-                                >
-                                  Adjuntar
-                                  <input
-                                    type='file'
-                                    hidden
-                                    onChange={e => {
-                                      const file = e.target.files?.[0]
-                                      if (file) {
-                                        manejarCambioFolioArchivo('transferencias', 'archivo', file.name)
-                                      }
-                                    }}
-                                  />
-                                </Button>
-                              </Box>
                             </Grid>
                           </Grid>
                         </CardContent>
@@ -1874,7 +1823,7 @@ export default function CorteCajaPage() {
                               }
                             />
                           </Box>
-                          
+
                           <Grid container spacing={2}>
                             <Grid item xs={12} md={6}>
                               <TextField
@@ -1886,35 +1835,6 @@ export default function CorteCajaPage() {
                                 disabled={!validaciones.cheques}
                                 required={validaciones.cheques}
                               />
-                            </Grid>
-                            <Grid item xs={12} md={6}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <TextField
-                                  fullWidth
-                                  label='Archivo adjunto'
-                                  placeholder='Seleccionar archivo'
-                                  value={foliosArchivosValidacion.cheques.archivo}
-                                  disabled
-                                />
-                                <Button
-                                  variant='outlined'
-                                  component='label'
-                                  disabled={!validaciones.cheques}
-                                  startIcon={<AddIcon />}
-                                >
-                                  Adjuntar
-                                  <input
-                                    type='file'
-                                    hidden
-                                    onChange={e => {
-                                      const file = e.target.files?.[0]
-                                      if (file) {
-                                        manejarCambioFolioArchivo('cheques', 'archivo', file.name)
-                                      }
-                                    }}
-                                  />
-                                </Button>
-                              </Box>
                             </Grid>
                           </Grid>
                         </CardContent>
@@ -2305,7 +2225,12 @@ export default function CorteCajaPage() {
       </Dialog>
 
       {/* Modal Validación de Depósito */}
-      <Dialog open={dialogoAbierto && tipoDialogo === 'validar-deposito'} onClose={cerrarDialogo} maxWidth='md' fullWidth>
+      <Dialog
+        open={dialogoAbierto && tipoDialogo === 'validar-deposito'}
+        onClose={cerrarDialogo}
+        maxWidth='md'
+        fullWidth
+      >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <AccountBalanceIcon color='primary' />
@@ -2318,13 +2243,13 @@ export default function CorteCajaPage() {
               <Typography variant='h6' gutterBottom>
                 Repartidor: {depositoSeleccionado.repartidorNombre}
               </Typography>
-              
+
               <Card variant='outlined' sx={{ mb: 3 }}>
                 <CardContent>
                   <Typography variant='h6' gutterBottom>
                     Información del Depósito
                   </Typography>
-                  
+
                   <Grid container spacing={2}>
                     <Grid item xs={12} md={6}>
                       <Typography variant='body2' color='text.secondary'>
@@ -2347,7 +2272,8 @@ export default function CorteCajaPage() {
                         Fecha y hora del depósito
                       </Typography>
                       <Typography variant='body2'>
-                        {new Date(depositoSeleccionado.fechaDeposito).toLocaleDateString('es-MX')} - {depositoSeleccionado.horaDeposito}
+                        {new Date(depositoSeleccionado.fechaDeposito).toLocaleDateString('es-MX')} -{' '}
+                        {depositoSeleccionado.horaDeposito}
                       </Typography>
                     </Grid>
                     <Grid item xs={12} md={6}>
@@ -2367,7 +2293,7 @@ export default function CorteCajaPage() {
               <Typography variant='h6' gutterBottom>
                 Validación del Auxiliar
               </Typography>
-              
+
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
                   <TextField
@@ -2390,17 +2316,10 @@ export default function CorteCajaPage() {
                   />
                 </Grid>
                 <Grid item xs={12}>
-                  <FormControlLabel
-                    control={<Checkbox />}
-                    label='Comprobante físico recibido'
-                  />
+                  <FormControlLabel control={<Checkbox />} label='Comprobante físico recibido' />
                 </Grid>
                 <Grid item xs={12}>
-                  <Button
-                    variant='outlined'
-                    startIcon={<AddIcon />}
-                    sx={{ mb: 2 }}
-                  >
+                  <Button variant='outlined' startIcon={<AddIcon />} sx={{ mb: 2 }}>
                     Subir foto del ticket físico
                   </Button>
                 </Grid>
@@ -2421,7 +2340,7 @@ export default function CorteCajaPage() {
                   <Typography variant='h6' gutterBottom>
                     Comparación de Folios
                   </Typography>
-                  
+
                   <TableContainer component={Paper} variant='outlined'>
                     <Table>
                       <TableHead>
@@ -2437,17 +2356,10 @@ export default function CorteCajaPage() {
                           <TableCell>Folio de Depósito</TableCell>
                           <TableCell align='center'>{depositoSeleccionado.folioRepartidor}</TableCell>
                           <TableCell align='center'>
-                            <TextField
-                              size='small'
-                              placeholder='Capturar folio físico'
-                            />
+                            <TextField size='small' placeholder='Capturar folio físico' />
                           </TableCell>
                           <TableCell align='center'>
-                            <Chip
-                              label='PENDIENTE'
-                              color='warning'
-                              size='small'
-                            />
+                            <Chip label='PENDIENTE' color='warning' size='small' />
                           </TableCell>
                         </TableRow>
                       </TableBody>
@@ -2459,9 +2371,7 @@ export default function CorteCajaPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={cerrarDialogo}>
-            Cancelar
-          </Button>
+          <Button onClick={cerrarDialogo}>Cancelar</Button>
           <Button variant='contained' color='error'>
             Marcar Diferencia
           </Button>

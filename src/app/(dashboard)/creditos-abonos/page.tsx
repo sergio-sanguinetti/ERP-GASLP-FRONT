@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { 
   Box, 
   Typography, 
@@ -382,6 +382,21 @@ export default function CreditosAbonosPage() {
     diasVencimientoMax: ''
   })
   const [tabValue, setTabValue] = useState(0)
+  const [contadorId, setContadorId] = useState(0)
+
+  // Función helper para formatear fechas de manera consistente
+  const formatearFecha = (fecha: string) => {
+    try {
+      const date = new Date(fecha)
+      return date.toLocaleDateString('es-MX', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      })
+    } catch {
+      return fecha
+    }
+  }
 
   const abrirDialogo = (tipo: 'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono', cliente?: ClienteCredito, nota?: NotaCredito) => {
     setTipoDialogo(tipo)
@@ -394,11 +409,12 @@ export default function CreditosAbonosPage() {
 
   const agregarFormaPago = () => {
     const nuevaFormaPago: FormaPago = {
-      id: Date.now().toString(),
+      id: `fp-${contadorId}`,
       metodo: 'efectivo',
       monto: 0
     }
     setFormasPago(prev => [...prev, nuevaFormaPago])
+    setContadorId(prev => prev + 1)
   }
 
   const eliminarFormaPago = (id: string) => {
@@ -411,11 +427,15 @@ export default function CreditosAbonosPage() {
     ))
   }
 
-  const calcularTotalPago = () => {
-    const total = formasPago.reduce((sum, fp) => sum + fp.monto, 0)
-    setMontoTotalPago(total)
-    return total
-  }
+  // Calcular total del pago usando useMemo para evitar re-renders infinitos
+  const totalPago = useMemo(() => {
+    return formasPago.reduce((sum, fp) => sum + fp.monto, 0)
+  }, [formasPago])
+
+  // Actualizar montoTotalPago cuando cambie el total
+  useEffect(() => {
+    setMontoTotalPago(totalPago)
+  }, [totalPago])
 
   const getMetodoPagoColor = (metodo: string) => {
     switch (metodo) {
@@ -953,10 +973,10 @@ export default function CreditosAbonosPage() {
                               </Typography>
                             </TableCell>
                             <TableCell>
-                              {new Date(nota.fechaVenta).toLocaleDateString('es-MX')}
+                              {formatearFecha(nota.fechaVenta)}
                             </TableCell>
                             <TableCell>
-                              {new Date(nota.fechaVencimiento).toLocaleDateString('es-MX')}
+                              {formatearFecha(nota.fechaVencimiento)}
                             </TableCell>
                             <TableCell align='right'>
                               <Typography variant='h6' color='primary'>
@@ -1206,7 +1226,7 @@ export default function CreditosAbonosPage() {
                             {cambio.motivo}
                           </Typography>
                           <Typography variant='caption' color='text.secondary'>
-                            {cambio.usuario} • {new Date(cambio.fecha).toLocaleDateString('es-MX')}
+                            {cambio.usuario} • {formatearFecha(cambio.fecha)}
                           </Typography>
                         </Box>
                       }
@@ -1277,7 +1297,7 @@ export default function CreditosAbonosPage() {
                           </Typography>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Typography variant='caption' color='text.secondary'>
-                              {new Date(alerta.fecha).toLocaleDateString('es-MX')}
+                              {formatearFecha(alerta.fecha)}
                             </Typography>
                             <Box sx={{ display: 'flex', gap: 1 }}>
                               <Button size='small' variant='outlined'>
@@ -1530,7 +1550,7 @@ export default function CreditosAbonosPage() {
                         <TableCell>
                           <Box>
                             <Typography variant='body2'>
-                              {new Date(pago.fechaPago).toLocaleDateString('es-MX')}
+                              {formatearFecha(pago.fechaPago)}
                             </Typography>
                             <Typography variant='caption' color='text.secondary'>
                               {pago.horaPago}
@@ -1768,11 +1788,11 @@ export default function CreditosAbonosPage() {
                         Resumen del Pago
                       </Typography>
                       <Typography variant='h4' color='primary'>
-                        Total a pagar: ${calcularTotalPago().toLocaleString()}
+                        Total a pagar: ${totalPago.toLocaleString()}
                       </Typography>
                       {notaSeleccionada && (
                         <Typography variant='body2' color='text.secondary'>
-                          Faltante: ${(notaSeleccionada.importe - calcularTotalPago()).toLocaleString()}
+                          Faltante: ${(notaSeleccionada.importe - totalPago).toLocaleString()}
                         </Typography>
                       )}
                     </CardContent>

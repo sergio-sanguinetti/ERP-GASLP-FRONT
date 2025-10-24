@@ -45,6 +45,11 @@ const verticalMenuData = (): VerticalMenuDataType[] => [
         label: 'Formas de Pago',
         href: '/configuracion/formas-pago',
         icon: 'tabler-credit-card-pay'
+      },
+      {
+        label: 'Rutas',
+        href: '/configuracion/rutas',
+        icon: 'tabler-route'
       }
     ]
   }
