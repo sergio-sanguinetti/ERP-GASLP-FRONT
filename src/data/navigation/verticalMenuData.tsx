@@ -50,6 +50,11 @@ const verticalMenuData = (): VerticalMenuDataType[] => [
         label: 'Rutas',
         href: '/configuracion/rutas',
         icon: 'tabler-route'
+      },
+      {
+        label: 'Tickets',
+        href: '/configuracion/tickets',
+        icon: 'tabler-receipt'
       }
     ]
   }
