@@ -761,19 +761,19 @@ export default function VentasPage() {
             {/* Gran Total Operación */}
             <Grid item xs={12}>
               <Card sx={{ bgcolor: 'primary.main', color: 'white' }}>
-                <CardContent>
+                <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box>
-                      <Typography variant='h6' gutterBottom>
+                      <Typography variant='h6' gutterBottom sx={{ color: 'white' }}>
                         TOTAL OPERACIÓN
                       </Typography>
-                      <Typography variant='h3'>${granTotalOperacion.toLocaleString()}</Typography>
+                      <Typography variant='h3' sx={{ color: 'white' }}>${granTotalOperacion.toLocaleString()}</Typography>
                     </Box>
                     <Box sx={{ textAlign: 'right' }}>
-                      <Typography variant='h6' gutterBottom>
+                      <Typography variant='h6' gutterBottom sx={{ color: 'white' }}>
                         EFECTIVO CONSOLIDADO
                       </Typography>
-                      <Typography variant='h4'>${efectivoConsolidado.toLocaleString()}</Typography>
+                      <Typography variant='h4' sx={{ color: 'white' }}>${efectivoConsolidado.toLocaleString()}</Typography>
                     </Box>
                   </Box>
                 </CardContent>

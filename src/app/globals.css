@@ -114,6 +114,25 @@ ul:not([class]) {
 
 :where([class^='tabler-']) {
   font-size: 1.5rem;
+  color: #2B2B2B;
+}
+
+:where([class^='tabler-']):hover {
+  color: #F5A623;
+}
+
+/* Forzar texto blanco en Cards con fondo primario */
+.MuiCard-root[style*="background-color"] {
+  &[style*="var(--mui-palette-primary-main)"],
+  &[style*="rgb(107, 78, 47)"],
+  &[style*="rgb(107 78 47)"] {
+    color: white !important;
+    .MuiCardContent-root,
+    .MuiCardHeader-root,
+    .MuiTypography-root {
+      color: white !important;
+    }
+  }
 }
 
 /* Fix width issue for the input-otp component */

@@ -20,14 +20,11 @@ const useLayoutInit = (colorSchemeFallback: 'light' | 'dark') => {
   const isDark = useMedia('(prefers-color-scheme: dark)', colorSchemeFallback === 'dark')
 
   useEffect(() => {
-    const appMode = isDark ? 'dark' : 'light'
+    // Forzar siempre modo light
+    const appMode = 'light'
 
     updateCookieColorPref(appMode)
-
-    if (settings.mode === 'system') {
-      // We need to change the mode in settings context to apply the mode change to MUI components
-      setMode(appMode)
-    }
+    setMode(appMode)
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDark])

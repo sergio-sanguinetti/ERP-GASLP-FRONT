@@ -60,7 +60,7 @@ export const SettingsProvider = (props: Props) => {
     navbarContentWidth: themeConfig.navbar.contentWidth,
     contentWidth: themeConfig.contentWidth,
     footerContentWidth: themeConfig.footer.contentWidth,
-    primaryColor: primaryColorConfig[0].main
+    primaryColor: '#6B4E2F' // Forzar color marrón
   }
 
   const updatedInitialSettings = {
@@ -74,16 +74,23 @@ export const SettingsProvider = (props: Props) => {
     JSON.stringify(props.settingsCookie) !== '{}' ? props.settingsCookie : updatedInitialSettings
   )
 
-  // State
-  const [_settingsState, _updateSettingsState] = useState<Settings>(
-    JSON.stringify(settingsCookie) !== '{}' ? settingsCookie : updatedInitialSettings
-  )
+  // State - Forzar siempre el color primario correcto
+  const sanitizedCookie = settingsCookie && JSON.stringify(settingsCookie) !== '{}' 
+    ? { ...settingsCookie, primaryColor: '#6B4E2F' }
+    : updatedInitialSettings
+  
+  const [_settingsState, _updateSettingsState] = useState<Settings>(sanitizedCookie)
 
   const updateSettings = (settings: Partial<Settings>, options?: UpdateSettingsOptions) => {
     const { updateCookie = true } = options || {}
 
     _updateSettingsState(prev => {
-      const newSettings = { ...prev, ...settings }
+      // Forzar siempre el color primario correcto
+      const newSettings = { 
+        ...prev, 
+        ...settings,
+        primaryColor: '#6B4E2F' // Siempre forzar este color
+      }
 
       // Update cookie if needed
       if (updateCookie) updateSettingsCookie(newSettings)

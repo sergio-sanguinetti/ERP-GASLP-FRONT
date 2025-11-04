@@ -61,9 +61,14 @@ const menuItemStyles = (theme: Theme, iconClass: string): MenuItemStyles => ({
   },
   icon: ({ level }) => ({
     marginInlineEnd: theme.spacing(2),
-    ...(level < 2 ? { fontSize: '1.375rem' } : { fontSize: '0.75rem', color: 'var(--mui-palette-text-secondary)' }),
+    ...(level < 2 ? { 
+      fontSize: '1.375rem',
+      // Iconos naranjas para nivel 0 y 1
+      color: '#F5A623'
+    } : { fontSize: '0.75rem', color: 'var(--mui-palette-text-secondary)' }),
     '& > i, & > svg': {
-      fontSize: 'inherit'
+      fontSize: 'inherit',
+      color: 'inherit'
     },
     [`& .${iconClass}`]: {
       fontSize: '0.75rem',

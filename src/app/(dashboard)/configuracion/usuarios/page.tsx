@@ -30,6 +30,13 @@ import EditUserModal from './components/EditUserModal'
 // Type Imports
 import type { User, UserRole } from './types'
 
+// Mock data para sedes
+const mockSedes = [
+  { id: 1, nombre: 'Sede Central' },
+  { id: 2, nombre: 'Sede Norte' },
+  { id: 3, nombre: 'Sede Sur' }
+]
+
 // Mock data para usuarios
 const mockUsers: User[] = [
   {
@@ -40,6 +47,8 @@ const mockUsers: User[] = [
     rol: 'Administrador',
     correo: 'juan.garcia@empresa.com',
     estado: 'Activo',
+    sedeId: 1,
+    sedeNombre: 'Sede Central',
     fechaCreacion: '2024-01-15'
   },
   {
@@ -50,6 +59,8 @@ const mockUsers: User[] = [
     rol: 'Gestor',
     correo: 'maria.rodriguez@empresa.com',
     estado: 'Activo',
+    sedeId: 2,
+    sedeNombre: 'Sede Norte',
     fechaCreacion: '2024-02-20'
   },
   {
@@ -60,6 +71,8 @@ const mockUsers: User[] = [
     rol: 'Repartidor',
     correo: 'carlos.martinez@empresa.com',
     estado: 'Inactivo',
+    sedeId: 3,
+    sedeNombre: 'Sede Sur',
     fechaCreacion: '2024-03-10'
   }
 ]
@@ -70,10 +83,15 @@ const UsuariosPage = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
 
-  const handleCreateUser = (newUser: Omit<User, 'id' | 'fechaCreacion'>) => {
+  const handleCreateUser = (newUser: Omit<User, 'id' | 'fechaCreacion' | 'sedeNombre'>) => {
+    const sedeNombre = newUser.sedeId 
+      ? mockSedes.find(s => s.id === newUser.sedeId)?.nombre 
+      : undefined
+    
     const user: User = {
       ...newUser,
-      id: Math.max(...users.map(u => u.id)) + 1,
+      sedeNombre,
+      id: Math.max(...users.map(u => u.id), 0) + 1,
       fechaCreacion: new Date().toISOString().split('T')[0]
     }
     setUsers([...users, user])
@@ -81,7 +99,17 @@ const UsuariosPage = () => {
   }
 
   const handleEditUser = (updatedUser: User) => {
-    setUsers(users.map(user => user.id === updatedUser.id ? updatedUser : user))
+    // Asegurar que el nombre de la sede esté actualizado
+    const sedeNombre = updatedUser.sedeId 
+      ? mockSedes.find(s => s.id === updatedUser.sedeId)?.nombre 
+      : undefined
+    
+    const userWithSede: User = {
+      ...updatedUser,
+      sedeNombre
+    }
+    
+    setUsers(users.map(user => user.id === updatedUser.id ? userWithSede : user))
     setIsEditModalOpen(false)
     setSelectedUser(null)
   }
@@ -132,6 +160,7 @@ const UsuariosPage = () => {
                   <TableCell>Apellido Materno</TableCell>
                   <TableCell>Rol</TableCell>
                   <TableCell>Correo</TableCell>
+                  <TableCell>Sede</TableCell>
                   <TableCell>Estado</TableCell>
                   <TableCell>Fecha Creación</TableCell>
                   <TableCell align="center">Acciones</TableCell>
@@ -151,6 +180,13 @@ const UsuariosPage = () => {
                       />
                     </TableCell>
                     <TableCell>{user.correo}</TableCell>
+                    <TableCell>
+                      {user.sedeNombre || (
+                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                          Sin sede
+                        </Typography>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Chip
                         label={user.estado}
@@ -190,6 +226,7 @@ const UsuariosPage = () => {
         open={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onCreateUser={handleCreateUser}
+        sedes={mockSedes}
       />
 
       <EditUserModal
@@ -200,12 +237,14 @@ const UsuariosPage = () => {
         }}
         onEditUser={handleEditUser}
         user={selectedUser}
+        sedes={mockSedes}
       />
     </Box>
   )
 }
 
 export default UsuariosPage
+
 
 
 

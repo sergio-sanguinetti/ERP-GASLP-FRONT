@@ -261,50 +261,6 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
                 </div>
               </div>
               <div className='flex flex-col gap-2'>
-                <p className='font-medium'>Mode</p>
-                <div className='flex items-center justify-between'>
-                  <div className='flex flex-col items-start gap-0.5'>
-                    <div
-                      className={classnames(styles.itemWrapper, styles.modeWrapper, {
-                        [styles.active]: settings.mode === 'light'
-                      })}
-                      onClick={() => handleChange('mode', 'light')}
-                    >
-                      <i className='tabler-sun text-[30px]' />
-                    </div>
-                    <p className={styles.itemLabel} onClick={() => handleChange('mode', 'light')}>
-                      Light
-                    </p>
-                  </div>
-                  <div className='flex flex-col items-start gap-0.5'>
-                    <div
-                      className={classnames(styles.itemWrapper, styles.modeWrapper, {
-                        [styles.active]: settings.mode === 'dark'
-                      })}
-                      onClick={() => handleChange('mode', 'dark')}
-                    >
-                      <i className='tabler-moon-stars text-[30px]' />
-                    </div>
-                    <p className={styles.itemLabel} onClick={() => handleChange('mode', 'dark')}>
-                      Dark
-                    </p>
-                  </div>
-                  <div className='flex flex-col items-start gap-0.5'>
-                    <div
-                      className={classnames(styles.itemWrapper, styles.modeWrapper, {
-                        [styles.active]: settings.mode === 'system'
-                      })}
-                      onClick={() => handleChange('mode', 'system')}
-                    >
-                      <i className='tabler-device-laptop text-[30px]' />
-                    </div>
-                    <p className={styles.itemLabel} onClick={() => handleChange('mode', 'system')}>
-                      System
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className='flex flex-col gap-2'>
                 <p className='font-medium'>Skin</p>
                 <div className='flex items-center gap-4'>
                   <div className='flex flex-col items-start gap-0.5'>

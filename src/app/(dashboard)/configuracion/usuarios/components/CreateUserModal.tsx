@@ -26,16 +26,25 @@ interface CreateUserModalProps {
   open: boolean
   onClose: () => void
   onCreateUser: (user: CreateUserData) => void
+  sedes?: Array<{ id: number; nombre: string }>
 }
 
-const CreateUserModal = ({ open, onClose, onCreateUser }: CreateUserModalProps) => {
+// Mock de sedes para el selector
+const mockSedes = [
+  { id: 1, nombre: 'Sede Central' },
+  { id: 2, nombre: 'Sede Norte' },
+  { id: 3, nombre: 'Sede Sur' }
+]
+
+const CreateUserModal = ({ open, onClose, onCreateUser, sedes = mockSedes }: CreateUserModalProps) => {
   const [formData, setFormData] = useState<CreateUserData>({
     nombres: '',
     apellidoPaterno: '',
     apellidoMaterno: '',
     rol: 'Repartidor',
     correo: '',
-    estado: 'Activo'
+    estado: 'Activo',
+    sedeId: undefined
   })
 
   const [errors, setErrors] = useState<Partial<CreateUserData>>({})
@@ -84,7 +93,8 @@ const CreateUserModal = ({ open, onClose, onCreateUser }: CreateUserModalProps) 
         apellidoMaterno: '',
         rol: 'Repartidor',
         correo: '',
-        estado: 'Activo'
+        estado: 'Activo',
+        sedeId: undefined
       })
       setErrors({})
     }
@@ -181,6 +191,28 @@ const CreateUserModal = ({ open, onClose, onCreateUser }: CreateUserModalProps) 
                 </Select>
               </FormControl>
             </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Sede</InputLabel>
+                <Select
+                  value={formData.sedeId || ''}
+                  onChange={(e) => {
+                    const value = e.target.value === '' ? undefined : Number(e.target.value)
+                    setFormData(prev => ({ ...prev, sedeId: value }))
+                  }}
+                  label="Sede"
+                >
+                  <MenuItem value="">
+                    <em>Sin sede asignada</em>
+                  </MenuItem>
+                  {sedes.map((sede) => (
+                    <MenuItem key={sede.id} value={sede.id}>
+                      {sede.nombre}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
           </Grid>
         </Box>
       </DialogContent>
@@ -195,6 +227,7 @@ const CreateUserModal = ({ open, onClose, onCreateUser }: CreateUserModalProps) 
 }
 
 export default CreateUserModal
+
 
 
 

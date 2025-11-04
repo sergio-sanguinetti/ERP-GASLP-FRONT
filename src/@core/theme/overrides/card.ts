@@ -13,10 +13,19 @@ const card = (skin: Skin): Theme['components'] => {
         })
       },
       styleOverrides: {
-        root: ({ ownerState }) => ({
+        root: ({ ownerState, theme }) => ({
           ...(ownerState.variant !== 'outlined' && {
             boxShadow: 'var(--mui-customShadows-md)'
-          })
+          }),
+          // Cuando el Card tiene fondo primario, forzar texto blanco en todos los hijos
+          '&[style*="background-color"]': {
+            '& .MuiCardContent-root, & .MuiCardHeader-root': {
+              color: 'white',
+              '& .MuiTypography-root': {
+                color: 'white !important'
+              }
+            }
+          }
         })
       }
     },
@@ -49,9 +58,16 @@ const card = (skin: Skin): Theme['components'] => {
     },
     MuiCardContent: {
       styleOverrides: {
-        root: ({ theme }) => ({
+        root: ({ theme, ownerState }) => ({
           padding: theme.spacing(6),
           color: 'var(--mui-palette-text-secondary)',
+          // Si el Card padre tiene color: 'white', aplicar a todo el contenido
+          '.MuiCard-root[class*="color: white"] &, .MuiCard-root[style*="color: white"] &': {
+            color: 'white',
+            '& .MuiTypography-root': {
+              color: 'white !important'
+            }
+          },
           '&:last-child': {
             paddingBlockEnd: theme.spacing(6)
           },

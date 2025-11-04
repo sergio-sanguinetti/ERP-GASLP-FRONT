@@ -42,6 +42,11 @@ const horizontalMenuData = (): HorizontalMenuDataType[] => [
         icon: 'tabler-user-cog'
       },
       {
+        label: 'Sedes',
+        href: '/configuracion/sedes',
+        icon: 'tabler-building-store'
+      },
+      {
         label: 'Formas de Pago',
         href: '/configuracion/formas-pago',
         icon: 'tabler-credit-card-pay'

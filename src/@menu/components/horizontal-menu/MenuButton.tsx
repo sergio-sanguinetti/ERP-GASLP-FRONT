@@ -54,10 +54,10 @@ export const menuButtonStyles = (props: MenuButtonStylesProps) => {
       ...(level === 0
         ? {
             color: 'white',
-            backgroundColor: '#765feb'
+            backgroundColor: '#6B4E2F'
           }
         : {
-            ...(children ? { backgroundColor: '#f3f3f3' } : { color: '#765feb', backgroundColor: '#765feb1f' })
+            ...(children ? { backgroundColor: '#f3f3f3' } : { color: '#6B4E2F', backgroundColor: 'rgb(107 78 47 / 0.12)' })
           })
     }
   })

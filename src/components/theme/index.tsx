@@ -45,17 +45,8 @@ const CustomThemeProvider = (props: Props) => {
 
   // Vars
   const isServer = typeof window === 'undefined'
-  let currentMode: SystemMode
-
-  if (isServer) {
-    currentMode = systemMode
-  } else {
-    if (settings.mode === 'system') {
-      currentMode = isDark ? 'dark' : 'light'
-    } else {
-      currentMode = settings.mode as SystemMode
-    }
-  }
+  // Forzar siempre modo light
+  let currentMode: SystemMode = 'light'
 
   // Merge the primary color scheme override with the core theme
   const theme = useMemo(() => {
@@ -64,18 +55,18 @@ const CustomThemeProvider = (props: Props) => {
         light: {
           palette: {
             primary: {
-              main: settings.primaryColor,
-              light: lighten(settings.primaryColor as string, 0.2),
-              dark: darken(settings.primaryColor as string, 0.1)
+              main: '#6B4E2F', // Forzar siempre este color
+              light: '#8C6643',
+              dark: '#5A4128'
             }
           }
         },
         dark: {
           palette: {
             primary: {
-              main: settings.primaryColor,
-              light: lighten(settings.primaryColor as string, 0.2),
-              dark: darken(settings.primaryColor as string, 0.1)
+              main: '#6B4E2F', // Forzar siempre este color
+              light: '#8C6643',
+              dark: '#5A4128'
             }
           }
         }

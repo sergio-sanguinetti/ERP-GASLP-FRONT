@@ -27,9 +27,17 @@ interface EditUserModalProps {
   onClose: () => void
   onEditUser: (user: User) => void
   user: User | null
+  sedes?: Array<{ id: number; nombre: string }>
 }
 
-const EditUserModal = ({ open, onClose, onEditUser, user }: EditUserModalProps) => {
+// Mock de sedes para el selector
+const mockSedes = [
+  { id: 1, nombre: 'Sede Central' },
+  { id: 2, nombre: 'Sede Norte' },
+  { id: 3, nombre: 'Sede Sur' }
+]
+
+const EditUserModal = ({ open, onClose, onEditUser, user, sedes = mockSedes }: EditUserModalProps) => {
   const [formData, setFormData] = useState<User>({
     id: 0,
     nombres: '',
@@ -38,6 +46,8 @@ const EditUserModal = ({ open, onClose, onEditUser, user }: EditUserModalProps) 
     rol: 'Repartidor',
     correo: '',
     estado: 'Activo',
+    sedeId: undefined,
+    sedeNombre: undefined,
     fechaCreacion: ''
   })
 
@@ -174,6 +184,33 @@ const EditUserModal = ({ open, onClose, onEditUser, user }: EditUserModalProps) 
                 </Select>
               </FormControl>
             </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Sede</InputLabel>
+                <Select
+                  value={formData.sedeId || ''}
+                  onChange={(e) => {
+                    const value = e.target.value === '' ? undefined : Number(e.target.value)
+                    const selectedSede = sedes.find(s => s.id === value)
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      sedeId: value,
+                      sedeNombre: selectedSede?.nombre
+                    }))
+                  }}
+                  label="Sede"
+                >
+                  <MenuItem value="">
+                    <em>Sin sede asignada</em>
+                  </MenuItem>
+                  {sedes.map((sede) => (
+                    <MenuItem key={sede.id} value={sede.id}>
+                      {sede.nombre}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
             <Grid item xs={12}>
               <TextField
                 fullWidth
@@ -197,6 +234,7 @@ const EditUserModal = ({ open, onClose, onEditUser, user }: EditUserModalProps) 
 }
 
 export default EditUserModal
+
 
 
 

@@ -139,16 +139,16 @@ export default function ReporteConsolidadoPage() {
     <Box sx={{ p: 3 }}>
       {/* Encabezado del Reporte */}
       <Card sx={{ mb: 3, bgcolor: 'primary.main', color: 'white' }}>
-        <CardContent>
+        <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Box>
-              <Typography variant="h4" gutterBottom>
+              <Typography variant="h4" gutterBottom sx={{ color: 'white' }}>
                 REPORTE CONSOLIDADO PARA OFICINA
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <CalendarTodayIcon />
-                  <Typography variant="h6">
+                  <CalendarTodayIcon sx={{ color: 'white' }} />
+                  <Typography variant="h6" sx={{ color: 'white' }}>
                     {new Date(reporteConsolidado.fecha).toLocaleDateString('es-MX', {
                       weekday: 'long',
                       year: 'numeric',
@@ -158,8 +158,8 @@ export default function ReporteConsolidadoPage() {
                   </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <PersonIcon />
-                  <Typography variant="h6">
+                  <PersonIcon sx={{ color: 'white' }} />
+                  <Typography variant="h6" sx={{ color: 'white' }}>
                     Validador: {reporteConsolidado.validador}
                   </Typography>
                 </Box>
@@ -318,12 +318,12 @@ export default function ReporteConsolidadoPage() {
         {/* GRAN TOTAL OPERACIÓN */}
         <Grid item xs={12}>
           <Card sx={{ bgcolor: 'primary.main', color: 'white' }}>
-            <CardContent>
+            <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
               <Box sx={{ textAlign: 'center' }}>
-                <Typography variant="h5" gutterBottom>
+                <Typography variant="h5" gutterBottom sx={{ color: 'white' }}>
                   GRAN TOTAL OPERACIÓN
                 </Typography>
-                <Typography variant="h1" sx={{ fontWeight: 'bold' }}>
+                <Typography variant="h1" sx={{ fontWeight: 'bold', color: 'white' }}>
                   ${reporteConsolidado.granTotalOperacion.toLocaleString()}
                 </Typography>
               </Box>

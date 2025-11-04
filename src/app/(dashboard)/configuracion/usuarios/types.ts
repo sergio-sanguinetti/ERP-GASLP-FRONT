@@ -10,6 +10,8 @@ export interface User {
   rol: UserRole
   correo: string
   estado: UserStatus
+  sedeId?: number
+  sedeNombre?: string
   fechaCreacion: string
 }
 
@@ -20,12 +22,14 @@ export interface CreateUserData {
   rol: UserRole
   correo: string
   estado: UserStatus
+  sedeId?: number
 }
 
 export interface EditUserData extends CreateUserData {
   id: number
   fechaCreacion: string
 }
+
 
 
 

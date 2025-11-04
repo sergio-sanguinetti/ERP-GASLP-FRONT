@@ -26,10 +26,14 @@ const list: Theme['components'] = {
     styleOverrides: {
       root: {
         minInlineSize: 0,
-        color: 'var(--mui-palette-text-primary)',
+        color: '#2B2B2B',
         fontSize: '1.375rem',
         '& > svg, & > i': {
-          fontSize: 'inherit'
+          fontSize: 'inherit',
+          color: 'inherit'
+        },
+        '&:hover > svg, &:hover > i': {
+          color: '#F5A623'
         }
       }
     }

@@ -240,6 +240,9 @@ const button: Theme['components'] = {
               '&:not(.Mui-disabled)': {
                 boxShadow: 'var(--mui-customShadows-primary-sm)'
               },
+              '&:not(.Mui-disabled):hover': {
+                backgroundColor: '#8C6643'
+              },
               '&:not(.Mui-disabled):active, &.Mui-focusVisible:not(:has(span.MuiTouchRipple-root))': {
                 backgroundColor: 'var(--mui-palette-primary-dark)'
               },

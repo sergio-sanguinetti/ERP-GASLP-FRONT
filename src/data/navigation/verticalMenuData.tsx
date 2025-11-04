@@ -28,6 +28,11 @@ const verticalMenuData = (): VerticalMenuDataType[] => [
     icon: 'tabler-cash'
   },
   {
+    label: 'Newsletter',
+    href: '/newsletter',
+    icon: 'tabler-news'
+  },
+  {
     label: 'Reportes',
     href: '/reportes',
     icon: 'tabler-chart-bar'
@@ -40,6 +45,11 @@ const verticalMenuData = (): VerticalMenuDataType[] => [
         label: 'Usuarios',
         href: '/configuracion/usuarios',
         icon: 'tabler-user-cog'
+      },
+      {
+        label: 'Sedes',
+        href: '/configuracion/sedes',
+        icon: 'tabler-building-store'
       },
       {
         label: 'Formas de Pago',

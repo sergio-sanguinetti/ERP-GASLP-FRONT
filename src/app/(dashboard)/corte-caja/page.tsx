@@ -746,11 +746,11 @@ export default function CorteCajaPage() {
         <Box>
           {/* Encabezado Principal */}
           <Card sx={{ mb: 3, bgcolor: 'primary.main', color: 'white' }}>
-            <CardContent>
-              <Typography variant='h4' gutterBottom>
+            <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
+              <Typography variant='h4' gutterBottom sx={{ color: 'white' }}>
                 CORTES ENTREGADOS - PENDIENTES VALIDACIÓN
               </Typography>
-              <Typography variant='h6'>
+              <Typography variant='h6' sx={{ color: 'white' }}>
                 Fecha:{' '}
                 {new Date().toLocaleDateString('es-MX', {
                   weekday: 'long',
@@ -913,11 +913,11 @@ export default function CorteCajaPage() {
         <Box>
           {/* Dashboard General de Cortes */}
           <Card sx={{ mb: 3, bgcolor: 'primary.main', color: 'white' }}>
-            <CardContent>
-              <Typography variant='h4' gutterBottom>
+            <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
+              <Typography variant='h4' gutterBottom sx={{ color: 'white' }}>
                 CONTROL GENERAL DE CORTES
               </Typography>
-              <Typography variant='h6'>Fecha: {new Date().toLocaleDateString('es-MX')}</Typography>
+              <Typography variant='h6' sx={{ color: 'white' }}>Fecha: {new Date().toLocaleDateString('es-MX')}</Typography>
             </CardContent>
           </Card>
 
@@ -1061,19 +1061,19 @@ export default function CorteCajaPage() {
             {/* Gran Total Operación */}
             <Grid item xs={12}>
               <Card sx={{ bgcolor: 'primary.main', color: 'white' }}>
-                <CardContent>
+                <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box>
-                      <Typography variant='h6' gutterBottom>
+                      <Typography variant='h6' gutterBottom sx={{ color: 'white' }}>
                         GRAN TOTAL OPERACIÓN
                       </Typography>
-                      <Typography variant='h3'>${resumenCortes.granTotalOperacion.toLocaleString()}</Typography>
+                      <Typography variant='h3' sx={{ color: 'white' }}>${resumenCortes.granTotalOperacion.toLocaleString()}</Typography>
                     </Box>
                     <Box sx={{ textAlign: 'right' }}>
-                      <Typography variant='h6' gutterBottom>
+                      <Typography variant='h6' gutterBottom sx={{ color: 'white' }}>
                         EFECTIVO CONSOLIDADO
                       </Typography>
-                      <Typography variant='h4'>${resumenCortes.efectivoConsolidado.toLocaleString()}</Typography>
+                      <Typography variant='h4' sx={{ color: 'white' }}>${resumenCortes.efectivoConsolidado.toLocaleString()}</Typography>
                     </Box>
                   </Box>
                 </CardContent>
@@ -1624,11 +1624,11 @@ export default function CorteCajaPage() {
                       </Grid>
                       <Grid item xs={12}>
                         <Card sx={{ bgcolor: 'primary.main', color: 'white' }}>
-                          <CardContent>
-                            <Typography variant='h6' gutterBottom>
+                          <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
+                            <Typography variant='h6' gutterBottom sx={{ color: 'white' }}>
                               TOTAL DÍA
                             </Typography>
-                            <Typography variant='h3'>${repartidorSeleccionado.totalDia.toLocaleString()}</Typography>
+                            <Typography variant='h3' sx={{ color: 'white' }}>${repartidorSeleccionado.totalDia.toLocaleString()}</Typography>
                           </CardContent>
                         </Card>
                       </Grid>

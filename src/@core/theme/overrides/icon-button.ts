@@ -15,12 +15,15 @@ const iconButton: Theme['components'] = {
           {
             props: { color: 'default' },
             style: {
+              color: '#2B2B2B',
               '&:not(.Mui-disabled):hover, &:not(.Mui-disabled):active': {
-                backgroundColor: 'rgb(var(--mui-palette-text-primaryChannel) / 0.08)'
+                backgroundColor: 'rgb(245 166 35 / 0.1)',
+                color: '#F5A623'
               },
               ...(themeConfig.disableRipple && {
                 '&.Mui-focusVisible:not(.Mui-disabled)': {
-                  backgroundColor: 'rgb(var(--mui-palette-text-primaryChannel) / 0.08)'
+                  backgroundColor: 'rgb(245 166 35 / 0.1)',
+                  color: '#F5A623'
                 }
               }),
               '&.Mui-disabled': {

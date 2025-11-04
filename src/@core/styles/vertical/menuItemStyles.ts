@@ -41,7 +41,7 @@ const menuItemStyles = (verticalNavOptions: VerticalNavState, theme: Theme): Men
               backgroundColor: 'var(--mui-palette-primary-lightOpacity)',
               color: 'var(--mui-palette-primary-main)',
               [`& .${menuClasses.icon}`]: {
-                color: 'var(--mui-palette-primary-main)'
+                color: '#F5A623'
               }
             }
           : {
@@ -56,7 +56,7 @@ const menuItemStyles = (verticalNavOptions: VerticalNavState, theme: Theme): Men
                      rgb(var(--mui-palette-primary-mainChannel) / 0.7) 100%) !important`,
               boxShadow: 'var(--mui-customShadows-primary-sm)',
               [`& .${menuClasses.icon}`]: {
-                color: 'inherit'
+                color: '#F5A623'
               }
             })
       }
@@ -87,7 +87,9 @@ const menuItemStyles = (verticalNavOptions: VerticalNavState, theme: Theme): Men
     icon: ({ level }) => ({
       transition: `margin-inline-end ${transitionDuration}ms ease-in-out`,
       ...(level === 0 && {
-        fontSize: '1.375rem'
+        fontSize: '1.375rem',
+        // Iconos naranjas para nivel 0
+        color: '#F5A623'
       }),
       ...(level > 0 && {
         fontSize: '0.75rem',
@@ -114,7 +116,8 @@ const menuItemStyles = (verticalNavOptions: VerticalNavState, theme: Theme): Men
           marginInlineEnd: theme.spacing(2)
         }),
       '& > i, & > svg': {
-        fontSize: 'inherit'
+        fontSize: 'inherit',
+        color: 'inherit'
       }
     }),
     prefix: {
