@@ -16,7 +16,8 @@ import {
   Select,
   MenuItem,
   Box,
-  Grid
+  Grid,
+  Alert
 } from '@mui/material'
 
 // Type Imports
@@ -25,22 +26,24 @@ import type { Sede } from '../types'
 interface EditSedeModalProps {
   open: boolean
   onClose: () => void
-  onEditSede: (sede: Sede) => void
+  onEditSede: (sede: Sede) => Promise<void>
   sede: Sede | null
 }
 
 const EditSedeModal = ({ open, onClose, onEditSede, sede }: EditSedeModalProps) => {
   const [formData, setFormData] = useState<Sede>({
-    id: 0,
+    id: '',
     nombre: '',
     direccion: '',
     telefono: '',
     email: '',
-    estado: 'Activa',
+    estado: 'activa',
     fechaCreacion: ''
   })
 
   const [errors, setErrors] = useState<Partial<Sede>>({})
+  const [loading, setLoading] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   useEffect(() => {
     if (sede) {
@@ -56,6 +59,7 @@ const EditSedeModal = ({ open, onClose, onEditSede, sede }: EditSedeModalProps) 
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }))
     }
+    setSubmitError('')
   }
 
   const validateForm = (): boolean => {
@@ -83,23 +87,41 @@ const EditSedeModal = ({ open, onClose, onEditSede, sede }: EditSedeModalProps) 
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSubmit = () => {
-    if (validateForm()) {
-      onEditSede(formData)
-      setErrors({})
+  const handleSubmit = async () => {
+    if (!sede || !validateForm()) {
+      return
+    }
+
+    setLoading(true)
+    setSubmitError('')
+
+    try {
+      await onEditSede(formData)
+    } catch (err: any) {
+      setSubmitError(err.message || 'Error al actualizar sede')
+    } finally {
+      setLoading(false)
     }
   }
 
   const handleClose = () => {
     setErrors({})
+    setSubmitError('')
     onClose()
   }
+
+  if (!sede) return null
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>Editar Sede</DialogTitle>
       <DialogContent>
         <Box sx={{ pt: 2 }}>
+          {submitError && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setSubmitError('')}>
+              {submitError}
+            </Alert>
+          )}
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <TextField
@@ -156,8 +178,8 @@ const EditSedeModal = ({ open, onClose, onEditSede, sede }: EditSedeModalProps) 
                   onChange={handleChange('estado')}
                   label="Estado"
                 >
-                  <MenuItem value="Activa">Activa</MenuItem>
-                  <MenuItem value="Inactiva">Inactiva</MenuItem>
+                  <MenuItem value="activa">Activa</MenuItem>
+                  <MenuItem value="inactiva">Inactiva</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -165,7 +187,7 @@ const EditSedeModal = ({ open, onClose, onEditSede, sede }: EditSedeModalProps) 
               <TextField
                 fullWidth
                 label="Fecha de Creación"
-                value={formData.fechaCreacion}
+                value={new Date(formData.fechaCreacion).toLocaleDateString('es-ES')}
                 disabled
                 helperText="Este campo no se puede modificar"
               />
@@ -174,9 +196,11 @@ const EditSedeModal = ({ open, onClose, onEditSede, sede }: EditSedeModalProps) 
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose}>Cancelar</Button>
-        <Button onClick={handleSubmit} variant="contained">
-          Guardar Cambios
+        <Button onClick={handleClose} disabled={loading}>
+          Cancelar
+        </Button>
+        <Button onClick={handleSubmit} variant="contained" disabled={loading}>
+          {loading ? 'Guardando...' : 'Guardar Cambios'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -184,4 +208,3 @@ const EditSedeModal = ({ open, onClose, onEditSede, sede }: EditSedeModalProps) 
 }
 
 export default EditSedeModal
-

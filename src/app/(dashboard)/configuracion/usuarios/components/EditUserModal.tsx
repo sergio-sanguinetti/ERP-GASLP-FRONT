@@ -16,50 +16,71 @@ import {
   Select,
   MenuItem,
   Box,
-  Grid
+  Grid,
+  Alert
 } from '@mui/material'
 
 // Type Imports
-import type { User, UserRole, UserStatus } from '../types'
+import type { User, UserRole, UserStatus, EditUserData } from '../types'
+import { sedesAPI, type Sede } from '@lib/api'
 
 interface EditUserModalProps {
   open: boolean
   onClose: () => void
-  onEditUser: (user: User) => void
+  onEditUser: (user: User) => Promise<void>
   user: User | null
-  sedes?: Array<{ id: number; nombre: string }>
 }
 
-// Mock de sedes para el selector
-const mockSedes = [
-  { id: 1, nombre: 'Sede Central' },
-  { id: 2, nombre: 'Sede Norte' },
-  { id: 3, nombre: 'Sede Sur' }
-]
-
-const EditUserModal = ({ open, onClose, onEditUser, user, sedes = mockSedes }: EditUserModalProps) => {
-  const [formData, setFormData] = useState<User>({
-    id: 0,
+const EditUserModal = ({ open, onClose, onEditUser, user }: EditUserModalProps) => {
+  const [formData, setFormData] = useState<EditUserData>({
     nombres: '',
     apellidoPaterno: '',
     apellidoMaterno: '',
-    rol: 'Repartidor',
-    correo: '',
-    estado: 'Activo',
-    sedeId: undefined,
-    sedeNombre: undefined,
-    fechaCreacion: ''
+    email: '',
+    telefono: '',
+    rol: 'repartidor',
+    tipoRepartidor: undefined,
+    estado: 'activo',
+    sede: ''
   })
 
-  const [errors, setErrors] = useState<Partial<User>>({})
+  const [errors, setErrors] = useState<Partial<EditUserData>>({})
+  const [loading, setLoading] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [sedes, setSedes] = useState<Sede[]>([])
+  const [loadingSedes, setLoadingSedes] = useState(true)
+
+  useEffect(() => {
+    const loadSedes = async () => {
+      try {
+        const data = await sedesAPI.getAll()
+        setSedes(data)
+      } catch (err) {
+        console.error('Error loading sedes:', err)
+      } finally {
+        setLoadingSedes(false)
+      }
+    }
+    loadSedes()
+  }, [])
 
   useEffect(() => {
     if (user) {
-      setFormData(user)
+      setFormData({
+        nombres: user.nombres,
+        apellidoPaterno: user.apellidoPaterno,
+        apellidoMaterno: user.apellidoMaterno,
+        email: user.email,
+        telefono: user.telefono || '',
+        rol: user.rol,
+        tipoRepartidor: user.tipoRepartidor,
+        estado: user.estado,
+        sede: user.sede || ''
+      })
     }
   }, [user])
 
-  const handleChange = (field: keyof User) => (event: any) => {
+  const handleChange = (field: keyof EditUserData) => (event: any) => {
     const value = event.target.value
     setFormData(prev => ({ ...prev, [field]: value }))
     
@@ -67,50 +88,79 @@ const EditUserModal = ({ open, onClose, onEditUser, user, sedes = mockSedes }: E
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }))
     }
+    setSubmitError('')
   }
 
   const validateForm = (): boolean => {
-    const newErrors: Partial<User> = {}
+    const newErrors: Partial<EditUserData> = {}
 
-    if (!formData.nombres.trim()) {
+    if (!formData.nombres?.trim()) {
       newErrors.nombres = 'Los nombres son requeridos'
     }
 
-    if (!formData.apellidoPaterno.trim()) {
+    if (!formData.apellidoPaterno?.trim()) {
       newErrors.apellidoPaterno = 'El apellido paterno es requerido'
     }
 
-    if (!formData.apellidoMaterno.trim()) {
+    if (!formData.apellidoMaterno?.trim()) {
       newErrors.apellidoMaterno = 'El apellido materno es requerido'
     }
 
-    if (!formData.correo.trim()) {
-      newErrors.correo = 'El correo es requerido'
-    } else if (!/\S+@\S+\.\S+/.test(formData.correo)) {
-      newErrors.correo = 'El correo no es válido'
+    if (!formData.email?.trim()) {
+      newErrors.email = 'El correo es requerido'
+    } else if (formData.email && !/\S+@\S+\.\S+/.test(formData.email)) {
+      newErrors.email = 'El correo no es válido'
+    }
+
+    if (formData.rol === 'repartidor' && !formData.tipoRepartidor) {
+      newErrors.tipoRepartidor = 'El tipo de repartidor es requerido'
     }
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSubmit = () => {
-    if (validateForm()) {
-      onEditUser(formData)
-      setErrors({})
+  const handleSubmit = async () => {
+    if (!user || !validateForm()) {
+      return
+    }
+
+    setLoading(true)
+    setSubmitError('')
+
+    try {
+      await onEditUser({
+        ...user,
+        ...formData,
+        telefono: formData.telefono || undefined,
+        tipoRepartidor: formData.rol === 'repartidor' ? formData.tipoRepartidor : undefined,
+        sede: formData.sede || undefined
+      })
+    } catch (err: any) {
+      setSubmitError(err.message || 'Error al actualizar usuario')
+    } finally {
+      setLoading(false)
     }
   }
 
   const handleClose = () => {
     setErrors({})
+    setSubmitError('')
     onClose()
   }
+
+  if (!user) return null
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>Editar Usuario</DialogTitle>
       <DialogContent>
         <Box sx={{ pt: 2 }}>
+          {submitError && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setSubmitError('')}>
+              {submitError}
+            </Alert>
+          )}
           <Grid container spacing={3}>
             <Grid item xs={12} sm={6}>
               <TextField
@@ -150,11 +200,21 @@ const EditUserModal = ({ open, onClose, onEditUser, user, sedes = mockSedes }: E
                 fullWidth
                 label="Correo Electrónico"
                 type="email"
-                value={formData.correo}
-                onChange={handleChange('correo')}
-                error={!!errors.correo}
-                helperText={errors.correo}
+                value={formData.email}
+                onChange={handleChange('email')}
+                error={!!errors.email}
+                helperText={errors.email}
                 required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Teléfono"
+                value={formData.telefono}
+                onChange={handleChange('telefono')}
+                error={!!errors.telefono}
+                helperText={errors.telefono}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -162,15 +222,41 @@ const EditUserModal = ({ open, onClose, onEditUser, user, sedes = mockSedes }: E
                 <InputLabel>Rol</InputLabel>
                 <Select
                   value={formData.rol}
-                  onChange={handleChange('rol')}
+                  onChange={(e) => {
+                    const newRol = e.target.value as any
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      rol: newRol,
+                      tipoRepartidor: newRol !== 'repartidor' ? undefined : prev.tipoRepartidor
+                    }))
+                  }}
                   label="Rol"
                 >
-                  <MenuItem value="Administrador">Administrador</MenuItem>
-                  <MenuItem value="Gestor">Gestor</MenuItem>
-                  <MenuItem value="Repartidor">Repartidor</MenuItem>
+                  <MenuItem value="superAdministrador">Super Administrador</MenuItem>
+                  <MenuItem value="administrador">Administrador</MenuItem>
+                  <MenuItem value="gestor">Gestor</MenuItem>
+                  <MenuItem value="repartidor">Repartidor</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
+            {formData.rol === 'repartidor' && (
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth required>
+                  <InputLabel>Tipo de Repartidor</InputLabel>
+                  <Select
+                    value={formData.tipoRepartidor || ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? undefined : e.target.value
+                      setFormData(prev => ({ ...prev, tipoRepartidor: value as any }))
+                    }}
+                    label="Tipo de Repartidor"
+                  >
+                    <MenuItem value="cilindros">Cilindros</MenuItem>
+                    <MenuItem value="pipas">Pipas</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth required>
                 <InputLabel>Estado</InputLabel>
@@ -179,8 +265,8 @@ const EditUserModal = ({ open, onClose, onEditUser, user, sedes = mockSedes }: E
                   onChange={handleChange('estado')}
                   label="Estado"
                 >
-                  <MenuItem value="Activo">Activo</MenuItem>
-                  <MenuItem value="Inactivo">Inactivo</MenuItem>
+                  <MenuItem value="activo">Activo</MenuItem>
+                  <MenuItem value="inactivo">Inactivo</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -188,23 +274,19 @@ const EditUserModal = ({ open, onClose, onEditUser, user, sedes = mockSedes }: E
               <FormControl fullWidth>
                 <InputLabel>Sede</InputLabel>
                 <Select
-                  value={formData.sedeId || ''}
+                  value={formData.sede || ''}
                   onChange={(e) => {
-                    const value = e.target.value === '' ? undefined : Number(e.target.value)
-                    const selectedSede = sedes.find(s => s.id === value)
-                    setFormData(prev => ({ 
-                      ...prev, 
-                      sedeId: value,
-                      sedeNombre: selectedSede?.nombre
-                    }))
+                    const value = e.target.value === '' ? undefined : e.target.value
+                    setFormData(prev => ({ ...prev, sede: value }))
                   }}
                   label="Sede"
+                  disabled={loadingSedes}
                 >
                   <MenuItem value="">
                     <em>Sin sede asignada</em>
                   </MenuItem>
                   {sedes.map((sede) => (
-                    <MenuItem key={sede.id} value={sede.id}>
+                    <MenuItem key={sede.id} value={sede.nombre}>
                       {sede.nombre}
                     </MenuItem>
                   ))}
@@ -214,8 +296,8 @@ const EditUserModal = ({ open, onClose, onEditUser, user, sedes = mockSedes }: E
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Fecha de Creación"
-                value={formData.fechaCreacion}
+                label="Fecha de Registro"
+                value={new Date(user.fechaRegistro).toLocaleDateString('es-ES')}
                 disabled
                 helperText="Este campo no se puede modificar"
               />
@@ -224,9 +306,11 @@ const EditUserModal = ({ open, onClose, onEditUser, user, sedes = mockSedes }: E
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose}>Cancelar</Button>
-        <Button onClick={handleSubmit} variant="contained">
-          Guardar Cambios
+        <Button onClick={handleClose} disabled={loading}>
+          Cancelar
+        </Button>
+        <Button onClick={handleSubmit} variant="contained" disabled={loading}>
+          {loading ? 'Guardando...' : 'Guardar Cambios'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -234,11 +318,3 @@ const EditUserModal = ({ open, onClose, onEditUser, user, sedes = mockSedes }: E
 }
 
 export default EditUserModal
-
-
-
-
-
-
-
-

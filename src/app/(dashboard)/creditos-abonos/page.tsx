@@ -2,6 +2,24 @@
 
 import React, { useState, useMemo, useEffect } from 'react'
 import { 
+  creditosAbonosAPI, 
+  clientesAPI, 
+  rutasAPI, 
+  formasPagoAPI,
+  authAPI,
+  sedesAPI,
+  usuariosAPI,
+  type ClienteCredito as ClienteCreditoAPI,
+  type NotaCredito as NotaCreditoAPI,
+  type Pago as PagoAPI,
+  type ResumenCartera,
+  type HistorialLimiteCredito,
+  type Usuario,
+  type Sede,
+  type Ruta,
+  type FormaPago
+} from '@/lib/api'
+import { 
   Box, 
   Typography, 
   Card, 
@@ -75,41 +93,11 @@ import {
   Close as CloseIcon
 } from '@mui/icons-material'
 
-// Tipos de datos
-interface ClienteCredito {
-  id: string
-  nombre: string
-  direccion: string
-  telefono: string
-  ruta: string
-  limiteCredito: number
-  saldoActual: number
-  creditoDisponible: number
-  diasPromedioPago: number
-  estado: 'buen-pagador' | 'vencido' | 'critico' | 'bloqueado'
-  notasPendientes: NotaCredito[]
-}
+// Tipos de datos (usando los de la API)
+type ClienteCredito = ClienteCreditoAPI
+type NotaCredito = NotaCreditoAPI
 
-interface NotaCredito {
-  id: string
-  numeroNota: string
-  fechaVenta: string
-  fechaVencimiento: string
-  importe: number
-  diasVencimiento: number
-  estado: 'vigente' | 'por-vencer' | 'vencida'
-}
-
-interface ResumenCredito {
-  carteraTotal: number
-  notasPendientes: number
-  carteraVencida: number
-  notasVencidas: number
-  porcentajeVencida: number
-  carteraPorVencer: number
-  notasPorVencer: number
-  porcentajePorVencer: number
-}
+type ResumenCredito = ResumenCartera
 
 interface AlertaCredito {
   id: string
@@ -165,204 +153,11 @@ interface PagoPendienteAutorizacion {
   montoPagado: number
   formasPago: FormaPago[]
   registradoPor: string
+  registradoPorNombre?: string
   fechaHora: string
   observaciones: string
+  pagoCompleto?: PagoAPI
 }
-
-// Datos de ejemplo
-const resumenCredito: ResumenCredito = {
-  carteraTotal: 450000,
-  notasPendientes: 125,
-  carteraVencida: 125000,
-  notasVencidas: 35,
-  porcentajeVencida: 27.8,
-  carteraPorVencer: 85000,
-  notasPorVencer: 28,
-  porcentajePorVencer: 18.9
-}
-
-const clientesCredito: ClienteCredito[] = [
-  {
-    id: '1',
-    nombre: 'María González Pérez',
-    direccion: 'Av. Insurgentes Sur 123, Col. Roma Norte, CDMX',
-    telefono: '55-1234-5678',
-    ruta: 'Ruta Centro',
-    limiteCredito: 50000,
-    saldoActual: 15000,
-    creditoDisponible: 35000,
-    diasPromedioPago: 25,
-    estado: 'buen-pagador',
-    notasPendientes: [
-      {
-        id: '1',
-        numeroNota: 'NC-001234',
-        fechaVenta: '2024-01-15',
-        fechaVencimiento: '2024-02-15',
-        importe: 8500,
-        diasVencimiento: 0,
-        estado: 'vigente'
-      },
-      {
-        id: '2',
-        numeroNota: 'NC-001235',
-        fechaVenta: '2024-01-20',
-        fechaVencimiento: '2024-02-20',
-        importe: 6500,
-        diasVencimiento: -5,
-        estado: 'vencida'
-      }
-    ]
-  },
-  {
-    id: '2',
-    nombre: 'Carlos Rodríguez López',
-    direccion: 'Calle Morelos 456, Col. Centro, Guadalajara, Jalisco',
-    telefono: '33-9876-5432',
-    ruta: 'Ruta Occidente',
-    limiteCredito: 30000,
-    saldoActual: 35000,
-    creditoDisponible: -5000,
-    diasPromedioPago: 45,
-    estado: 'critico',
-    notasPendientes: [
-      {
-        id: '3',
-        numeroNota: 'NC-001236',
-        fechaVenta: '2024-01-10',
-        fechaVencimiento: '2024-02-10',
-        importe: 25000,
-        diasVencimiento: -10,
-        estado: 'vencida'
-      }
-    ]
-  },
-  {
-    id: '3',
-    nombre: 'Ana Martínez Silva',
-    direccion: 'Blvd. López Mateos 789, Col. Del Valle, Monterrey, NL',
-    telefono: '81-5555-1234',
-    ruta: 'Ruta Norte',
-    limiteCredito: 75000,
-    saldoActual: 0,
-    creditoDisponible: 75000,
-    diasPromedioPago: 15,
-    estado: 'buen-pagador',
-    notasPendientes: []
-  }
-]
-
-const alertasCredito: AlertaCredito[] = [
-  {
-    id: '1',
-    tipo: 'critica',
-    titulo: 'Cliente excede límite de crédito',
-    descripcion: 'Carlos Rodríguez López ha excedido su límite de crédito en $5,000',
-    fecha: '2024-01-25',
-    cliente: 'Carlos Rodríguez López',
-    monto: 5000
-  },
-  {
-    id: '2',
-    tipo: 'critica',
-    titulo: 'Deuda vencida más de 60 días',
-    descripcion: 'Roberto Hernández García tiene deuda vencida desde hace 75 días',
-    fecha: '2024-01-25',
-    cliente: 'Roberto Hernández García',
-    diasVencimiento: 75
-  },
-  {
-    id: '3',
-    tipo: 'importante',
-    titulo: 'Solicitud de crédito pendiente',
-    descripcion: 'Nueva solicitud de crédito de $25,000 para Patricia López',
-    fecha: '2024-01-24',
-    cliente: 'Patricia López',
-    monto: 25000
-  },
-  {
-    id: '4',
-    tipo: 'automatica',
-    titulo: 'Recordatorio enviado',
-    descripcion: 'Recordatorio de pago enviado a María González Pérez',
-    fecha: '2024-01-24',
-    cliente: 'María González Pérez'
-  }
-]
-
-const historialLimites: HistorialLimite[] = [
-  {
-    id: '1',
-    cliente: 'María González Pérez',
-    usuario: 'Admin Sistema',
-    fecha: '2024-01-20',
-    limiteAnterior: 40000,
-    limiteNuevo: 50000,
-    motivo: 'Cliente con buen historial de pagos'
-  },
-  {
-    id: '2',
-    cliente: 'Carlos Rodríguez López',
-    usuario: 'Gerente Ventas',
-    fecha: '2024-01-18',
-    limiteAnterior: 35000,
-    limiteNuevo: 30000,
-    motivo: 'Reducción por incumplimiento de pagos'
-  }
-]
-
-const pagosPendientesAutorizacion: PagoPendienteAutorizacion[] = [
-  {
-    id: '1',
-    cliente: 'María González Pérez',
-    nota: 'NC-001234',
-    montoPagado: 8500,
-    formasPago: [
-      { id: '1', metodo: 'efectivo', monto: 5000 },
-      { id: '2', metodo: 'transferencia', monto: 2500, referencia: 'TRF123456', banco: 'BBVA' },
-      { id: '3', metodo: 'tarjeta', monto: 1000, referencia: 'TER789012' }
-    ],
-    registradoPor: 'Juan Pérez (Auxiliar)',
-    fechaHora: '2024-01-25 10:30',
-    observaciones: 'Pago completo de la nota'
-  },
-  {
-    id: '2',
-    cliente: 'Roberto Hernández García',
-    nota: 'NC-001235',
-    montoPagado: 3000,
-    formasPago: [
-      { id: '1', metodo: 'efectivo', monto: 3000 }
-    ],
-    registradoPor: 'Ana García (Auxiliar)',
-    fechaHora: '2024-01-25 11:15',
-    observaciones: 'Abono parcial'
-  }
-]
-
-const historialPagos: Pago[] = [
-  {
-    id: '1',
-    clienteId: '1',
-    clienteNombre: 'María González Pérez',
-    notaId: '1',
-    numeroNota: 'NC-001234',
-    montoTotal: 8500,
-    formasPago: [
-      { id: '1', metodo: 'efectivo', monto: 5000 },
-      { id: '2', metodo: 'transferencia', monto: 2500, referencia: 'TRF123456', banco: 'BBVA' },
-      { id: '3', metodo: 'tarjeta', monto: 1000, referencia: 'TER789012' }
-    ],
-    fechaPago: '2024-01-25',
-    horaPago: '10:30',
-    observaciones: 'Pago completo de la nota',
-    usuarioRegistro: 'Juan Pérez',
-    usuarioAutorizacion: 'Carlos Mendoza',
-    estado: 'autorizado',
-    tipo: 'nota-especifica',
-    aplicadoA: ['NC-001234']
-  }
-]
 
 export default function CreditosAbonosPage() {
   const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'alertas' | 'reportes' | 'pagos-pendientes' | 'historial-pagos'>('dashboard')
@@ -370,7 +165,7 @@ export default function CreditosAbonosPage() {
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
   const [tipoDialogo, setTipoDialogo] = useState<'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono'>('modificar-limite')
   const [notaSeleccionada, setNotaSeleccionada] = useState<NotaCredito | null>(null)
-  const [formasPago, setFormasPago] = useState<FormaPago[]>([])
+  const [formasPago, setFormasPago] = useState<Array<{ id: string; formaPagoId: string; metodo: string; monto: number; referencia?: string; banco?: string }>>([])
   const [montoTotalPago, setMontoTotalPago] = useState(0)
   const [filtros, setFiltros] = useState({
     nombre: '',
@@ -383,6 +178,220 @@ export default function CreditosAbonosPage() {
   })
   const [tabValue, setTabValue] = useState(0)
   const [contadorId, setContadorId] = useState(0)
+  
+  // Estados para datos del servidor
+  const [resumenCredito, setResumenCredito] = useState<ResumenCredito>({
+    carteraTotal: 0,
+    notasPendientes: 0,
+    carteraVencida: 0,
+    notasVencidas: 0,
+    porcentajeVencida: 0,
+    carteraPorVencer: 0,
+    notasPorVencer: 0,
+    porcentajePorVencer: 0
+  })
+  const [clientesCredito, setClientesCredito] = useState<ClienteCredito[]>([])
+  const [pagosPendientesAutorizacion, setPagosPendientesAutorizacion] = useState<PagoPendienteAutorizacion[]>([])
+  const [historialPagos, setHistorialPagos] = useState<Pago[]>([])
+  const [historialLimites, setHistorialLimites] = useState<HistorialLimite[]>([])
+  const [rutas, setRutas] = useState<Ruta[]>([])
+  const [formasPagoDisponibles, setFormasPagoDisponibles] = useState<FormaPago[]>([])
+  const [usuario, setUsuario] = useState<Usuario | null>(null)
+  const [sedes, setSedes] = useState<Sede[]>([])
+  const [sedeId, setSedeId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [nuevoLimite, setNuevoLimite] = useState(0)
+  const [motivoLimite, setMotivoLimite] = useState('')
+  const [observacionesPago, setObservacionesPago] = useState('')
+  const [limitesEditados, setLimitesEditados] = useState<Record<string, { limite: number; motivo: string }>>({})
+  const [modalDetallePago, setModalDetallePago] = useState(false)
+  const [pagoSeleccionadoDetalle, setPagoSeleccionadoDetalle] = useState<PagoAPI | null>(null)
+  const [usuarioRegistroNombre, setUsuarioRegistroNombre] = useState<string>('')
+  const [usuarioAutorizacionNombre, setUsuarioAutorizacionNombre] = useState<string>('')
+
+  // Cargar datos iniciales
+  useEffect(() => {
+    loadInitialData()
+  }, [])
+
+  useEffect(() => {
+    if (sedeId !== null) {
+      cargarDatos()
+    }
+  }, [sedeId])
+
+  const loadInitialData = async () => {
+    try {
+      setLoading(true)
+      const user = await authAPI.getProfile()
+      setUsuario(user)
+      
+      const [sedesData, rutasData, formasPagoData] = await Promise.all([
+        sedesAPI.getAll(),
+        rutasAPI.getAll(),
+        formasPagoAPI.getAll()
+      ])
+      
+      setSedes(sedesData)
+      setRutas(rutasData)
+      setFormasPagoDisponibles(formasPagoData)
+      
+      if (user.rol === 'superAdministrador') {
+        setSedeId(user.sede || sedesData[0]?.id || null)
+      } else {
+        setSedeId(user.sede || null)
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar datos iniciales')
+      console.error('Error loading initial data:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const cargarDatos = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const filtrosAPI: any = {}
+      if (sedeId) {
+        filtrosAPI.sedeId = sedeId
+      }
+      if (filtros.nombre) {
+        filtrosAPI.nombre = filtros.nombre
+      }
+      if (filtros.ruta) {
+        const rutaEncontrada = rutas.find(r => r.nombre === filtros.ruta)
+        if (rutaEncontrada) {
+          filtrosAPI.rutaId = rutaEncontrada.id
+        }
+      }
+      if (filtros.estado) {
+        filtrosAPI.estadoCliente = filtros.estado
+      }
+
+      const [resumen, clientes, pagos, historial] = await Promise.all([
+        creditosAbonosAPI.getResumenCartera(),
+        creditosAbonosAPI.getClientesCredito(filtrosAPI),
+        creditosAbonosAPI.getAllPagos({ estado: 'pendiente' }),
+        creditosAbonosAPI.getAllPagos()
+      ])
+
+      setResumenCredito(resumen)
+      setClientesCredito(clientes)
+      
+      // Convertir pagos pendientes al formato esperado
+      // Obtener nombres de usuarios únicos
+      const usuariosIds = [...new Set(pagos.map(p => p.usuarioRegistro).filter(Boolean))]
+      const usuariosMap = new Map<string, Usuario>()
+      
+      // Cargar información de usuarios en paralelo
+      await Promise.all(
+        usuariosIds.map(async (userId) => {
+          try {
+            const usuario = await usuariosAPI.getById(userId)
+            usuariosMap.set(userId, usuario)
+          } catch (err) {
+            console.error(`Error al obtener usuario ${userId}:`, err)
+          }
+        })
+      )
+
+      const pagosPendientes = pagos.map(p => {
+        const usuario = usuariosMap.get(p.usuarioRegistro)
+        const nombreUsuario = usuario 
+          ? `${usuario.nombres} ${usuario.apellidoPaterno}`
+          : p.usuarioRegistro
+
+        return {
+          id: p.id,
+          cliente: p.cliente ? `${p.cliente.nombre} ${p.cliente.apellidoPaterno} ${p.cliente.apellidoMaterno}` : 'N/A',
+          nota: p.notaCredito?.numeroNota || 'Abono general',
+          montoPagado: p.montoTotal,
+          formasPago: p.formasPago?.map(fp => ({
+            id: fp.id,
+            metodo: fp.formaPago?.tipo || 'efectivo',
+            monto: fp.monto,
+            referencia: fp.referencia,
+            banco: fp.banco
+          })) || [],
+          registradoPor: p.usuarioRegistro,
+          registradoPorNombre: nombreUsuario,
+          fechaHora: `${new Date(p.fechaPago).toLocaleDateString('es-MX')} ${p.horaPago}`,
+          observaciones: p.observaciones || '',
+          pagoCompleto: p
+        }
+      })
+      setPagosPendientesAutorizacion(pagosPendientes)
+      setHistorialPagos(historial)
+
+      // Cargar historial de límites
+      const historialLimitesData = await creditosAbonosAPI.getHistorialLimites()
+      setHistorialLimites(historialLimitesData.map(h => ({
+        id: h.id,
+        cliente: h.cliente ? `${h.cliente.nombre} ${h.cliente.apellidoPaterno} ${h.cliente.apellidoMaterno}` : 'N/A',
+        usuario: h.usuario ? `${h.usuario.nombres} ${h.usuario.apellidoPaterno}` : 'N/A',
+        fecha: h.fechaCreacion,
+        limiteAnterior: h.limiteAnterior,
+        limiteNuevo: h.limiteNuevo,
+        motivo: h.motivo
+      })))
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar datos')
+      console.error('Error cargando datos:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Generar alertas basadas en los datos reales
+  const alertasCredito = useMemo(() => {
+    const alertas: Array<{
+      id: string
+      tipo: 'critica' | 'importante' | 'automatica'
+      titulo: string
+      descripcion: string
+      fecha: string
+      cliente?: string
+      monto?: number
+      diasVencimiento?: number
+    }> = []
+
+    clientesCredito.forEach(cliente => {
+      if (cliente.saldoActual > cliente.limiteCredito) {
+        alertas.push({
+          id: `alerta-${cliente.id}-excede`,
+          tipo: 'critica',
+          titulo: 'Cliente excede límite de crédito',
+          descripcion: `${cliente.nombre} ha excedido su límite de crédito en $${(cliente.saldoActual - cliente.limiteCredito).toLocaleString()}`,
+          fecha: new Date().toISOString().split('T')[0],
+          cliente: cliente.nombre,
+          monto: cliente.saldoActual - cliente.limiteCredito
+        })
+      }
+
+      const notasVencidas = cliente.notasPendientes.filter(n => n.estado === 'vencida')
+      notasVencidas.forEach(nota => {
+        if (nota.diasVencimiento < -60) {
+          alertas.push({
+            id: `alerta-${nota.id}-vencida`,
+            tipo: 'critica',
+            titulo: 'Deuda vencida más de 60 días',
+            descripcion: `${cliente.nombre} tiene deuda vencida desde hace ${Math.abs(nota.diasVencimiento)} días`,
+            fecha: new Date().toISOString().split('T')[0],
+            cliente: cliente.nombre,
+            diasVencimiento: Math.abs(nota.diasVencimiento)
+          })
+        }
+      })
+    })
+
+    return alertas
+  }, [clientesCredito])
 
   // Función helper para formatear fechas de manera consistente
   const formatearFecha = (fecha: string) => {
@@ -404,12 +413,17 @@ export default function CreditosAbonosPage() {
     setNotaSeleccionada(nota || null)
     setFormasPago([])
     setMontoTotalPago(0)
+    setNuevoLimite(cliente?.limiteCredito || 0)
+    setMotivoLimite('')
+    setObservacionesPago('')
     setDialogoAbierto(true)
   }
 
   const agregarFormaPago = () => {
-    const nuevaFormaPago: FormaPago = {
+    const formaPagoEfectivo = formasPagoDisponibles.find(fp => fp.tipo === 'efectivo')
+    const nuevaFormaPago = {
       id: `fp-${contadorId}`,
+      formaPagoId: formaPagoEfectivo?.id || '',
       metodo: 'efectivo',
       monto: 0
     }
@@ -422,9 +436,166 @@ export default function CreditosAbonosPage() {
   }
 
   const actualizarFormaPago = (id: string, campo: string, valor: any) => {
-    setFormasPago(prev => prev.map(fp => 
-      fp.id === id ? { ...fp, [campo]: valor } : fp
-    ))
+    setFormasPago(prev => prev.map(fp => {
+      if (fp.id === id) {
+        if (campo === 'metodo') {
+          const formaPago = formasPagoDisponibles.find(f => f.tipo === valor)
+          return { ...fp, formaPagoId: formaPago?.id || '', metodo: valor }
+        }
+        return { ...fp, [campo]: valor }
+      }
+      return fp
+    }))
+  }
+
+  const guardarLimiteCredito = async () => {
+    if (!clienteSeleccionado || nuevoLimite <= 0) return
+
+    try {
+      setSaving(true)
+      setError(null)
+      await creditosAbonosAPI.updateLimiteCredito(
+        clienteSeleccionado.id,
+        nuevoLimite,
+        motivoLimite
+      )
+      await cargarDatos()
+      cerrarDialogo()
+    } catch (err: any) {
+      setError(err.message || 'Error al actualizar límite de crédito')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const actualizarLimiteCliente = async (clienteId: string) => {
+    const datosLimite = limitesEditados[clienteId]
+    if (!datosLimite || datosLimite.limite <= 0) {
+      setError('Por favor ingrese un límite válido')
+      return
+    }
+
+    const cliente = clientesCredito.find(c => c.id === clienteId)
+    if (!cliente) return
+
+    // Verificar que haya un cambio
+    if (datosLimite.limite === cliente.limiteCredito && !datosLimite.motivo) {
+      setError('No hay cambios para guardar')
+      return
+    }
+
+    try {
+      setSaving(true)
+      setError(null)
+      setSuccessMessage(null)
+      
+      await creditosAbonosAPI.updateLimiteCredito(
+        clienteId,
+        datosLimite.limite,
+        datosLimite.motivo || 'Actualización desde Control de Límites'
+      )
+      
+      // Limpiar el estado editado para este cliente
+      setLimitesEditados(prev => {
+        const nuevo = { ...prev }
+        delete nuevo[clienteId]
+        return nuevo
+      })
+      
+      setSuccessMessage(`Límite de crédito actualizado exitosamente para ${cliente.nombre}`)
+      
+      await cargarDatos()
+      
+      // Limpiar el mensaje de éxito después de 3 segundos
+      setTimeout(() => {
+        setSuccessMessage(null)
+      }, 3000)
+    } catch (err: any) {
+      setError(err.message || 'Error al actualizar límite de crédito')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const manejarCambioLimite = (clienteId: string, limite: number) => {
+    const cliente = clientesCredito.find(c => c.id === clienteId)
+    if (!cliente) return
+    
+    setLimitesEditados(prev => ({
+      ...prev,
+      [clienteId]: {
+        limite: limite || cliente.limiteCredito,
+        motivo: prev[clienteId]?.motivo || ''
+      }
+    }))
+  }
+
+  const manejarCambioMotivo = (clienteId: string, motivo: string) => {
+    setLimitesEditados(prev => ({
+      ...prev,
+      [clienteId]: {
+        limite: prev[clienteId]?.limite || 0,
+        motivo
+      }
+    }))
+  }
+
+  const registrarPago = async () => {
+    if (!clienteSeleccionado || formasPago.length === 0 || montoTotalPago <= 0) return
+
+    try {
+      setSaving(true)
+      setError(null)
+
+      const formasPagoData = formasPago.map(fp => ({
+        formaPagoId: fp.formaPagoId,
+        monto: fp.monto,
+        referencia: fp.referencia,
+        banco: fp.banco
+      }))
+
+      await creditosAbonosAPI.createPago({
+        clienteId: clienteSeleccionado.id,
+        notaCreditoId: notaSeleccionada?.id,
+        montoTotal: montoTotalPago,
+        tipo: notaSeleccionada ? 'nota_especifica' : 'abono_general',
+        observaciones: observacionesPago,
+        formasPago: formasPagoData
+      })
+
+      await cargarDatos()
+      cerrarDialogo()
+    } catch (err: any) {
+      setError(err.message || 'Error al registrar pago')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const autorizarPago = async (pagoId: string) => {
+    try {
+      setSaving(true)
+      setError(null)
+      await creditosAbonosAPI.updatePagoEstado(pagoId, 'autorizado')
+      await cargarDatos()
+    } catch (err: any) {
+      setError(err.message || 'Error al autorizar pago')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const rechazarPago = async (pagoId: string) => {
+    try {
+      setSaving(true)
+      setError(null)
+      await creditosAbonosAPI.updatePagoEstado(pagoId, 'rechazado')
+      await cargarDatos()
+    } catch (err: any) {
+      setError(err.message || 'Error al rechazar pago')
+    } finally {
+      setSaving(false)
+    }
   }
 
   // Calcular total del pago usando useMemo para evitar re-renders infinitos
@@ -453,6 +624,9 @@ export default function CreditosAbonosPage() {
     setNotaSeleccionada(null)
     setFormasPago([])
     setMontoTotalPago(0)
+    setNuevoLimite(0)
+    setMotivoLimite('')
+    setObservacionesPago('')
   }
 
   const manejarCambioFiltros = (campo: string, valor: any) => {
@@ -496,23 +670,52 @@ export default function CreditosAbonosPage() {
     }
   }
 
-  const clientesFiltrados = clientesCredito.filter(cliente => {
-    const cumpleNombre = !filtros.nombre || cliente.nombre.toLowerCase().includes(filtros.nombre.toLowerCase())
-    const cumpleRuta = !filtros.ruta || cliente.ruta === filtros.ruta
-    const cumpleEstado = !filtros.estado || cliente.estado === filtros.estado
-    const cumpleSaldoMin = !filtros.saldoMin || cliente.saldoActual >= Number(filtros.saldoMin)
-    const cumpleSaldoMax = !filtros.saldoMax || cliente.saldoActual <= Number(filtros.saldoMax)
-    
-    return cumpleNombre && cumpleRuta && cumpleEstado && cumpleSaldoMin && cumpleSaldoMax
-  })
+  const clientesFiltrados = useMemo(() => {
+    return clientesCredito.filter(cliente => {
+      const cumpleNombre = !filtros.nombre || cliente.nombre.toLowerCase().includes(filtros.nombre.toLowerCase())
+      const cumpleRuta = !filtros.ruta || cliente.ruta === filtros.ruta
+      const cumpleEstado = !filtros.estado || cliente.estado === filtros.estado
+      const cumpleSaldoMin = !filtros.saldoMin || cliente.saldoActual >= Number(filtros.saldoMin)
+      const cumpleSaldoMax = !filtros.saldoMax || cliente.saldoActual <= Number(filtros.saldoMax)
+      
+      return cumpleNombre && cumpleRuta && cumpleEstado && cumpleSaldoMin && cumpleSaldoMax
+    })
+  }, [clientesCredito, filtros])
 
-  const rutasUnicas = [...new Set(clientesCredito.map(c => c.ruta))]
+  const rutasUnicas = useMemo(() => {
+    return [...new Set(clientesCredito.map(c => c.ruta))]
+  }, [clientesCredito])
+
+  // Recargar datos cuando cambien los filtros
+  useEffect(() => {
+    if (sedeId !== null) {
+      cargarDatos()
+    }
+  }, [filtros.nombre, filtros.ruta, filtros.estado])
 
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant='h4' component='h1' gutterBottom>
         Gestión de Créditos y Abonos
       </Typography>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {successMessage && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage(null)}>
+          {successMessage}
+        </Alert>
+      )}
+
+      {loading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+          <LinearProgress sx={{ width: '100%' }} />
+        </Box>
+      )}
 
       {/* Navegación */}
       <Box sx={{ mb: 3 }}>
@@ -1147,7 +1350,7 @@ export default function CreditosAbonosPage() {
                       <TableCell>Ruta</TableCell>
                       <TableCell align='right'>Límite Actual</TableCell>
                       <TableCell align='right'>Nuevo Límite</TableCell>
-                      <TableCell align='center'>Acciones</TableCell>
+                      <TableCell align='center' sx={{ minWidth: 400 }}>Acciones</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1175,16 +1378,38 @@ export default function CreditosAbonosPage() {
                           <TextField
                             size='small'
                             type='number'
-                            defaultValue={cliente.limiteCredito}
+                            value={limitesEditados[cliente.id]?.limite ?? cliente.limiteCredito}
+                            onChange={(e) => manejarCambioLimite(cliente.id, Number(e.target.value))}
                             InputProps={{
                               startAdornment: <InputAdornment position='start'>$</InputAdornment>
                             }}
+                            sx={{ minWidth: 150 }}
                           />
                         </TableCell>
                         <TableCell align='center'>
-                          <Button variant='outlined' size='small' startIcon={<EditIcon />}>
-                            Actualizar
-                          </Button>
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <TextField
+                              size='small'
+                              placeholder='Motivo (opcional)'
+                              value={limitesEditados[cliente.id]?.motivo || ''}
+                              onChange={(e) => manejarCambioMotivo(cliente.id, e.target.value)}
+                              sx={{ minWidth: 180, maxWidth: 250 }}
+                            />
+                            <Button 
+                              variant='outlined' 
+                              size='small' 
+                              startIcon={<EditIcon />}
+                              onClick={() => actualizarLimiteCliente(cliente.id)}
+                              disabled={
+                                saving || 
+                                !limitesEditados[cliente.id] || 
+                                limitesEditados[cliente.id].limite <= 0 ||
+                                (limitesEditados[cliente.id].limite === cliente.limiteCredito && !limitesEditados[cliente.id].motivo)
+                              }
+                            >
+                              {saving ? 'Guardando...' : 'Actualizar'}
+                            </Button>
+                          </Box>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1484,7 +1709,7 @@ export default function CreditosAbonosPage() {
                         </TableCell>
                         <TableCell>
                           <Typography variant='body2'>
-                            {pago.registradoPor}
+                            {pago.registradoPorNombre || pago.registradoPor}
                           </Typography>
                         </TableCell>
                         <TableCell>
@@ -1495,17 +1720,43 @@ export default function CreditosAbonosPage() {
                         <TableCell align='center'>
                           <Box sx={{ display: 'flex', gap: 0.5 }}>
                             <Tooltip title='Ver detalles'>
-                              <IconButton size='small'>
+                              <IconButton 
+                                size='small' 
+                                onClick={async () => {
+                                  if (pago.pagoCompleto) {
+                                    setPagoSeleccionadoDetalle(pago.pagoCompleto)
+                                    setModalDetallePago(true)
+                                    
+                                    // Cargar nombres de usuarios
+                                    try {
+                                      if (pago.pagoCompleto.usuarioRegistro) {
+                                        const usuarioReg = await usuariosAPI.getById(pago.pagoCompleto.usuarioRegistro)
+                                        setUsuarioRegistroNombre(`${usuarioReg.nombres} ${usuarioReg.apellidoPaterno}`)
+                                      }
+                                      if (pago.pagoCompleto.usuarioAutorizacion) {
+                                        const usuarioAut = await usuariosAPI.getById(pago.pagoCompleto.usuarioAutorizacion)
+                                        setUsuarioAutorizacionNombre(`${usuarioAut.nombres} ${usuarioAut.apellidoPaterno}`)
+                                      }
+                                    } catch (err) {
+                                      console.error('Error al cargar información de usuarios:', err)
+                                      setUsuarioRegistroNombre(pago.pagoCompleto.usuarioRegistro)
+                                      if (pago.pagoCompleto.usuarioAutorizacion) {
+                                        setUsuarioAutorizacionNombre(pago.pagoCompleto.usuarioAutorizacion)
+                                      }
+                                    }
+                                  }
+                                }}
+                              >
                                 <VisibilityIcon />
                               </IconButton>
                             </Tooltip>
                             <Tooltip title='Autorizar'>
-                              <IconButton size='small' color='success'>
+                              <IconButton size='small' color='success' onClick={() => autorizarPago(pago.id)}>
                                 <CheckCircleIcon />
                               </IconButton>
                             </Tooltip>
                             <Tooltip title='Rechazar'>
-                              <IconButton size='small' color='error'>
+                              <IconButton size='small' color='error' onClick={() => rechazarPago(pago.id)}>
                                 <CloseIcon />
                               </IconButton>
                             </Tooltip>
@@ -1559,12 +1810,12 @@ export default function CreditosAbonosPage() {
                         </TableCell>
                         <TableCell>
                           <Typography variant='subtitle2' fontWeight='bold'>
-                            {pago.clienteNombre}
+                            {pago.cliente ? `${pago.cliente.nombre} ${pago.cliente.apellidoPaterno} ${pago.cliente.apellidoMaterno}` : 'N/A'}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant='subtitle2' fontWeight='bold'>
-                            {pago.numeroNota}
+                            {pago.notaCredito?.numeroNota || 'Abono general'}
                           </Typography>
                         </TableCell>
                         <TableCell align='right'>
@@ -1640,16 +1891,22 @@ export default function CreditosAbonosPage() {
                     fullWidth
                     label='Nuevo Límite de Crédito'
                     type='number'
+                    value={nuevoLimite}
+                    onChange={(e) => setNuevoLimite(Number(e.target.value))}
                     InputProps={{
                       startAdornment: <InputAdornment position='start'>$</InputAdornment>
                     }}
+                    sx={{ mt: 2 }}
                   />
                   <TextField
                     fullWidth
                     label='Motivo del Cambio'
                     multiline
                     rows={3}
+                    value={motivoLimite}
+                    onChange={(e) => setMotivoLimite(e.target.value)}
                     sx={{ mt: 2 }}
+                    required
                   />
                 </Box>
               )}
@@ -1721,10 +1978,11 @@ export default function CreditosAbonosPage() {
                                 onChange={(e) => actualizarFormaPago(forma.id, 'metodo', e.target.value)}
                                 label='Método'
                               >
-                                <MenuItem value='efectivo'>Efectivo</MenuItem>
-                                <MenuItem value='transferencia'>Transferencia</MenuItem>
-                                <MenuItem value='tarjeta'>Tarjeta</MenuItem>
-                                <MenuItem value='cheque'>Cheque</MenuItem>
+                                {formasPagoDisponibles.map(fp => (
+                                  <MenuItem key={fp.id} value={fp.tipo}>
+                                    {fp.nombre}
+                                  </MenuItem>
+                                ))}
                               </Select>
                             </FormControl>
                           </Grid>
@@ -1803,6 +2061,8 @@ export default function CreditosAbonosPage() {
                     label='Observaciones'
                     multiline
                     rows={3}
+                    value={observacionesPago}
+                    onChange={(e) => setObservacionesPago(e.target.value)}
                     sx={{ mb: 2 }}
                     placeholder='Observaciones sobre el pago...'
                   />
@@ -1812,16 +2072,306 @@ export default function CreditosAbonosPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={cerrarDialogo}>
+          <Button onClick={cerrarDialogo} disabled={saving}>
             Cancelar
           </Button>
-          <Button variant='contained' color={tipoDialogo === 'bloquear' ? 'error' : 'primary'}>
-            {tipoDialogo === 'modificar-limite' && 'Actualizar Límite'}
-            {tipoDialogo === 'recordatorio' && 'Enviar Recordatorio'}
-            {tipoDialogo === 'bloquear' && 'Bloquear Crédito'}
-            {tipoDialogo === 'estado-cuenta' && 'Generar Estado'}
-            {tipoDialogo === 'registrar-pago' && 'Registrar Pago'}
-            {tipoDialogo === 'registrar-abono' && 'Registrar Abono'}
+          <Button 
+            variant='contained' 
+            color={tipoDialogo === 'bloquear' ? 'error' : 'primary'}
+            onClick={() => {
+              if (tipoDialogo === 'modificar-limite') {
+                guardarLimiteCredito()
+              } else if (tipoDialogo === 'registrar-pago' || tipoDialogo === 'registrar-abono') {
+                registrarPago()
+              }
+            }}
+            disabled={saving}
+          >
+            {saving ? 'Guardando...' : (
+              <>
+                {tipoDialogo === 'modificar-limite' && 'Actualizar Límite'}
+                {tipoDialogo === 'recordatorio' && 'Enviar Recordatorio'}
+                {tipoDialogo === 'bloquear' && 'Bloquear Crédito'}
+                {tipoDialogo === 'estado-cuenta' && 'Generar Estado'}
+                {tipoDialogo === 'registrar-pago' && 'Registrar Pago'}
+                {tipoDialogo === 'registrar-abono' && 'Registrar Abono'}
+              </>
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal de Detalles del Pago */}
+      <Dialog 
+        open={modalDetallePago} 
+        onClose={() => {
+          setModalDetallePago(false)
+          setPagoSeleccionadoDetalle(null)
+        }} 
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PaymentIcon />
+              <Typography variant="h6">
+                Detalles del Pago
+              </Typography>
+            </Box>
+            <IconButton 
+              onClick={() => {
+                setModalDetallePago(false)
+                setPagoSeleccionadoDetalle(null)
+                setUsuarioRegistroNombre('')
+                setUsuarioAutorizacionNombre('')
+              }} 
+              size="small"
+            >
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {pagoSeleccionadoDetalle && (
+            <Box sx={{ mt: 2 }}>
+              {/* Información del Cliente */}
+              <Card variant="outlined" sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PersonIcon />
+                    Información del Cliente
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Cliente
+                      </Typography>
+                      <Typography variant="body1" fontWeight="bold">
+                        {pagoSeleccionadoDetalle.cliente 
+                          ? `${pagoSeleccionadoDetalle.cliente.nombre} ${pagoSeleccionadoDetalle.cliente.apellidoPaterno} ${pagoSeleccionadoDetalle.cliente.apellidoMaterno}`
+                          : 'N/A'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Teléfono
+                      </Typography>
+                      <Typography variant="body1">
+                        {pagoSeleccionadoDetalle.cliente?.telefono || 'N/A'}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+
+              {/* Información del Pago */}
+              <Card variant="outlined" sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PaymentIcon />
+                    Información del Pago
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Número de Nota
+                      </Typography>
+                      <Typography variant="body1" fontWeight="bold">
+                        {pagoSeleccionadoDetalle.notaCredito?.numeroNota || 'Abono general'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Tipo de Pago
+                      </Typography>
+                      <Chip
+                        label={pagoSeleccionadoDetalle.tipo === 'nota_especifica' ? 'Nota Específica' : 'Abono General'}
+                        color={pagoSeleccionadoDetalle.tipo === 'nota_especifica' ? 'primary' : 'secondary'}
+                        size="small"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Monto Total
+                      </Typography>
+                      <Typography variant="h5" color="primary" fontWeight="bold">
+                        ${pagoSeleccionadoDetalle.montoTotal.toLocaleString()}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Estado
+                      </Typography>
+                      <Chip
+                        label={pagoSeleccionadoDetalle.estado.toUpperCase()}
+                        color={
+                          pagoSeleccionadoDetalle.estado === 'autorizado' ? 'success' :
+                          pagoSeleccionadoDetalle.estado === 'pendiente' ? 'warning' : 'error'
+                        }
+                        size="small"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Fecha de Pago
+                      </Typography>
+                      <Typography variant="body1">
+                        {new Date(pagoSeleccionadoDetalle.fechaPago).toLocaleDateString('es-MX', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Hora de Pago
+                      </Typography>
+                      <Typography variant="body1">
+                        {pagoSeleccionadoDetalle.horaPago}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+
+              {/* Formas de Pago */}
+              {pagoSeleccionadoDetalle.formasPago && pagoSeleccionadoDetalle.formasPago.length > 0 && (
+                <Card variant="outlined" sx={{ mb: 3 }}>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <AttachMoneyIcon />
+                      Formas de Pago
+                    </Typography>
+                    <TableContainer component={Paper} variant="outlined">
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Método</TableCell>
+                            <TableCell align="right">Monto</TableCell>
+                            <TableCell>Referencia</TableCell>
+                            <TableCell>Banco</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {pagoSeleccionadoDetalle.formasPago.map((forma, index) => (
+                            <TableRow key={index}>
+                              <TableCell>
+                                <Chip
+                                  label={forma.formaPago?.nombre || forma.formaPago?.tipo || 'N/A'}
+                                  color={getMetodoPagoColor(forma.formaPago?.tipo || 'efectivo') as any}
+                                  size="small"
+                                />
+                              </TableCell>
+                              <TableCell align="right">
+                                <Typography variant="body1" fontWeight="bold">
+                                  ${forma.monto.toLocaleString()}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2">
+                                  {forma.referencia || '-'}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2">
+                                  {forma.banco || '-'}
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Información de Registro */}
+              <Card variant="outlined" sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <HistoryIcon />
+                    Información de Registro
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Registrado por
+                      </Typography>
+                      <Typography variant="body1" fontWeight="bold">
+                        {usuarioRegistroNombre || pagoSeleccionadoDetalle.usuarioRegistro || 'N/A'}
+                      </Typography>
+                    </Grid>
+                    {pagoSeleccionadoDetalle.usuarioAutorizacion && (
+                      <Grid item xs={12} sm={6}>
+                        <Typography variant="body2" color="text.secondary">
+                          Autorizado por
+                        </Typography>
+                        <Typography variant="body1" fontWeight="bold">
+                          {usuarioAutorizacionNombre || pagoSeleccionadoDetalle.usuarioAutorizacion}
+                        </Typography>
+                      </Grid>
+                    )}
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Fecha de Creación
+                      </Typography>
+                      <Typography variant="body1">
+                        {new Date(pagoSeleccionadoDetalle.fechaCreacion).toLocaleDateString('es-MX', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Última Modificación
+                      </Typography>
+                      <Typography variant="body1">
+                        {new Date(pagoSeleccionadoDetalle.fechaModificacion).toLocaleDateString('es-MX', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+
+              {/* Observaciones */}
+              {pagoSeleccionadoDetalle.observaciones && (
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Observaciones
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {pagoSeleccionadoDetalle.observaciones}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => {
+              setModalDetallePago(false)
+              setPagoSeleccionadoDetalle(null)
+              setUsuarioRegistroNombre('')
+              setUsuarioAutorizacionNombre('')
+            }}
+          >
+            Cerrar
           </Button>
         </DialogActions>
       </Dialog>

@@ -1,7 +1,9 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import QRCode from 'qrcode'
+import { clientesAPI, rutasAPI, authAPI, sedesAPI, type Cliente as ClienteAPI, type Domicilio as DomicilioAPI, type Ruta, type Usuario, type Sede } from '@/lib/api'
 
 import { 
   Box, 
@@ -22,6 +24,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogContentText,
   DialogActions,
   TextField,
   FormControl,
@@ -38,12 +41,14 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
-  Avatar
+  Avatar,
+  CircularProgress
 } from '@mui/material'
 import { 
   Add as AddIcon, 
   Upload as UploadIcon, 
   Edit as EditIcon,
+  Delete as DeleteIcon,
   CreditCard as CreditCardIcon,
   History as HistoryIcon,
   Phone as PhoneIcon,
@@ -61,7 +66,9 @@ import {
   Receipt as ReceiptIcon,
   Close as CloseIcon,
   QrCode as QrCodeIcon,
-  Print as PrintIcon
+  Print as PrintIcon,
+  Download as DownloadIcon,
+  AccountBalance as AccountBalanceIcon
 } from '@mui/icons-material'
 
 // Tipos de datos
@@ -147,7 +154,7 @@ const generarContenidoQR = (cliente: Cliente, domicilio: Domicilio): string => {
   })
 }
 
-// Datos de ejemplo con información completa de México
+// Datos de ejemplo (ya no se usan, se cargan del servidor)
 const clientesEjemplo: Cliente[] = [
   {
     id: '1',
@@ -557,14 +564,112 @@ const clientesEjemplo: Cliente[] = [
 ]
 
 export default function ClientesPage() {
-  const [clientes, setClientes] = useState<Cliente[]>(clientesEjemplo)
+  const router = useRouter()
+  const [clientes, setClientes] = useState<Cliente[]>([])
+  const [rutas, setRutas] = useState<Ruta[]>([])
+  const [sedes, setSedes] = useState<Sede[]>([])
+  const [usuario, setUsuario] = useState<Usuario | null>(null)
+  const [sedeSeleccionada, setSedeSeleccionada] = useState<string | null>(null)
+  const [sedeId, setSedeId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
   const [tipoDialogo, setTipoDialogo] = useState<'importar' | 'agregar' | 'editar' | 'credito' | 'historial' | 'detalles'>('agregar')
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null)
   const [formularioCliente, setFormularioCliente] = useState<Partial<Cliente>>({})
+  const [domiciliosAdicionales, setDomiciliosAdicionales] = useState<Partial<Domicilio>[]>([])
   const [archivoSeleccionado, setArchivoSeleccionado] = useState<File | null>(null)
   const [progresoImportacion, setProgresoImportacion] = useState(0)
   const [importando, setImportando] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [eliminando, setEliminando] = useState(false)
+  const [dialogoEliminar, setDialogoEliminar] = useState(false)
+  const [clienteAEliminar, setClienteAEliminar] = useState<Cliente | null>(null)
+  const [modalQR, setModalQR] = useState(false)
+  const [qrDataURL, setQrDataURL] = useState<string>('')
+  const [domicilioQR, setDomicilioQR] = useState<Domicilio | null>(null)
+
+  const esSuperAdministrador = usuario?.rol === 'superAdministrador'
+
+  // Cargar datos iniciales
+  useEffect(() => {
+    loadInitialData()
+  }, [])
+
+  // Recargar clientes cuando cambia la sede
+  useEffect(() => {
+    if (sedeId !== null) {
+      cargarDatos()
+    }
+  }, [sedeId])
+
+  const loadInitialData = async () => {
+    try {
+      setLoading(true)
+      // Obtener usuario autenticado
+      const user = await authAPI.getProfile()
+      setUsuario(user)
+      
+      // Cargar sedes
+      const sedesData = await sedesAPI.getAll()
+      setSedes(sedesData)
+      
+      // Si es super administrador, permitir seleccionar sede
+      // Si no, usar la sede del usuario
+      if (user.rol === 'superAdministrador') {
+        // Por defecto, usar la primera sede o la del usuario si existe
+        setSedeId(user.sede || sedesData[0]?.id || null)
+        setSedeSeleccionada(user.sede || sedesData[0]?.id || null)
+      } else {
+        setSedeId(user.sede || null)
+        setSedeSeleccionada(user.sede || null)
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar datos iniciales')
+      console.error('Error loading initial data:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const cargarDatos = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const filtros: any = {}
+      if (sedeId) {
+        filtros.sedeId = sedeId
+      }
+      const [clientesData, rutasData] = await Promise.all([
+        clientesAPI.getAll(filtros),
+        rutasAPI.getAll()
+      ])
+      setClientes(clientesData.map(adaptarCliente))
+      setRutas(rutasData)
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar datos')
+      console.error('Error cargando datos:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSedeChange = (nuevaSedeId: string) => {
+    setSedeSeleccionada(nuevaSedeId)
+    setSedeId(nuevaSedeId)
+  }
+
+  // Función para adaptar el cliente de la API al formato del componente
+  const adaptarCliente = (cliente: ClienteAPI): Cliente => {
+    return {
+      ...cliente,
+      ruta: typeof cliente.ruta === 'string' ? cliente.ruta : cliente.ruta?.nombre || '',
+      domicilios: cliente.domicilios?.map(d => ({
+        ...d,
+        fechaCreacionQR: d.fechaCreacionQR || new Date().toISOString()
+      }))
+    }
+  }
 
   const abrirDialogo = (tipo: 'importar' | 'agregar' | 'editar' | 'credito' | 'historial' | 'detalles', cliente?: Cliente) => {
     setTipoDialogo(tipo)
@@ -579,8 +684,12 @@ export default function ClientesPage() {
         fechaRegistro: new Date().toISOString().split('T')[0],
         ultimaModificacion: new Date().toISOString().split('T')[0]
       })
+      setDomiciliosAdicionales([])
     } else if (tipo === 'editar' && cliente) {
       setFormularioCliente({ ...cliente })
+      // Separar el domicilio principal de los adicionales
+      const domiciliosAdicionalesList = cliente.domicilios?.filter(d => d.tipo !== 'principal') || []
+      setDomiciliosAdicionales(domiciliosAdicionalesList)
     }
     
     setDialogoAbierto(true)
@@ -590,6 +699,7 @@ export default function ClientesPage() {
     setDialogoAbierto(false)
     setClienteSeleccionado(null)
     setFormularioCliente({})
+    setDomiciliosAdicionales([])
     setArchivoSeleccionado(null)
     setProgresoImportacion(0)
     setImportando(false)
@@ -599,23 +709,177 @@ export default function ClientesPage() {
     setFormularioCliente(prev => ({ ...prev, [campo]: valor }))
   }
 
-  const guardarCliente = () => {
-    if (tipoDialogo === 'agregar') {
-      const nuevoCliente: Cliente = {
-        id: Date.now().toString(),
-        ...formularioCliente as Cliente
+  const agregarDomicilioAdicional = () => {
+    setDomiciliosAdicionales(prev => [...prev, {
+      tipo: 'otro',
+      calle: '',
+      numeroExterior: '',
+      numeroInterior: '',
+      colonia: '',
+      municipio: '',
+      estado: '',
+      codigoPostal: '',
+      referencia: '',
+      activo: true
+    }])
+  }
+
+  const eliminarDomicilioAdicional = (index: number) => {
+    setDomiciliosAdicionales(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const actualizarDomicilioAdicional = (index: number, campo: keyof Domicilio, valor: any) => {
+    setDomiciliosAdicionales(prev => prev.map((dom, i) => 
+      i === index ? { ...dom, [campo]: valor } : dom
+    ))
+  }
+
+  const guardarCliente = async () => {
+    try {
+      setSaving(true)
+      setError(null)
+
+      // Crear el primer domicilio automáticamente con los datos de la dirección principal
+      const domicilioPrincipal: Omit<Domicilio, 'id' | 'clienteId' | 'codigoQR' | 'fechaCreacionQR'> = {
+        tipo: 'principal',
+        calle: formularioCliente.calle!,
+        numeroExterior: formularioCliente.numeroExterior!,
+        numeroInterior: formularioCliente.numeroInterior,
+        colonia: formularioCliente.colonia!,
+        municipio: formularioCliente.municipio!,
+        estado: formularioCliente.estado!,
+        codigoPostal: formularioCliente.codigoPostal!,
+        referencia: 'Dirección principal del cliente',
+        activo: true
       }
 
-      setClientes(prev => [...prev, nuevoCliente])
-    } else if (tipoDialogo === 'editar' && clienteSeleccionado) {
-      setClientes(prev => prev.map(cliente => 
-        cliente.id === clienteSeleccionado.id 
-          ? { ...cliente, ...formularioCliente, ultimaModificacion: new Date().toISOString().split('T')[0] }
-          : cliente
-      ))
-    }
+      // Combinar el domicilio principal con los adicionales
+      const todosLosDomicilios = [
+        domicilioPrincipal,
+        ...domiciliosAdicionales
+          .filter(d => d.calle && d.numeroExterior && d.colonia && d.municipio && d.estado && d.codigoPostal)
+          .map(d => ({
+            tipo: d.tipo || 'otro',
+            calle: d.calle!,
+            numeroExterior: d.numeroExterior!,
+            numeroInterior: d.numeroInterior,
+            colonia: d.colonia!,
+            municipio: d.municipio!,
+            estado: d.estado!,
+            codigoPostal: d.codigoPostal!,
+            referencia: d.referencia || '',
+            activo: d.activo ?? true
+          }))
+      ]
 
-    cerrarDialogo()
+      if (tipoDialogo === 'agregar') {
+        const nuevoCliente = await clientesAPI.create({
+          nombre: formularioCliente.nombre!,
+          apellidoPaterno: formularioCliente.apellidoPaterno!,
+          apellidoMaterno: formularioCliente.apellidoMaterno!,
+          email: formularioCliente.email!,
+          telefono: formularioCliente.telefono!,
+          telefonoSecundario: formularioCliente.telefonoSecundario,
+          calle: formularioCliente.calle!,
+          numeroExterior: formularioCliente.numeroExterior!,
+          numeroInterior: formularioCliente.numeroInterior,
+          colonia: formularioCliente.colonia!,
+          municipio: formularioCliente.municipio!,
+          estado: formularioCliente.estado!,
+          codigoPostal: formularioCliente.codigoPostal!,
+          rfc: formularioCliente.rfc,
+          curp: formularioCliente.curp,
+          rutaId: (formularioCliente.ruta as any)?.id || (typeof formularioCliente.ruta === 'object' && formularioCliente.ruta ? (formularioCliente.ruta as any).id : undefined),
+          limiteCredito: formularioCliente.limiteCredito || 0,
+          saldoActual: formularioCliente.saldoActual || 0,
+          pagosEspecialesAutorizados: formularioCliente.pagosEspecialesAutorizados || false,
+          estadoCliente: formularioCliente.estadoCliente || 'activo',
+          domicilios: todosLosDomicilios
+        })
+        await cargarDatos()
+      } else if (tipoDialogo === 'editar' && clienteSeleccionado) {
+        await clientesAPI.update(clienteSeleccionado.id, {
+          nombre: formularioCliente.nombre,
+          apellidoPaterno: formularioCliente.apellidoPaterno,
+          apellidoMaterno: formularioCliente.apellidoMaterno,
+          email: formularioCliente.email,
+          telefono: formularioCliente.telefono,
+          telefonoSecundario: formularioCliente.telefonoSecundario,
+          calle: formularioCliente.calle,
+          numeroExterior: formularioCliente.numeroExterior,
+          numeroInterior: formularioCliente.numeroInterior,
+          colonia: formularioCliente.colonia,
+          municipio: formularioCliente.municipio,
+          estado: formularioCliente.estado,
+          codigoPostal: formularioCliente.codigoPostal,
+          rfc: formularioCliente.rfc,
+          curp: formularioCliente.curp,
+          rutaId: (formularioCliente.ruta as any)?.id || (typeof formularioCliente.ruta === 'object' && formularioCliente.ruta ? (formularioCliente.ruta as any).id : undefined),
+          limiteCredito: formularioCliente.limiteCredito,
+          saldoActual: formularioCliente.saldoActual,
+          pagosEspecialesAutorizados: formularioCliente.pagosEspecialesAutorizados,
+          estadoCliente: formularioCliente.estadoCliente
+        })
+
+        // Actualizar domicilio principal si cambió la dirección
+        const domicilioPrincipalExistente = clienteSeleccionado.domicilios?.find(d => d.tipo === 'principal')
+        if (domicilioPrincipalExistente) {
+          await clientesAPI.updateDomicilio(domicilioPrincipalExistente.id, {
+            calle: formularioCliente.calle!,
+            numeroExterior: formularioCliente.numeroExterior!,
+            numeroInterior: formularioCliente.numeroInterior,
+            colonia: formularioCliente.colonia!,
+            municipio: formularioCliente.municipio!,
+            estado: formularioCliente.estado!,
+            codigoPostal: formularioCliente.codigoPostal!
+          })
+        } else {
+          // Crear domicilio principal si no existe
+          await clientesAPI.createDomicilio(clienteSeleccionado.id, domicilioPrincipal)
+        }
+
+        // Crear domicilios adicionales nuevos
+        for (const domicilio of domiciliosAdicionales) {
+          if (domicilio.id) {
+            // Actualizar domicilio existente
+            await clientesAPI.updateDomicilio(domicilio.id, {
+              tipo: domicilio.tipo,
+              calle: domicilio.calle!,
+              numeroExterior: domicilio.numeroExterior!,
+              numeroInterior: domicilio.numeroInterior,
+              colonia: domicilio.colonia!,
+              municipio: domicilio.municipio!,
+              estado: domicilio.estado!,
+              codigoPostal: domicilio.codigoPostal!,
+              referencia: domicilio.referencia,
+              activo: domicilio.activo
+            })
+          } else if (domicilio.calle && domicilio.numeroExterior && domicilio.colonia && domicilio.municipio && domicilio.estado && domicilio.codigoPostal) {
+            // Crear nuevo domicilio
+            await clientesAPI.createDomicilio(clienteSeleccionado.id, {
+              tipo: domicilio.tipo || 'otro',
+              calle: domicilio.calle,
+              numeroExterior: domicilio.numeroExterior,
+              numeroInterior: domicilio.numeroInterior,
+              colonia: domicilio.colonia,
+              municipio: domicilio.municipio,
+              estado: domicilio.estado,
+              codigoPostal: domicilio.codigoPostal,
+              referencia: domicilio.referencia,
+              activo: domicilio.activo !== undefined ? domicilio.activo : true
+            })
+          }
+        }
+
+        await cargarDatos()
+      }
+
+      cerrarDialogo()
+    } catch (err: any) {
+      setError(err.message || 'Error al guardar cliente')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const manejarArchivo = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -641,6 +905,112 @@ export default function ClientesPage() {
     cerrarDialogo()
   }
 
+  const abrirDialogoEliminar = (cliente: Cliente) => {
+    setClienteAEliminar(cliente)
+    setDialogoEliminar(true)
+  }
+
+  const cerrarDialogoEliminar = () => {
+    setDialogoEliminar(false)
+    setClienteAEliminar(null)
+  }
+
+  const eliminarCliente = async () => {
+    if (!clienteAEliminar) return
+
+    try {
+      setEliminando(true)
+      setError(null)
+      await clientesAPI.delete(clienteAEliminar.id)
+      cerrarDialogoEliminar()
+      await cargarDatos()
+    } catch (err: any) {
+      setError(err.message || 'Error al eliminar cliente')
+    } finally {
+      setEliminando(false)
+    }
+  }
+
+  const abrirModalQR = async (domicilio: Domicilio) => {
+    if (!clienteSeleccionado) return
+    
+    try {
+      setDomicilioQR(domicilio)
+      const contenidoQR = generarContenidoQR(clienteSeleccionado, domicilio)
+      
+      // Crear un canvas para el QR
+      const canvas = document.createElement('canvas')
+      const qrSize = 500
+      canvas.width = qrSize
+      canvas.height = qrSize
+      
+      // Generar el QR en el canvas
+      await QRCode.toCanvas(canvas, contenidoQR, {
+        width: qrSize,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      })
+      
+      // Cargar el logo
+      const logo = new Image()
+      logo.crossOrigin = 'anonymous'
+      
+      await new Promise<void>((resolve, reject) => {
+        logo.onload = () => {
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            reject(new Error('No se pudo obtener el contexto del canvas'))
+            return
+          }
+          
+          // Tamaño del logo (20% del tamaño del QR)
+          const logoSize = qrSize * 0.4
+          const logoX = (qrSize - logoSize) / 2
+          const logoY = (qrSize - logoSize) / 2
+          
+          // Dibujar un fondo blanco para el logo
+          ctx.fillStyle = '#FFFFFF'
+          ctx.fillRect(logoX - 5, logoY - 5, logoSize + 10, logoSize + 10)
+          
+          // Dibujar el logo en el centro
+          ctx.drawImage(logo, logoX, logoY, logoSize, logoSize)
+          
+          resolve()
+        }
+        logo.onerror = () => reject(new Error('Error al cargar el logo'))
+        logo.src = '/images/flama.png'
+      })
+      
+      // Convertir el canvas a data URL
+      const qrDataURL = canvas.toDataURL('image/png')
+      setQrDataURL(qrDataURL)
+      setModalQR(true)
+    } catch (err) {
+      console.error('Error generando QR:', err)
+      setError('Error al generar el código QR')
+    }
+  }
+
+  const cerrarModalQR = () => {
+    setModalQR(false)
+    setQrDataURL('')
+    setDomicilioQR(null)
+  }
+
+  const descargarQR = () => {
+    if (!qrDataURL || !domicilioQR) return
+
+    const link = document.createElement('a')
+    link.href = qrDataURL
+    link.download = `QR_${domicilioQR.codigoQR}_${obtenerNombreCompleto(clienteSeleccionado!).replace(/\s+/g, '_')}.png`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   const getEstadoColor = (estado: string) => {
     switch (estado) {
       case 'activo': return 'success'
@@ -660,15 +1030,59 @@ export default function ClientesPage() {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Gestión de Clientes
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1">
+          Gestión de Clientes
+        </Typography>
+        {esSuperAdministrador && (
+          <FormControl sx={{ minWidth: 250 }}>
+            <InputLabel>Sede</InputLabel>
+            <Select
+              value={sedeSeleccionada || ''}
+              onChange={(e) => handleSedeChange(e.target.value)}
+              label="Sede"
+            >
+              {sedes.map((sede) => (
+                <MenuItem key={sede.id} value={sede.id}>
+                  {sede.nombre}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+        {!esSuperAdministrador && sedeId && (
+          <Chip 
+            label={`Sede: ${sedes.find(s => s.id === sedeId)?.nombre || 'N/A'}`}
+            color="primary"
+            variant="outlined"
+          />
+        )}
+      </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {loading && clientes.length === 0 ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+          <CircularProgress />
+        </Box>
+      ) : null}
       
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">Lista de Clientes</Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant="outlined"
+                startIcon={<AccountBalanceIcon />}
+                onClick={() => router.push('/creditos-abonos')}
+              >
+                Créditos y Abonos
+              </Button>
               <Button
                 variant="outlined"
                 startIcon={<UploadIcon />}
@@ -731,7 +1145,11 @@ export default function ClientesPage() {
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Chip label={cliente.ruta} size="small" variant="outlined" />
+                      <Chip 
+                        label={(cliente.ruta as any)?.nombre || cliente.ruta || 'Sin ruta'} 
+                        size="small" 
+                        variant="outlined" 
+                      />
                     </TableCell>
                     <TableCell align="right">
                       <Typography variant="body2" fontWeight="bold">
@@ -794,6 +1212,18 @@ export default function ClientesPage() {
                             }}
                           >
                             <HistoryIcon />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Eliminar">
+                          <IconButton 
+                            size="small" 
+                            color="error"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              abrirDialogoEliminar(cliente)
+                            }}
+                          >
+                            <DeleteIcon />
                           </IconButton>
                         </Tooltip>
                       </Box>
@@ -1062,13 +1492,19 @@ export default function ClientesPage() {
               <FormControl fullWidth required>
                 <InputLabel>Ruta</InputLabel>
                 <Select
-                  value={formularioCliente.ruta || ''}
-                  onChange={(e) => manejarCambioFormulario('ruta', e.target.value)}
+                  value={(formularioCliente.ruta as any)?.id || (typeof formularioCliente.ruta === 'string' ? formularioCliente.ruta : '') || ''}
+                  onChange={(e) => {
+                    const rutaSeleccionada = rutas.find(r => r.id === e.target.value)
+                    manejarCambioFormulario('ruta', rutaSeleccionada || e.target.value)
+                    if (rutaSeleccionada) {
+                      manejarCambioFormulario('ruta', rutaSeleccionada.nombre)
+                    }
+                  }}
                   label="Ruta"
                 >
-                  {rutasMexico.map((ruta) => (
-                    <MenuItem key={ruta} value={ruta}>
-                      {ruta}
+                  {rutas.filter(r => r.activa).map((ruta) => (
+                    <MenuItem key={ruta.id} value={ruta.id}>
+                      {ruta.nombre} - {ruta.codigo}
                     </MenuItem>
                   ))}
                 </Select>
@@ -1123,14 +1559,161 @@ export default function ClientesPage() {
                 </Select>
               </FormControl>
             </Grid>
+
+            {/* Domicilios Adicionales */}
+            <Grid item xs={12}>
+              <Divider sx={{ my: 2 }} />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" gutterBottom>
+                  Domicilios Adicionales
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<AddIcon />}
+                  onClick={agregarDomicilioAdicional}
+                >
+                  Agregar Domicilio
+                </Button>
+              </Box>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                El primer domicilio (principal) se crea automáticamente con los datos de la dirección principal del cliente.
+              </Alert>
+              
+              {domiciliosAdicionales.map((domicilio, index) => (
+                <Card key={index} variant="outlined" sx={{ mb: 2 }}>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        Domicilio {index + 1}
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => eliminarDomicilioAdicional(index)}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Box>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={4}>
+                        <FormControl fullWidth>
+                          <InputLabel>Tipo de Domicilio</InputLabel>
+                          <Select
+                            value={domicilio.tipo || 'otro'}
+                            onChange={(e) => actualizarDomicilioAdicional(index, 'tipo', e.target.value)}
+                            label="Tipo de Domicilio"
+                          >
+                            <MenuItem value="facturacion">Facturación</MenuItem>
+                            <MenuItem value="entrega">Entrega</MenuItem>
+                            <MenuItem value="otro">Otro</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} sm={8}>
+                        <TextField
+                          fullWidth
+                          label="Calle"
+                          value={domicilio.calle || ''}
+                          onChange={(e) => actualizarDomicilioAdicional(index, 'calle', e.target.value)}
+                          required
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={3}>
+                        <TextField
+                          fullWidth
+                          label="No. Ext."
+                          value={domicilio.numeroExterior || ''}
+                          onChange={(e) => actualizarDomicilioAdicional(index, 'numeroExterior', e.target.value)}
+                          required
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={3}>
+                        <TextField
+                          fullWidth
+                          label="No. Int."
+                          value={domicilio.numeroInterior || ''}
+                          onChange={(e) => actualizarDomicilioAdicional(index, 'numeroInterior', e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          label="Colonia"
+                          value={domicilio.colonia || ''}
+                          onChange={(e) => actualizarDomicilioAdicional(index, 'colonia', e.target.value)}
+                          required
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <TextField
+                          fullWidth
+                          label="Municipio"
+                          value={domicilio.municipio || ''}
+                          onChange={(e) => actualizarDomicilioAdicional(index, 'municipio', e.target.value)}
+                          required
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <FormControl fullWidth required>
+                          <InputLabel>Estado</InputLabel>
+                          <Select
+                            value={domicilio.estado || ''}
+                            onChange={(e) => actualizarDomicilioAdicional(index, 'estado', e.target.value)}
+                            label="Estado"
+                          >
+                            {estadosMexico.map((estado) => (
+                              <MenuItem key={estado} value={estado}>
+                                {estado}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <TextField
+                          fullWidth
+                          label="Código Postal"
+                          value={domicilio.codigoPostal || ''}
+                          onChange={(e) => actualizarDomicilioAdicional(index, 'codigoPostal', e.target.value)}
+                          required
+                          inputProps={{ maxLength: 5 }}
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          label="Referencia"
+                          value={domicilio.referencia || ''}
+                          onChange={(e) => actualizarDomicilioAdicional(index, 'referencia', e.target.value)}
+                          multiline
+                          rows={2}
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={domicilio.activo !== undefined ? domicilio.activo : true}
+                              onChange={(e) => actualizarDomicilioAdicional(index, 'activo', e.target.checked)}
+                            />
+                          }
+                          label="Domicilio Activo"
+                        />
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Card>
+              ))}
+            </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
           <Button onClick={cerrarDialogo}>
             Cancelar
           </Button>
-          <Button onClick={guardarCliente} variant="contained" startIcon={<SaveIcon />}>
-            {tipoDialogo === 'agregar' ? 'Agregar' : 'Guardar Cambios'}
+          <Button onClick={guardarCliente} variant="contained" startIcon={<SaveIcon />} disabled={saving}>
+            {saving ? 'Guardando...' : tipoDialogo === 'agregar' ? 'Agregar' : 'Guardar Cambios'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1497,7 +2080,11 @@ export default function ClientesPage() {
                       <Typography variant="body2" color="text.secondary">
                         Ruta Asignada
                       </Typography>
-                      <Chip label={clienteSeleccionado.ruta} size="small" variant="outlined" />
+                      <Chip 
+                        label={(clienteSeleccionado.ruta as any)?.nombre || clienteSeleccionado.ruta || 'Sin ruta'} 
+                        size="small" 
+                        variant="outlined" 
+                      />
                     </Grid>
                   </Grid>
                 </CardContent>
@@ -1538,6 +2125,11 @@ export default function ClientesPage() {
                                     color="primary"
                                     variant="outlined"
                                     size="small"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      abrirModalQR(domicilio)
+                                    }}
+                                    sx={{ cursor: 'pointer', '&:hover': { opacity: 0.8 } }}
                                   />
                                 </Box>
                               </Box>
@@ -1564,165 +2156,6 @@ export default function ClientesPage() {
                                   </Typography>
                                 </>
                               )}
-                              
-                              <Divider sx={{ my: 2 }} />
-                              
-                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                                <Typography variant="body2" color="text.secondary">
-                                  Código QR Único
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                  Creado: {new Date(domicilio.fechaCreacionQR).toLocaleDateString('es-MX')}
-                                </Typography>
-                              </Box>
-                              
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                                <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
-                                  <QrCodeIcon />
-                                </Avatar>
-                                <Box>
-                                  <Typography variant="body2" fontWeight="bold">
-                                    {domicilio.codigoQR}
-                                  </Typography>
-                                  <Typography variant="caption" color="text.secondary">
-                                    Escanea para cargar datos del cliente y domicilio
-                                  </Typography>
-                                </Box>
-                              </Box>
-                              
-                              <Button
-                                size="small"
-                                variant="contained"
-                                startIcon={<PrintIcon />}
-                                onClick={async () => {
-                                  const contenidoQR = generarContenidoQR(clienteSeleccionado, domicilio)
-                                  try {
-                                    // Generar el código QR como imagen
-                                    const qrDataURL = await QRCode.toDataURL(contenidoQR, {
-                                      width: 300,
-                                      margin: 2,
-                                      color: {
-                                        dark: '#000000',
-                                        light: '#FFFFFF'
-                                      }
-                                    })
-                                    
-                                    const ventanaImpresion = window.open('', '_blank')
-                                    ventanaImpresion?.document.write(`
-                                      <html>
-                                        <head>
-                                          <title>Código QR - ${domicilio.codigoQR}</title>
-                                          <style>
-                                            body { 
-                                              font-family: Arial, sans-serif; 
-                                              margin: 20px; 
-                                              text-align: center;
-                                            }
-                                            .header { margin-bottom: 30px; }
-                                            .qr-container { 
-                                              display: flex; 
-                                              flex-direction: column; 
-                                              align-items: center; 
-                                              margin: 30px 0; 
-                                            }
-                                            .qr-image { 
-                                              border: 2px solid #333; 
-                                              margin: 20px 0; 
-                                            }
-                                            .qr-info { 
-                                              background: #f5f5f5; 
-                                              padding: 20px; 
-                                              border-radius: 8px; 
-                                              margin: 20px 0; 
-                                              text-align: left;
-                                              max-width: 400px;
-                                            }
-                                            .qr-code-text {
-                                              font-family: monospace;
-                                              font-size: 18px;
-                                              font-weight: bold;
-                                              color: #1976d2;
-                                              margin: 10px 0;
-                                            }
-                                            .address-info {
-                                              margin: 10px 0;
-                                            }
-                                            .label {
-                                              font-weight: bold;
-                                              color: #666;
-                                            }
-                                            @media print {
-                                              body { margin: 0; }
-                                              .no-print { display: none; }
-                                            }
-                                          </style>
-                                        </head>
-                                        <body>
-                                          <div class="header">
-                                            <h1>Código QR para Domicilio</h1>
-                                            <div class="qr-code-text">${domicilio.codigoQR}</div>
-                                          </div>
-                                          
-                                          <div class="qr-container">
-                                            <img src="${qrDataURL}" alt="Código QR ${domicilio.codigoQR}" class="qr-image" />
-                                            <p><strong>Escanea este código QR con la app móvil</strong></p>
-                                          </div>
-                                          
-                                          <div class="qr-info">
-                                            <h3>Información del Domicilio</h3>
-                                            <div class="address-info">
-                                              <div class="label">Cliente:</div>
-                                              <div>${obtenerNombreCompleto(clienteSeleccionado)}</div>
-                                            </div>
-                                            <div class="address-info">
-                                              <div class="label">Tipo:</div>
-                                              <div>${domicilio.tipo.charAt(0).toUpperCase() + domicilio.tipo.slice(1)}</div>
-                                            </div>
-                                            <div class="address-info">
-                                              <div class="label">Dirección:</div>
-                                              <div>${domicilio.calle} ${domicilio.numeroExterior}${domicilio.numeroInterior ? ` Int. ${domicilio.numeroInterior}` : ''}</div>
-                                            </div>
-                                            <div class="address-info">
-                                              <div class="label">Colonia:</div>
-                                              <div>${domicilio.colonia}</div>
-                                            </div>
-                                            <div class="address-info">
-                                              <div class="label">Municipio:</div>
-                                              <div>${domicilio.municipio}</div>
-                                            </div>
-                                            <div class="address-info">
-                                              <div class="label">Estado:</div>
-                                              <div>${domicilio.estado}</div>
-                                            </div>
-                                            <div class="address-info">
-                                              <div class="label">Código Postal:</div>
-                                              <div>${domicilio.codigoPostal}</div>
-                                            </div>
-                                            ${domicilio.referencia ? `
-                                            <div class="address-info">
-                                              <div class="label">Referencia:</div>
-                                              <div>${domicilio.referencia}</div>
-                                            </div>
-                                            ` : ''}
-                                          </div>
-                                          
-                                          <div class="no-print">
-                                            <button onclick="window.print()" style="padding: 10px 20px; font-size: 16px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                                              Imprimir
-                                            </button>
-                                          </div>
-                                        </body>
-                                      </html>
-                                    `)
-                                    ventanaImpresion?.document.close()
-                                  } catch (error) {
-                                    console.error('Error generando QR:', error)
-                                    alert('Error al generar el código QR')
-                                  }
-                                }}
-                              >
-                                Imprimir QR
-                              </Button>
                             </CardContent>
                           </Card>
                         </Grid>
@@ -1741,6 +2174,112 @@ export default function ClientesPage() {
         <DialogActions>
           <Button onClick={cerrarDialogo}>
             Cerrar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Diálogo de Confirmación para Eliminar Cliente */}
+      <Dialog open={dialogoEliminar} onClose={cerrarDialogoEliminar}>
+        <DialogTitle>Confirmar Eliminación</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            ¿Está seguro de que desea eliminar al cliente{' '}
+            <strong>
+              {clienteAEliminar ? obtenerNombreCompleto(clienteAEliminar) : ''}
+            </strong>
+            ? Esta acción no se puede deshacer y también se eliminarán todos los domicilios asociados.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cerrarDialogoEliminar} disabled={eliminando}>
+            Cancelar
+          </Button>
+          <Button 
+            onClick={eliminarCliente} 
+            color="error" 
+            variant="contained" 
+            disabled={eliminando}
+          >
+            {eliminando ? 'Eliminando...' : 'Eliminar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal de Código QR */}
+      <Dialog 
+        open={modalQR} 
+        onClose={cerrarModalQR}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <QrCodeIcon />
+              <Typography variant="h6">
+                Código QR - {domicilioQR?.codigoQR}
+              </Typography>
+            </Box>
+            <IconButton onClick={cerrarModalQR} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {domicilioQR && clienteSeleccionado && (
+            <Box sx={{ textAlign: 'center', py: 2 }}>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                {domicilioQR.tipo.charAt(0).toUpperCase() + domicilioQR.tipo.slice(1)} - {obtenerNombreCompleto(clienteSeleccionado)}
+              </Typography>
+              
+              {qrDataURL && (
+                <Box sx={{ my: 3 }}>
+                  <img 
+                    src={qrDataURL} 
+                    alt={`QR Code ${domicilioQR.codigoQR}`}
+                    style={{
+                      width: '100%',
+                      maxWidth: '400px',
+                      height: 'auto',
+                      border: '2px solid #e0e0e0',
+                      borderRadius: '8px',
+                      padding: '16px',
+                      backgroundColor: '#ffffff'
+                    }}
+                  />
+                </Box>
+              )}
+
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2, mb: 1 }}>
+                <strong>Dirección:</strong> {domicilioQR.calle} {domicilioQR.numeroExterior}
+                {domicilioQR.numeroInterior && ` Int. ${domicilioQR.numeroInterior}`}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {domicilioQR.colonia}, {domicilioQR.municipio}, {domicilioQR.estado}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                C.P. {domicilioQR.codigoPostal}
+              </Typography>
+
+              {domicilioQR.referencia && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  <strong>Referencia:</strong> {domicilioQR.referencia}
+                </Typography>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cerrarModalQR}>
+            Cerrar
+          </Button>
+          <Button 
+            onClick={descargarQR} 
+            variant="contained" 
+            startIcon={<DownloadIcon />}
+            disabled={!qrDataURL}
+          >
+            Descargar como Imagen
           </Button>
         </DialogActions>
       </Dialog>

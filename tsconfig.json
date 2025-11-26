@@ -48,6 +48,12 @@
       ],
       "@views/*": [
         "./src/views/*"
+      ],
+      "@lib/*": [
+        "./src/lib/*"
+      ],
+      "@contexts/*": [
+        "./src/contexts/*"
       ]
     }
   },

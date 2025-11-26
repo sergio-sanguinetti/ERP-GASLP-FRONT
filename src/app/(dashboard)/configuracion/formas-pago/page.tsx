@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 
 import {
   Box,
@@ -33,7 +33,9 @@ import {
   FormControlLabel,
   InputAdornment,
   Checkbox,
-  DialogContentText
+  DialogContentText,
+  Alert,
+  CircularProgress
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -52,168 +54,33 @@ import {
   Download as DownloadIcon
 } from '@mui/icons-material'
 
-// Tipos de datos
-interface FormaPago {
-  id: string
-  nombre: string
-  tipo: 'efectivo' | 'terminal' | 'transferencia' | 'cheque' | 'deposito' | 'credito'
-  descripcion: string
-  activa: boolean
-  requiereValidacion: boolean
-  requiereFolio: boolean
-  comisionPorcentaje: number
-  diasLiquidacion: number
-  bancoAsociado?: string
+// Type Imports
+import { formasPagoAPI, sedesAPI, type FormaPago, type Sede } from '@lib/api'
+import { useAuth } from '@contexts/AuthContext'
+
+// Tipos de datos (compatibilidad con estructura del frontend)
+interface FormaPagoFrontend extends FormaPago {
   configuracion: {
     requiereComprobante: boolean
     permiteCambio: boolean
     limiteMaximo?: number
     limiteMinimo?: number
   }
-  fechaCreacion: string
-  fechaModificacion: string
-  usuarioCreacion: string
-  usuarioModificacion: string
 }
 
-// Datos de ejemplo
-const formasPago: FormaPago[] = [
-  {
-    id: '1',
-    nombre: 'Efectivo',
-    tipo: 'efectivo',
-    descripcion: 'Pago en efectivo al momento de la entrega',
-    activa: true,
-    requiereValidacion: false,
-    requiereFolio: false,
-    comisionPorcentaje: 0,
-    diasLiquidacion: 0,
-    configuracion: {
-      requiereComprobante: false,
-      permiteCambio: true,
-      limiteMaximo: 50000,
-      limiteMinimo: 1
-    },
-    fechaCreacion: '2024-01-01',
-    fechaModificacion: '2024-01-01',
-    usuarioCreacion: 'Admin Sistema',
-    usuarioModificacion: 'Admin Sistema'
-  },
-  {
-    id: '2',
-    nombre: 'Terminal de Pago',
-    tipo: 'terminal',
-    descripcion: 'Pago con tarjeta de débito o crédito mediante terminal',
-    activa: true,
-    requiereValidacion: true,
-    requiereFolio: true,
-    comisionPorcentaje: 2.5,
-    diasLiquidacion: 1,
-    configuracion: {
-      requiereComprobante: true,
-      permiteCambio: false,
-      limiteMaximo: 100000,
-      limiteMinimo: 10
-    },
-    fechaCreacion: '2024-01-01',
-    fechaModificacion: '2024-01-15',
-    usuarioCreacion: 'Admin Sistema',
-    usuarioModificacion: 'Gerente Ventas'
-  },
-  {
-    id: '3',
-    nombre: 'Transferencia Bancaria',
-    tipo: 'transferencia',
-    descripcion: 'Transferencia bancaria SPEI o interbancaria',
-    activa: true,
-    requiereValidacion: true,
-    requiereFolio: true,
-    comisionPorcentaje: 0,
-    diasLiquidacion: 1,
-    bancoAsociado: 'BBVA',
-    configuracion: {
-      requiereComprobante: true,
-      permiteCambio: false,
-      limiteMaximo: 200000,
-      limiteMinimo: 100
-    },
-    fechaCreacion: '2024-01-01',
-    fechaModificacion: '2024-01-20',
-    usuarioCreacion: 'Admin Sistema',
-    usuarioModificacion: 'Admin Sistema'
-  },
-  {
-    id: '4',
-    nombre: 'Cheque',
-    tipo: 'cheque',
-    descripcion: 'Pago mediante cheque bancario',
-    activa: true,
-    requiereValidacion: true,
-    requiereFolio: true,
-    comisionPorcentaje: 0,
-    diasLiquidacion: 3,
-    configuracion: {
-      requiereComprobante: true,
-      permiteCambio: false,
-      limiteMaximo: 500000,
-      limiteMinimo: 1000
-    },
-    fechaCreacion: '2024-01-01',
-    fechaModificacion: '2024-01-10',
-    usuarioCreacion: 'Admin Sistema',
-    usuarioModificacion: 'Admin Sistema'
-  },
-  {
-    id: '5',
-    nombre: 'Depósito Bancario',
-    tipo: 'deposito',
-    descripcion: 'Depósito directo en cuenta bancaria',
-    activa: true,
-    requiereValidacion: true,
-    requiereFolio: true,
-    comisionPorcentaje: 0,
-    diasLiquidacion: 1,
-    bancoAsociado: 'Santander',
-    configuracion: {
-      requiereComprobante: true,
-      permiteCambio: false,
-      limiteMaximo: 300000,
-      limiteMinimo: 50
-    },
-    fechaCreacion: '2024-01-01',
-    fechaModificacion: '2024-01-05',
-    usuarioCreacion: 'Admin Sistema',
-    usuarioModificacion: 'Admin Sistema'
-  },
-  {
-    id: '6',
-    nombre: 'Crédito',
-    tipo: 'credito',
-    descripcion: 'Pago a crédito según límite autorizado',
-    activa: true,
-    requiereValidacion: false,
-    requiereFolio: false,
-    comisionPorcentaje: 0,
-    diasLiquidacion: 30,
-    configuracion: {
-      requiereComprobante: false,
-      permiteCambio: true,
-      limiteMaximo: 1000000,
-      limiteMinimo: 100
-    },
-    fechaCreacion: '2024-01-01',
-    fechaModificacion: '2024-01-01',
-    usuarioCreacion: 'Admin Sistema',
-    usuarioModificacion: 'Admin Sistema'
-  }
-]
-
 export default function ConfiguracionFormasPagoPage() {
-  const [formasPagoList, setFormasPagoList] = useState<FormaPago[]>(formasPago)
+  const { user } = useAuth()
+  const [formasPagoList, setFormasPagoList] = useState<FormaPagoFrontend[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
   const [tipoDialogo, setTipoDialogo] = useState<'crear' | 'editar' | 'eliminar' | 'ver'>('crear')
-  const [formaPagoSeleccionada, setFormaPagoSeleccionada] = useState<FormaPago | null>(null)
-  const [formulario, setFormulario] = useState<Partial<FormaPago>>({})
+  const [formaPagoSeleccionada, setFormaPagoSeleccionada] = useState<FormaPagoFrontend | null>(null)
+  const [formulario, setFormulario] = useState<Partial<FormaPagoFrontend>>({})
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [sedes, setSedes] = useState<Sede[]>([])
+  const [sedesSeleccionadas, setSedesSeleccionadas] = useState<string[]>([])
 
   const [filtros, setFiltros] = useState({
     nombre: '',
@@ -221,9 +88,69 @@ export default function ConfiguracionFormasPagoPage() {
     activa: ''
   })
 
-  const abrirDialogo = (tipo: 'crear' | 'editar' | 'eliminar' | 'ver', formaPago?: FormaPago) => {
+  // Cargar sedes al montar el componente
+  useEffect(() => {
+    loadSedes()
+  }, [])
+
+  // Cargar formas de pago al montar el componente y cuando cambian los filtros
+  useEffect(() => {
+    loadFormasPago()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros.nombre, filtros.tipo, filtros.activa])
+
+  const loadSedes = async () => {
+    try {
+      const data = await sedesAPI.getAll()
+      setSedes(data)
+    } catch (err: any) {
+      console.error('Error loading sedes:', err)
+    }
+  }
+
+  const loadFormasPago = async () => {
+    try {
+      setLoading(true)
+      setError('')
+      const data = await formasPagoAPI.getAll({
+        nombre: filtros.nombre || undefined,
+        tipo: filtros.tipo || undefined,
+        activa: filtros.activa || undefined
+      })
+      
+      // Convertir a formato del frontend (con configuracion anidada)
+      const formasPagoFormateadas: FormaPagoFrontend[] = data.map(fp => {
+        // Debug: verificar estructura de datos
+        if (process.env.NODE_ENV === 'development') {
+          console.log('FormaPago recibida:', { id: fp.id, nombre: fp.nombre, sede: fp.sede, sedeId: fp.sedeId })
+        }
+        
+        return {
+          ...fp,
+          sede: fp.sede || undefined, // Asegurar que sede se preserve
+          sedes: fp.sedes?.map((fs: any) => fs.sede || fs) || undefined, // Mapear sedes desde la relación
+          configuracion: {
+            requiereComprobante: fp.requiereComprobante,
+            permiteCambio: fp.permiteCambio,
+            limiteMaximo: fp.limiteMaximo,
+            limiteMinimo: fp.limiteMinimo
+          }
+        }
+      })
+      
+      setFormasPagoList(formasPagoFormateadas)
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar formas de pago')
+      console.error('Error loading formas de pago:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const abrirDialogo = (tipo: 'crear' | 'editar' | 'eliminar' | 'ver', formaPago?: FormaPagoFrontend) => {
     setTipoDialogo(tipo)
     setFormaPagoSeleccionada(formaPago || null)
+    setError('')
 
     if (tipo === 'crear') {
       setFormulario({
@@ -232,17 +159,26 @@ export default function ConfiguracionFormasPagoPage() {
         requiereFolio: false,
         comisionPorcentaje: 0,
         diasLiquidacion: 0,
+        requiereComprobante: false,
+        permiteCambio: true,
         configuracion: {
           requiereComprobante: false,
           permiteCambio: true
         },
-        fechaCreacion: new Date().toISOString().split('T')[0],
-        fechaModificacion: new Date().toISOString().split('T')[0],
-        usuarioCreacion: 'Usuario Actual',
-        usuarioModificacion: 'Usuario Actual'
+        usuarioCreacion: user?.nombres || user?.email || 'Sistema',
+        usuarioModificacion: user?.nombres || user?.email || 'Sistema'
       })
+      setSedesSeleccionadas([])
     } else if (tipo === 'editar' && formaPago) {
       setFormulario({ ...formaPago })
+      // Si hay sedes asociadas, cargarlas
+      if (formaPago.sedes && Array.isArray(formaPago.sedes)) {
+        setSedesSeleccionadas(formaPago.sedes.map((s: any) => s.id || s.sedeId))
+      } else if (formaPago.sedeId) {
+        setSedesSeleccionadas([formaPago.sedeId])
+      } else {
+        setSedesSeleccionadas([])
+      }
     }
 
     setDialogoAbierto(true)
@@ -252,6 +188,17 @@ export default function ConfiguracionFormasPagoPage() {
     setDialogoAbierto(false)
     setFormaPagoSeleccionada(null)
     setFormulario({})
+    setSedesSeleccionadas([])
+  }
+
+  const manejarSeleccionarTodas = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    if (sedesSeleccionadas.length === sedes.length && sedes.length > 0) {
+      setSedesSeleccionadas([])
+    } else {
+      setSedesSeleccionadas(sedes.map(s => s.id))
+    }
   }
 
   const manejarCambioFormulario = (campo: string, valor: any) => {
@@ -268,38 +215,81 @@ export default function ConfiguracionFormasPagoPage() {
     }))
   }
 
-  const guardarFormaPago = () => {
-    if (tipoDialogo === 'crear') {
-      const nuevaFormaPago: FormaPago = {
-        id: Date.now().toString(),
-        ...(formulario as FormaPago)
+  const guardarFormaPago = async () => {
+    if (!formulario.nombre || !formulario.tipo || !formulario.descripcion) {
+      setError('Por favor completa todos los campos requeridos')
+      return
+    }
+
+    setSaving(true)
+    setError('')
+
+    try {
+      if (tipoDialogo === 'crear') {
+        await formasPagoAPI.create({
+          nombre: formulario.nombre!,
+          tipo: formulario.tipo!,
+          descripcion: formulario.descripcion!,
+          activa: formulario.activa !== undefined ? formulario.activa : true,
+          requiereValidacion: formulario.requiereValidacion || false,
+          requiereFolio: formulario.requiereFolio || false,
+          comisionPorcentaje: formulario.comisionPorcentaje || 0,
+          diasLiquidacion: formulario.diasLiquidacion || 0,
+          bancoAsociado: formulario.bancoAsociado,
+          requiereComprobante: formulario.configuracion?.requiereComprobante || false,
+          permiteCambio: formulario.configuracion?.permiteCambio !== undefined ? formulario.configuracion.permiteCambio : true,
+          limiteMaximo: formulario.configuracion?.limiteMaximo,
+          limiteMinimo: formulario.configuracion?.limiteMinimo,
+          sedeId: sedesSeleccionadas.length === 1 ? sedesSeleccionadas[0] : undefined,
+          sedesIds: sedesSeleccionadas.length > 0 ? sedesSeleccionadas : undefined,
+          usuarioCreacion: user?.nombres || user?.email || 'Sistema',
+          usuarioModificacion: user?.nombres || user?.email || 'Sistema'
+        })
+      } else if (tipoDialogo === 'editar' && formaPagoSeleccionada) {
+        await formasPagoAPI.update(formaPagoSeleccionada.id, {
+          nombre: formulario.nombre,
+          tipo: formulario.tipo,
+          descripcion: formulario.descripcion,
+          activa: formulario.activa,
+          requiereValidacion: formulario.requiereValidacion,
+          requiereFolio: formulario.requiereFolio,
+          comisionPorcentaje: formulario.comisionPorcentaje,
+          diasLiquidacion: formulario.diasLiquidacion,
+          bancoAsociado: formulario.bancoAsociado,
+          requiereComprobante: formulario.configuracion?.requiereComprobante,
+          permiteCambio: formulario.configuracion?.permiteCambio,
+          limiteMaximo: formulario.configuracion?.limiteMaximo,
+          limiteMinimo: formulario.configuracion?.limiteMinimo,
+          sedeId: sedesSeleccionadas.length === 1 ? sedesSeleccionadas[0] : undefined,
+          sedesIds: sedesSeleccionadas.length > 0 ? sedesSeleccionadas : undefined,
+          usuarioModificacion: user?.nombres || user?.email || 'Sistema'
+        })
       }
 
-      setFormasPagoList(prev => [...prev, nuevaFormaPago])
-    } else if (tipoDialogo === 'editar' && formaPagoSeleccionada) {
-      setFormasPagoList(prev =>
-        prev.map(fp =>
-          fp.id === formaPagoSeleccionada.id
-            ? {
-                ...fp,
-                ...formulario,
-                fechaModificacion: new Date().toISOString().split('T')[0],
-                usuarioModificacion: 'Usuario Actual'
-              }
-            : fp
-        )
-      )
+      cerrarDialogo()
+      await loadFormasPago() // Recargar la lista
+    } catch (err: any) {
+      setError(err.message || 'Error al guardar forma de pago')
+    } finally {
+      setSaving(false)
     }
-
-    cerrarDialogo()
   }
 
-  const eliminarFormaPago = () => {
-    if (formaPagoSeleccionada) {
-      setFormasPagoList(prev => prev.filter(fp => fp.id !== formaPagoSeleccionada.id))
-    }
+  const eliminarFormaPago = async () => {
+    if (!formaPagoSeleccionada) return
 
-    cerrarDialogo()
+    setDeleting(true)
+    setError('')
+
+    try {
+      await formasPagoAPI.delete(formaPagoSeleccionada.id)
+      cerrarDialogo()
+      await loadFormasPago() // Recargar la lista
+    } catch (err: any) {
+      setError(err.message || 'Error al eliminar forma de pago')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const manejarCambioFiltros = (campo: string, valor: any) => {
@@ -344,14 +334,8 @@ export default function ConfiguracionFormasPagoPage() {
     }
   }
 
-  const formasPagoFiltradas = formasPagoList.filter(fp => {
-    const cumpleNombre = !filtros.nombre || fp.nombre.toLowerCase().includes(filtros.nombre.toLowerCase())
-    const cumpleTipo = !filtros.tipo || fp.tipo === filtros.tipo
-    const cumpleActiva =
-      !filtros.activa || (filtros.activa === 'activa' && fp.activa) || (filtros.activa === 'inactiva' && !fp.activa)
-
-    return cumpleNombre && cumpleTipo && cumpleActiva
-  })
+  // Los filtros ya se aplican en el backend, así que usamos directamente la lista
+  const formasPagoFiltradas = formasPagoList
 
   const tiposFormaPago = [
     { value: 'efectivo', label: 'Efectivo' },
@@ -365,6 +349,12 @@ export default function ConfiguracionFormasPagoPage() {
   return (
     <>
       <Box sx={{ p: 3 }}>
+        {error && (
+          <Alert severity='error' sx={{ mb: 2 }} onClose={() => setError('')}>
+            {error}
+          </Alert>
+        )}
+
         {/* Filtros y Búsqueda */}
         <Card sx={{ mb: 3 }}>
           <CardContent>
@@ -440,7 +430,7 @@ export default function ConfiguracionFormasPagoPage() {
               <Typography variant='h6'>Formas de Pago ({formasPagoFiltradas.length})</Typography>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <Tooltip title='Actualizar'>
-                  <IconButton onClick={() => window.location.reload()}>
+                  <IconButton onClick={loadFormasPago} disabled={loading}>
                     <RefreshIcon />
                   </IconButton>
                 </Tooltip>
@@ -452,21 +442,31 @@ export default function ConfiguracionFormasPagoPage() {
               </Box>
             </Box>
 
-            <TableContainer component={Paper} variant='outlined'>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Forma de Pago</TableCell>
-                    <TableCell>Tipo</TableCell>
-                    <TableCell>Descripción</TableCell>
-                    <TableCell align='center'>Estado</TableCell>
-                    <TableCell align='right'>Comisión</TableCell>
-                    <TableCell align='right'>Días Liquidación</TableCell>
-                    <TableCell align='center'>Acciones</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {formasPagoFiltradas.map(formaPago => (
+            {loading && formasPagoList.length === 0 ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : formasPagoFiltradas.length === 0 ? (
+              <Typography variant='body1' color='text.secondary' sx={{ textAlign: 'center', py: 4 }}>
+                No hay formas de pago registradas
+              </Typography>
+            ) : (
+              <TableContainer component={Paper} variant='outlined'>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Forma de Pago</TableCell>
+                      <TableCell>Tipo</TableCell>
+                      <TableCell>Descripción</TableCell>
+                      <TableCell>Sede</TableCell>
+                      <TableCell align='center'>Estado</TableCell>
+                      <TableCell align='right'>Comisión</TableCell>
+                      <TableCell align='right'>Días Liquidación</TableCell>
+                      <TableCell align='center'>Acciones</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {formasPagoFiltradas.map(formaPago => (
                     <TableRow key={formaPago.id} hover>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -496,6 +496,27 @@ export default function ConfiguracionFormasPagoPage() {
                         <Typography variant='body2' color='text.secondary'>
                           {formaPago.descripcion}
                         </Typography>
+                      </TableCell>
+                      <TableCell>
+                        {formaPago.sedes && formaPago.sedes.length > 0 ? (
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {formaPago.sedes.map((sede: any, index: number) => (
+                              <Chip 
+                                key={sede.id || index} 
+                                label={sede.nombre} 
+                                size='small' 
+                                color='primary' 
+                                variant='outlined' 
+                              />
+                            ))}
+                          </Box>
+                        ) : formaPago.sede ? (
+                          <Chip label={formaPago.sede.nombre} size='small' color='primary' variant='outlined' />
+                        ) : (
+                          <Typography variant='body2' color='text.secondary'>
+                            Sin sede
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell align='center'>
                         <Chip
@@ -530,10 +551,11 @@ export default function ConfiguracionFormasPagoPage() {
                         </Box>
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
           </CardContent>
         </Card>
 
@@ -678,6 +700,62 @@ export default function ConfiguracionFormasPagoPage() {
                 />
               </Grid>
 
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Sedes</InputLabel>
+                  <Select
+                    multiple
+                    value={sedesSeleccionadas}
+                    onChange={e => {
+                      const value = typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value
+                      // Filtrar el valor especial "__select_all__"
+                      const filteredValue = value.filter((v: string) => v !== '__select_all__')
+                      
+                      // Si el valor incluye "__select_all__", seleccionar/deseleccionar todas
+                      if (value.includes('__select_all__')) {
+                        if (sedesSeleccionadas.length === sedes.length && sedes.length > 0) {
+                          setSedesSeleccionadas([])
+                        } else {
+                          setSedesSeleccionadas(sedes.map(s => s.id))
+                        }
+                      } else {
+                        setSedesSeleccionadas(filteredValue)
+                      }
+                    }}
+                    label='Sedes'
+                    renderValue={(selected) => {
+                      if (selected.length === 0) return 'Sin sedes'
+                      if (selected.length === sedes.length && sedes.length > 0) return 'Todas las sedes'
+                      if (selected.length === 1) {
+                        const sede = sedes.find(s => s.id === selected[0])
+                        return sede?.nombre || ''
+                      }
+                      return `${selected.length} sedes seleccionadas`
+                    }}
+                  >
+                    <MenuItem 
+                      value="__select_all__"
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                      }}
+                    >
+                      <Checkbox
+                        checked={sedesSeleccionadas.length === sedes.length && sedes.length > 0}
+                        indeterminate={sedesSeleccionadas.length > 0 && sedesSeleccionadas.length < sedes.length}
+                      />
+                      <em>Seleccionar todas</em>
+                    </MenuItem>
+                    {sedes.map(sede => (
+                      <MenuItem key={sede.id} value={sede.id}>
+                        <Checkbox checked={sedesSeleccionadas.indexOf(sede.id) > -1} />
+                        {sede.nombre}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
               {/* Configuración Avanzada */}
               <Grid item xs={12}>
                 <Divider sx={{ my: 2 }} />
@@ -716,7 +794,10 @@ export default function ConfiguracionFormasPagoPage() {
                   label='Límite Máximo'
                   type='number'
                   value={formulario.configuracion?.limiteMaximo || ''}
-                  onChange={e => manejarCambioConfiguracion('limiteMaximo', Number(e.target.value))}
+                  onChange={e => {
+                    const value = e.target.value === '' ? undefined : Number(e.target.value)
+                    manejarCambioConfiguracion('limiteMaximo', value)
+                  }}
                   InputProps={{
                     startAdornment: <InputAdornment position='start'>$</InputAdornment>
                   }}
@@ -730,7 +811,10 @@ export default function ConfiguracionFormasPagoPage() {
                   label='Límite Mínimo'
                   type='number'
                   value={formulario.configuracion?.limiteMinimo || ''}
-                  onChange={e => manejarCambioConfiguracion('limiteMinimo', Number(e.target.value))}
+                  onChange={e => {
+                    const value = e.target.value === '' ? undefined : Number(e.target.value)
+                    manejarCambioConfiguracion('limiteMinimo', value)
+                  }}
                   InputProps={{
                     startAdornment: <InputAdornment position='start'>$</InputAdornment>
                   }}
@@ -740,9 +824,16 @@ export default function ConfiguracionFormasPagoPage() {
             </Grid>
           </DialogContent>
           <DialogActions>
-            <Button onClick={cerrarDialogo}>Cancelar</Button>
-            <Button onClick={guardarFormaPago} variant='contained' startIcon={<SaveIcon />}>
-              {tipoDialogo === 'crear' ? 'Crear' : 'Guardar Cambios'}
+            {error && (
+              <Alert severity='error' sx={{ flex: 1, mr: 2 }}>
+                {error}
+              </Alert>
+            )}
+            <Button onClick={cerrarDialogo} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button onClick={guardarFormaPago} variant='contained' startIcon={<SaveIcon />} disabled={saving}>
+              {saving ? 'Guardando...' : tipoDialogo === 'crear' ? 'Crear' : 'Guardar Cambios'}
             </Button>
           </DialogActions>
         </Dialog>
@@ -810,6 +901,28 @@ export default function ConfiguracionFormasPagoPage() {
                               {formaPagoSeleccionada.bancoAsociado}
                             </Typography>
                           </>
+                        )}
+
+                        <Typography variant='body2' color='text.secondary' gutterBottom>
+                          Sedes
+                        </Typography>
+                        {formaPagoSeleccionada.sedes && formaPagoSeleccionada.sedes.length > 0 ? (
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2 }}>
+                            {formaPagoSeleccionada.sedes.map((sede: any, index: number) => (
+                              <Chip 
+                                key={sede.id || index} 
+                                label={sede.nombre} 
+                                size='small' 
+                                color='primary' 
+                              />
+                            ))}
+                          </Box>
+                        ) : formaPagoSeleccionada.sede ? (
+                          <Chip label={formaPagoSeleccionada.sede.nombre} size='small' color='primary' sx={{ mb: 2 }} />
+                        ) : (
+                          <Typography variant='body1' color='text.secondary' sx={{ mb: 2 }}>
+                            Sin sedes asignadas
+                          </Typography>
                         )}
                       </CardContent>
                     </Card>
@@ -976,9 +1089,11 @@ export default function ConfiguracionFormasPagoPage() {
              </DialogContentText>
           </DialogContent>
           <DialogActions>
-            <Button onClick={cerrarDialogo}>Cancelar</Button>
-            <Button onClick={eliminarFormaPago} variant='contained' color='error' startIcon={<DeleteIcon />}>
-              Eliminar
+            <Button onClick={cerrarDialogo} disabled={deleting}>
+              Cancelar
+            </Button>
+            <Button onClick={eliminarFormaPago} variant='contained' color='error' startIcon={<DeleteIcon />} disabled={deleting}>
+              {deleting ? 'Eliminando...' : 'Eliminar'}
             </Button>
           </DialogActions>
         </Dialog>

@@ -1,39 +1,50 @@
-export type UserRole = 'Administrador' | 'Gestor' | 'Repartidor'
+// Tipos actualizados para coincidir con el backend
 
-export type UserStatus = 'Activo' | 'Inactivo'
+export type UserRole = 
+  | 'superAdministrador'
+  | 'administrador'
+  | 'gestor'
+  | 'repartidor'
+
+export type UserStatus = 'activo' | 'inactivo'
+export type TipoRepartidor = 'cilindros' | 'pipas'
 
 export interface User {
-  id: number
+  id: string
   nombres: string
   apellidoPaterno: string
   apellidoMaterno: string
+  email: string
+  telefono?: string
   rol: UserRole
-  correo: string
+  tipoRepartidor?: TipoRepartidor
   estado: UserStatus
-  sedeId?: number
-  sedeNombre?: string
-  fechaCreacion: string
+  sede?: string
+  isTwoFactorEnabled: boolean
+  fechaRegistro: string
 }
 
 export interface CreateUserData {
   nombres: string
   apellidoPaterno: string
   apellidoMaterno: string
+  email: string
+  password: string
+  telefono?: string
   rol: UserRole
-  correo: string
+  tipoRepartidor?: TipoRepartidor
   estado: UserStatus
-  sedeId?: number
+  sede?: string
 }
 
-export interface EditUserData extends CreateUserData {
-  id: number
-  fechaCreacion: string
+export interface EditUserData {
+  nombres?: string
+  apellidoPaterno?: string
+  apellidoMaterno?: string
+  email?: string
+  telefono?: string
+  rol?: UserRole
+  tipoRepartidor?: TipoRepartidor
+  estado?: UserStatus
+  sede?: string
 }
-
-
-
-
-
-
-
-

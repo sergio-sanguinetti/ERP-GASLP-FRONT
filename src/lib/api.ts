@@ -1,0 +1,2198 @@
+// API Client para conectar con el backend
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+
+export interface LoginRequest {
+  email: string
+  password: string
+}
+
+export interface LoginResponse {
+  message: string
+  token?: string
+  requires2FA?: boolean
+  usuario?: any
+}
+
+export interface Verify2FARequest {
+  token2FA: string
+}
+
+export interface Usuario {
+  id: string
+  nombres: string
+  apellidoPaterno: string
+  apellidoMaterno: string
+  email: string
+  telefono?: string
+  rol: string
+  tipoRepartidor?: 'cilindros' | 'pipas'
+  estado: 'activo' | 'inactivo'
+  sede?: string
+  isTwoFactorEnabled: boolean
+  fechaRegistro: string
+}
+
+export interface CreateUsuarioRequest {
+  nombres: string
+  apellidoPaterno: string
+  apellidoMaterno: string
+  email: string
+  password: string
+  telefono?: string
+  rol: string
+  tipoRepartidor?: 'cilindros' | 'pipas'
+  estado: 'activo' | 'inactivo'
+  sede?: string
+}
+
+export interface UpdateUsuarioRequest {
+  nombres?: string
+  apellidoPaterno?: string
+  apellidoMaterno?: string
+  email?: string
+  telefono?: string
+  rol?: string
+  tipoRepartidor?: 'cilindros' | 'pipas'
+  estado?: 'activo' | 'inactivo'
+  sede?: string
+}
+
+// Helper para obtener el token del localStorage
+const getToken = (): string | null => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('token')
+  }
+  return null
+}
+
+// Helper para hacer peticiones con autenticación
+const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  const token = getToken()
+  
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...options.headers as HeadersInit,
+  }
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  const response = await fetch(`${API_URL}${url}`, {
+    ...options,
+    headers,
+  })
+
+  if (response.status === 401) {
+    // Token expirado o inválido
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
+    }
+  }
+
+  return response
+}
+
+// API de Autenticación
+export const authAPI = {
+  login: async (data: LoginRequest): Promise<LoginResponse> => {
+    const response = await fetch(`${API_URL}/usuarios/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al iniciar sesión')
+    }
+
+    return response.json()
+  },
+
+  verify2FA: async (data: Verify2FARequest): Promise<LoginResponse> => {
+    const response = await fetchWithAuth('/usuarios/login/verify-2fa', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al verificar código 2FA')
+    }
+
+    return response.json()
+  },
+
+  getProfile: async (): Promise<Usuario> => {
+    const response = await fetchWithAuth('/usuarios/profile')
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener perfil')
+    }
+
+    return response.json()
+  },
+
+  updateProfile: async (data: UpdateUsuarioRequest): Promise<Usuario> => {
+    const response = await fetchWithAuth('/usuarios/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar perfil')
+    }
+
+    const result = await response.json()
+    return result.usuario || result
+  },
+
+  setup2FA: async (): Promise<{ message: string; secret: string; qrCodeUrl: string }> => {
+    const response = await fetchWithAuth('/usuarios/2fa/setup', {
+      method: 'POST',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al configurar 2FA')
+    }
+
+    return response.json()
+  },
+
+  enable2FA: async (token2FA: string): Promise<{ message: string }> => {
+    const response = await fetchWithAuth('/usuarios/2fa/enable', {
+      method: 'POST',
+      body: JSON.stringify({ token2FA }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al habilitar 2FA')
+    }
+
+    return response.json()
+  },
+
+  disable2FA: async (): Promise<{ message: string }> => {
+    const response = await fetchWithAuth('/usuarios/2fa/disable', {
+      method: 'POST',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al deshabilitar 2FA')
+    }
+
+    return response.json()
+  },
+}
+
+// API de Usuarios (Administración)
+export interface UsuariosFilters {
+  rol?: string
+  estado?: string
+  sede?: string
+}
+
+export const usuariosAPI = {
+  getAll: async (filtros?: UsuariosFilters): Promise<Usuario[]> => {
+    const queryParams = new URLSearchParams()
+    if (filtros?.rol) queryParams.append('rol', filtros.rol)
+    if (filtros?.estado) queryParams.append('estado', filtros.estado)
+    if (filtros?.sede) queryParams.append('sede', filtros.sede)
+
+    const queryString = queryParams.toString()
+    const url = `/usuarios/admin/all${queryString ? `?${queryString}` : ''}`
+    
+    const response = await fetchWithAuth(url)
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener usuarios')
+    }
+
+    return response.json()
+  },
+
+  getById: async (id: string): Promise<Usuario> => {
+    const response = await fetchWithAuth(`/usuarios/admin/${id}`)
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener usuario')
+    }
+
+    return response.json()
+  },
+
+  create: async (data: CreateUsuarioRequest): Promise<Usuario> => {
+    // Usar el endpoint de registro con el token de admin
+    const response = await fetchWithAuth('/usuarios/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al crear usuario')
+    }
+
+    const result = await response.json()
+    return result.usuario
+  },
+
+  update: async (id: string, data: UpdateUsuarioRequest): Promise<Usuario> => {
+    const response = await fetchWithAuth(`/usuarios/admin/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar usuario')
+    }
+
+    const result = await response.json()
+    return result.usuario
+  },
+
+  delete: async (id: string): Promise<void> => {
+    const response = await fetchWithAuth(`/usuarios/admin/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al eliminar usuario')
+    }
+  },
+}
+
+// API de Sedes
+export interface Sede {
+  id: string
+  nombre: string
+  direccion: string
+  telefono: string
+  email: string
+  estado: 'activa' | 'inactiva'
+  fechaCreacion: string
+}
+
+export interface CreateSedeRequest {
+  nombre: string
+  direccion: string
+  telefono: string
+  email: string
+  estado: 'activa' | 'inactiva'
+}
+
+export interface UpdateSedeRequest {
+  nombre?: string
+  direccion?: string
+  telefono?: string
+  email?: string
+  estado?: 'activa' | 'inactiva'
+}
+
+export const sedesAPI = {
+  getAll: async (): Promise<Sede[]> => {
+    const response = await fetch(`${API_URL}/sedes`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener sedes')
+    }
+
+    return response.json()
+  },
+
+  getById: async (id: string): Promise<Sede> => {
+    const response = await fetch(`${API_URL}/sedes/${id}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener sede')
+    }
+
+    return response.json()
+  },
+
+  create: async (data: CreateSedeRequest): Promise<Sede> => {
+    const response = await fetchWithAuth('/sedes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al crear sede')
+    }
+
+    const result = await response.json()
+    return result.sede
+  },
+
+  update: async (id: string, data: UpdateSedeRequest): Promise<Sede> => {
+    const response = await fetchWithAuth(`/sedes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar sede')
+    }
+
+    const result = await response.json()
+    return result.sede
+  },
+
+  delete: async (id: string): Promise<void> => {
+    const response = await fetchWithAuth(`/sedes/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al eliminar sede')
+    }
+  },
+}
+
+// API de Formas de Pago
+export interface FormaPago {
+  id: string
+  nombre: string
+  tipo: 'efectivo' | 'terminal' | 'transferencia' | 'cheque' | 'deposito' | 'credito'
+  descripcion: string
+  activa: boolean
+  requiereValidacion: boolean
+  requiereFolio: boolean
+  comisionPorcentaje: number
+  diasLiquidacion: number
+  bancoAsociado?: string
+  requiereComprobante: boolean
+  permiteCambio: boolean
+  limiteMaximo?: number
+  limiteMinimo?: number
+  sedeId?: string
+  sede?: Sede
+  sedes?: Sede[]
+  usuarioCreacion: string
+  usuarioModificacion: string
+  fechaCreacion: string
+  fechaModificacion: string
+}
+
+export interface CreateFormaPagoRequest {
+  nombre: string
+  tipo: 'efectivo' | 'terminal' | 'transferencia' | 'cheque' | 'deposito' | 'credito'
+  descripcion: string
+  activa?: boolean
+  requiereValidacion?: boolean
+  requiereFolio?: boolean
+  comisionPorcentaje?: number
+  diasLiquidacion?: number
+  bancoAsociado?: string
+  requiereComprobante?: boolean
+  permiteCambio?: boolean
+  limiteMaximo?: number
+  limiteMinimo?: number
+  sedeId?: string
+  sedesIds?: string[]
+  usuarioCreacion?: string
+  usuarioModificacion?: string
+}
+
+export interface UpdateFormaPagoRequest {
+  nombre?: string
+  tipo?: 'efectivo' | 'terminal' | 'transferencia' | 'cheque' | 'deposito' | 'credito'
+  descripcion?: string
+  activa?: boolean
+  requiereValidacion?: boolean
+  requiereFolio?: boolean
+  comisionPorcentaje?: number
+  diasLiquidacion?: number
+  bancoAsociado?: string
+  requiereComprobante?: boolean
+  permiteCambio?: boolean
+  limiteMaximo?: number
+  limiteMinimo?: number
+  sedeId?: string
+  sedesIds?: string[]
+  usuarioModificacion?: string
+}
+
+export interface FormasPagoFilters {
+  nombre?: string
+  tipo?: string
+  activa?: string
+}
+
+export const formasPagoAPI = {
+  getAll: async (filtros?: FormasPagoFilters): Promise<FormaPago[]> => {
+    const queryParams = new URLSearchParams()
+    if (filtros?.nombre) queryParams.append('nombre', filtros.nombre)
+    if (filtros?.tipo) queryParams.append('tipo', filtros.tipo)
+    if (filtros?.activa) queryParams.append('activa', filtros.activa)
+
+    const queryString = queryParams.toString()
+    const url = `${API_URL}/formas-pago${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener formas de pago')
+    }
+
+    return response.json()
+  },
+
+  getById: async (id: string): Promise<FormaPago> => {
+    const response = await fetch(`${API_URL}/formas-pago/${id}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener forma de pago')
+    }
+
+    return response.json()
+  },
+
+  create: async (data: CreateFormaPagoRequest): Promise<FormaPago> => {
+    const response = await fetchWithAuth('/formas-pago', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al crear forma de pago')
+    }
+
+    const result = await response.json()
+    return result.formaPago
+  },
+
+  update: async (id: string, data: UpdateFormaPagoRequest): Promise<FormaPago> => {
+    const response = await fetchWithAuth(`/formas-pago/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar forma de pago')
+    }
+
+    const result = await response.json()
+    return result.formaPago
+  },
+
+  delete: async (id: string): Promise<void> => {
+    const response = await fetchWithAuth(`/formas-pago/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al eliminar forma de pago')
+    }
+  },
+}
+
+// API de Rutas
+export interface Ruta {
+  id: string
+  nombre: string
+  codigo: string
+  descripcion?: string
+  zona: string
+  zonaId?: string
+  zonaRelacion?: Zona
+  activa: boolean
+  horarioInicio?: string
+  horarioFin?: string
+  repartidores: User[]
+  usuarioCreacion: string
+  usuarioModificacion: string
+  fechaCreacion: string
+  fechaModificacion: string
+}
+
+export interface CreateRutaRequest {
+  nombre: string
+  codigo: string
+  descripcion?: string
+  zona?: string
+  zonaId?: string
+  activa?: boolean
+  horarioInicio?: string
+  horarioFin?: string
+  repartidoresIds?: string[]
+  usuarioCreacion?: string
+  usuarioModificacion?: string
+}
+
+export interface UpdateRutaRequest {
+  nombre?: string
+  codigo?: string
+  descripcion?: string
+  zona?: string
+  zonaId?: string
+  activa?: boolean
+  horarioInicio?: string
+  horarioFin?: string
+  repartidoresIds?: string[]
+  usuarioModificacion?: string
+}
+
+export interface RutasFilters {
+  nombre?: string
+  zona?: string
+  activa?: string
+  repartidor?: string
+}
+
+export const rutasAPI = {
+  getAll: async (filtros?: RutasFilters): Promise<Ruta[]> => {
+    const queryParams = new URLSearchParams()
+    if (filtros?.nombre) queryParams.append('nombre', filtros.nombre)
+    if (filtros?.zona) queryParams.append('zona', filtros.zona)
+    if (filtros?.activa) queryParams.append('activa', filtros.activa)
+    if (filtros?.repartidor) queryParams.append('repartidor', filtros.repartidor)
+
+    const queryString = queryParams.toString()
+    const url = `${API_URL}/rutas${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener rutas')
+    }
+
+    return response.json()
+  },
+
+  getById: async (id: string): Promise<Ruta> => {
+    const response = await fetch(`${API_URL}/rutas/${id}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener ruta')
+    }
+
+    return response.json()
+  },
+
+  create: async (data: CreateRutaRequest): Promise<Ruta> => {
+    const response = await fetchWithAuth('/rutas', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al crear ruta')
+    }
+
+    const result = await response.json()
+    return result.ruta
+  },
+
+  update: async (id: string, data: UpdateRutaRequest): Promise<Ruta> => {
+    const response = await fetchWithAuth(`/rutas/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar ruta')
+    }
+
+    const result = await response.json()
+    return result.ruta
+  },
+
+  delete: async (id: string): Promise<void> => {
+    const response = await fetchWithAuth(`/rutas/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al eliminar ruta')
+    }
+  },
+}
+
+// API de Zonas
+export interface Ciudad {
+  id: string
+  nombre: string
+  codigo?: string
+  estado: string
+  activa: boolean
+  fechaCreacion: string
+  municipios?: Municipio[]
+}
+
+export interface Municipio {
+  id: string
+  nombre: string
+  codigo?: string
+  ciudadId: string
+  ciudad?: Ciudad
+  activo: boolean
+  fechaCreacion: string
+  zonas?: Zona[]
+}
+
+export interface Zona {
+  id: string
+  nombre: string
+  codigo?: string
+  descripcion?: string
+  municipioId: string
+  municipio?: Municipio
+  activa: boolean
+  fechaCreacion: string
+}
+
+export interface CreateCiudadRequest {
+  nombre: string
+  codigo?: string
+  estado: string
+  activa?: boolean
+}
+
+export interface UpdateCiudadRequest {
+  nombre?: string
+  codigo?: string
+  estado?: string
+  activa?: boolean
+}
+
+export interface CreateMunicipioRequest {
+  nombre: string
+  codigo?: string
+  ciudadId: string
+  activo?: boolean
+}
+
+export interface UpdateMunicipioRequest {
+  nombre?: string
+  codigo?: string
+  ciudadId?: string
+  activo?: boolean
+}
+
+export interface CreateZonaRequest {
+  nombre: string
+  codigo?: string
+  descripcion?: string
+  municipioId: string
+  activa?: boolean
+}
+
+export interface UpdateZonaRequest {
+  nombre?: string
+  codigo?: string
+  descripcion?: string
+  municipioId?: string
+  activa?: boolean
+}
+
+export const zonasAPI = {
+  // ========== CIUDADES ==========
+  ciudades: {
+    getAll: async (): Promise<Ciudad[]> => {
+      const response = await fetch(`${API_URL}/zonas/ciudades`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Error al obtener ciudades')
+      }
+
+      return response.json()
+    },
+
+    getById: async (id: string): Promise<Ciudad> => {
+      const response = await fetch(`${API_URL}/zonas/ciudades/${id}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Error al obtener ciudad')
+      }
+
+      return response.json()
+    },
+
+    create: async (data: CreateCiudadRequest): Promise<Ciudad> => {
+      const response = await fetchWithAuth('/zonas/ciudades', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Error al crear ciudad')
+      }
+
+      const result = await response.json()
+      return result.ciudad
+    },
+
+    update: async (id: string, data: UpdateCiudadRequest): Promise<Ciudad> => {
+      const response = await fetchWithAuth(`/zonas/ciudades/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Error al actualizar ciudad')
+      }
+
+      const result = await response.json()
+      return result.ciudad
+    },
+
+    delete: async (id: string): Promise<void> => {
+      const response = await fetchWithAuth(`/zonas/ciudades/${id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Error al eliminar ciudad')
+      }
+    },
+  },
+
+  // ========== MUNICIPIOS ==========
+  municipios: {
+    getAll: async (ciudadId?: string): Promise<Municipio[]> => {
+      const url = ciudadId 
+        ? `${API_URL}/zonas/municipios?ciudadId=${ciudadId}`
+        : `${API_URL}/zonas/municipios`
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Error al obtener municipios')
+      }
+
+      return response.json()
+    },
+
+    getById: async (id: string): Promise<Municipio> => {
+      const response = await fetch(`${API_URL}/zonas/municipios/${id}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Error al obtener municipio')
+      }
+
+      return response.json()
+    },
+
+    create: async (data: CreateMunicipioRequest): Promise<Municipio> => {
+      const response = await fetchWithAuth('/zonas/municipios', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Error al crear municipio')
+      }
+
+      const result = await response.json()
+      return result.municipio
+    },
+
+    update: async (id: string, data: UpdateMunicipioRequest): Promise<Municipio> => {
+      const response = await fetchWithAuth(`/zonas/municipios/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Error al actualizar municipio')
+      }
+
+      const result = await response.json()
+      return result.municipio
+    },
+
+    delete: async (id: string): Promise<void> => {
+      const response = await fetchWithAuth(`/zonas/municipios/${id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Error al eliminar municipio')
+      }
+    },
+  },
+
+  // ========== ZONAS ==========
+  getAll: async (municipioId?: string, ciudadId?: string): Promise<Zona[]> => {
+    const queryParams = new URLSearchParams()
+    if (municipioId) queryParams.append('municipioId', municipioId)
+    if (ciudadId) queryParams.append('ciudadId', ciudadId)
+
+    const queryString = queryParams.toString()
+    const url = `${API_URL}/zonas${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener zonas')
+    }
+
+    return response.json()
+  },
+
+  getById: async (id: string): Promise<Zona> => {
+    const response = await fetch(`${API_URL}/zonas/${id}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener zona')
+    }
+
+    return response.json()
+  },
+
+  create: async (data: CreateZonaRequest): Promise<Zona> => {
+    const response = await fetchWithAuth('/zonas', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al crear zona')
+    }
+
+    const result = await response.json()
+    return result.zona
+  },
+
+  update: async (id: string, data: UpdateZonaRequest): Promise<Zona> => {
+    const response = await fetchWithAuth(`/zonas/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar zona')
+    }
+
+    const result = await response.json()
+    return result.zona
+  },
+
+  delete: async (id: string): Promise<void> => {
+    const response = await fetchWithAuth(`/zonas/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al eliminar zona')
+    }
+  },
+}
+
+// API de Clientes
+export interface Domicilio {
+  id: string
+  tipo: 'principal' | 'facturacion' | 'entrega' | 'otro'
+  calle: string
+  numeroExterior: string
+  numeroInterior?: string
+  colonia: string
+  municipio: string
+  estado: string
+  codigoPostal: string
+  referencia?: string
+  activo: boolean
+  codigoQR: string
+  fechaCreacionQR: string
+}
+
+export interface Cliente {
+  id: string
+  nombre: string
+  apellidoPaterno: string
+  apellidoMaterno: string
+  email: string
+  telefono: string
+  telefonoSecundario?: string
+  calle: string
+  numeroExterior: string
+  numeroInterior?: string
+  colonia: string
+  municipio: string
+  estado: string
+  codigoPostal: string
+  rfc?: string
+  curp?: string
+  rutaId?: string
+  ruta?: Ruta
+  limiteCredito: number
+  saldoActual: number
+  pagosEspecialesAutorizados: boolean
+  fechaRegistro: string
+  ultimaModificacion: string
+  estadoCliente: 'activo' | 'suspendido' | 'inactivo'
+  domicilios?: Domicilio[]
+}
+
+export interface CreateClienteRequest {
+  nombre: string
+  apellidoPaterno: string
+  apellidoMaterno: string
+  email: string
+  telefono: string
+  telefonoSecundario?: string
+  calle: string
+  numeroExterior: string
+  numeroInterior?: string
+  colonia: string
+  municipio: string
+  estado: string
+  codigoPostal: string
+  rfc?: string
+  curp?: string
+  rutaId?: string
+  limiteCredito?: number
+  saldoActual?: number
+  pagosEspecialesAutorizados?: boolean
+  estadoCliente?: 'activo' | 'suspendido' | 'inactivo'
+  domicilios?: Omit<Domicilio, 'id' | 'clienteId' | 'codigoQR' | 'fechaCreacionQR'>[]
+}
+
+export interface UpdateClienteRequest {
+  nombre?: string
+  apellidoPaterno?: string
+  apellidoMaterno?: string
+  email?: string
+  telefono?: string
+  telefonoSecundario?: string
+  calle?: string
+  numeroExterior?: string
+  numeroInterior?: string
+  colonia?: string
+  municipio?: string
+  estado?: string
+  codigoPostal?: string
+  rfc?: string
+  curp?: string
+  rutaId?: string
+  limiteCredito?: number
+  saldoActual?: number
+  pagosEspecialesAutorizados?: boolean
+  estadoCliente?: 'activo' | 'suspendido' | 'inactivo'
+}
+
+export interface ClientesFilters {
+  nombre?: string
+  email?: string
+  estadoCliente?: string
+  rutaId?: string
+  sedeId?: string
+}
+
+export const clientesAPI = {
+  getAll: async (filtros?: ClientesFilters): Promise<Cliente[]> => {
+    const queryParams = new URLSearchParams()
+    if (filtros?.nombre) queryParams.append('nombre', filtros.nombre)
+    if (filtros?.email) queryParams.append('email', filtros.email)
+    if (filtros?.estadoCliente) queryParams.append('estadoCliente', filtros.estadoCliente)
+    if (filtros?.rutaId) queryParams.append('rutaId', filtros.rutaId)
+    if (filtros?.sedeId) queryParams.append('sedeId', filtros.sedeId)
+
+    const queryString = queryParams.toString()
+    const url = `${API_URL}/clientes${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener clientes')
+    }
+
+    return response.json()
+  },
+
+  getById: async (id: string): Promise<Cliente> => {
+    const response = await fetch(`${API_URL}/clientes/${id}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener cliente')
+    }
+
+    return response.json()
+  },
+
+  create: async (data: CreateClienteRequest): Promise<Cliente> => {
+    const response = await fetchWithAuth('/clientes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al crear cliente')
+    }
+
+    const result = await response.json()
+    return result.cliente
+  },
+
+  update: async (id: string, data: UpdateClienteRequest): Promise<Cliente> => {
+    const response = await fetchWithAuth(`/clientes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar cliente')
+    }
+
+    const result = await response.json()
+    return result.cliente
+  },
+
+  delete: async (id: string): Promise<void> => {
+    const response = await fetchWithAuth(`/clientes/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al eliminar cliente')
+    }
+  },
+
+  // Domicilios
+  getDomicilios: async (clienteId: string): Promise<Domicilio[]> => {
+    const response = await fetch(`${API_URL}/clientes/${clienteId}/domicilios`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener domicilios')
+    }
+
+    return response.json()
+  },
+
+  createDomicilio: async (clienteId: string, data: Omit<Domicilio, 'id' | 'clienteId' | 'codigoQR' | 'fechaCreacionQR'>): Promise<Domicilio> => {
+    const response = await fetchWithAuth(`/clientes/${clienteId}/domicilios`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al crear domicilio')
+    }
+
+    const result = await response.json()
+    return result.domicilio
+  },
+
+  updateDomicilio: async (id: string, data: Partial<Domicilio>): Promise<Domicilio> => {
+    const response = await fetchWithAuth(`/clientes/domicilios/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar domicilio')
+    }
+
+    const result = await response.json()
+    return result.domicilio
+  },
+
+  deleteDomicilio: async (id: string): Promise<void> => {
+    const response = await fetchWithAuth(`/clientes/domicilios/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al eliminar domicilio')
+    }
+  },
+}
+
+// API de Productos
+export interface Producto {
+  id: string
+  nombre: string
+  categoria: 'gas_lp' | 'cilindros' | 'tanques_nuevos' | 'gas-lp' | 'tanques-nuevos'
+  precio: number
+  unidad: string
+  descripcion: string
+  activo: boolean
+  sedeId?: string
+  fechaCreacion?: string
+  fechaModificacion?: string
+}
+
+export interface CreateProductoRequest {
+  nombre: string
+  categoria: 'gas_lp' | 'cilindros' | 'tanques_nuevos' | 'gas-lp' | 'tanques-nuevos'
+  precio: number
+  unidad: string
+  descripcion: string
+  activo?: boolean
+  sedeId?: string
+}
+
+export interface UpdateProductoRequest {
+  nombre?: string
+  categoria?: 'gas_lp' | 'cilindros' | 'tanques_nuevos' | 'gas-lp' | 'tanques-nuevos'
+  precio?: number
+  unidad?: string
+  descripcion?: string
+  activo?: boolean
+}
+
+export interface ProductosFilters {
+  categoria?: string
+  activo?: boolean
+  sedeId?: string
+}
+
+export const productosAPI = {
+  getAll: async (filtros?: ProductosFilters): Promise<Producto[]> => {
+    const queryParams = new URLSearchParams()
+    if (filtros?.categoria) queryParams.append('categoria', filtros.categoria)
+    if (filtros?.activo !== undefined) queryParams.append('activo', String(filtros.activo))
+    if (filtros?.sedeId) queryParams.append('sedeId', filtros.sedeId)
+
+    const queryString = queryParams.toString()
+    const url = `${API_URL}/productos${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      // Si el endpoint no existe, retornar array vacío
+      if (response.status === 404) return []
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener productos')
+    }
+
+    return response.json()
+  },
+
+  getById: async (id: string): Promise<Producto> => {
+    const response = await fetch(`${API_URL}/productos/${id}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener producto')
+    }
+
+    return response.json()
+  },
+
+  create: async (data: CreateProductoRequest): Promise<Producto> => {
+    const response = await fetchWithAuth('/productos', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      // Si hay errores de validación, mostrarlos de forma más detallada
+      if (error.errors && Array.isArray(error.errors)) {
+        const errorMessages = error.errors.map((e: any) => `${e.param || e.path}: ${e.msg || e.message}`).join(', ')
+        throw new Error(errorMessages || error.message || 'Error al crear producto')
+      }
+      throw new Error(error.message || 'Error al crear producto')
+    }
+
+    const result = await response.json()
+    return result.producto || result
+  },
+
+  update: async (id: string, data: UpdateProductoRequest): Promise<Producto> => {
+    const response = await fetchWithAuth(`/productos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      // Si hay errores de validación, mostrarlos de forma más detallada
+      if (error.errors && Array.isArray(error.errors)) {
+        const errorMessages = error.errors.map((e: any) => `${e.param}: ${e.msg}`).join(', ')
+        throw new Error(errorMessages || error.message || 'Error al actualizar producto')
+      }
+      throw new Error(error.message || 'Error al actualizar producto')
+    }
+
+    const result = await response.json()
+    return result.producto || result
+  },
+
+  delete: async (id: string): Promise<void> => {
+    const response = await fetchWithAuth(`/productos/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al eliminar producto')
+    }
+  },
+}
+
+// API de Descuentos por Repartidor
+export interface DescuentoRepartidor {
+  id: string
+  repartidorId: string
+  repartidor?: Usuario
+  descuentoAutorizado: number
+  activo: boolean
+  fechaCreacion?: string
+  fechaModificacion?: string
+}
+
+export interface CreateDescuentoRepartidorRequest {
+  repartidorId: string
+  descuentoAutorizado: number
+  activo?: boolean
+}
+
+export interface UpdateDescuentoRepartidorRequest {
+  descuentoAutorizado?: number
+  activo?: boolean
+}
+
+export const descuentosRepartidorAPI = {
+  getAll: async (): Promise<DescuentoRepartidor[]> => {
+    const response = await fetch(`${API_URL}/descuentos-repartidor`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      if (response.status === 404) return []
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener descuentos')
+    }
+
+    return response.json()
+  },
+
+  getByRepartidor: async (repartidorId: string): Promise<DescuentoRepartidor | null> => {
+    const response = await fetch(`${API_URL}/descuentos-repartidor/repartidor/${repartidorId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      if (response.status === 404) return null
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener descuento')
+    }
+
+    return response.json()
+  },
+
+  create: async (data: CreateDescuentoRepartidorRequest): Promise<DescuentoRepartidor> => {
+    const response = await fetchWithAuth('/descuentos-repartidor', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al crear descuento')
+    }
+
+    const result = await response.json()
+    return result.descuento || result
+  },
+
+  update: async (id: string, data: UpdateDescuentoRepartidorRequest): Promise<DescuentoRepartidor> => {
+    const response = await fetchWithAuth(`/descuentos-repartidor/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar descuento')
+    }
+
+    const result = await response.json()
+    return result.descuento || result
+  },
+
+  delete: async (id: string): Promise<void> => {
+    const response = await fetchWithAuth(`/descuentos-repartidor/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al eliminar descuento')
+    }
+  },
+}
+
+// API de Pedidos
+export interface PedidoProducto {
+  id: string
+  pedidoId: string
+  productoId: string
+  producto?: Producto
+  cantidad: number
+  precio: number
+  subtotal: number
+}
+
+export interface Pedido {
+  id: string
+  numeroPedido: string
+  clienteId: string
+  cliente?: Cliente
+  zona?: string
+  rutaId?: string
+  ruta?: Ruta
+  fechaPedido: string
+  horaPedido: string
+  estado: 'entregado' | 'pendiente' | 'cancelado' | 'en_proceso' | 'en-proceso'
+  sede?: Sede
+  cantidadProductos: number
+  ventaTotal: number
+  tipoServicio: 'pipas' | 'cilindros'
+  repartidorId?: string
+  repartidor?: Usuario
+  observaciones?: string
+  sedeId?: string
+  fechaCreacion?: string
+  fechaModificacion?: string
+  productosPedido?: PedidoProducto[]
+}
+
+export interface CreatePedidoRequest {
+  clienteId: string
+  rutaId?: string
+  fechaPedido?: string
+  horaPedido?: string
+  tipoServicio: 'pipas' | 'cilindros'
+  repartidorId?: string
+  observaciones?: string
+  sedeId?: string
+  productos?: Array<{ productoId: string; cantidad: number; precio: number }>
+}
+
+export interface PedidosFilters {
+  fechaDesde?: string
+  fechaHasta?: string
+  clienteId?: string
+  estado?: string
+  tipoServicio?: string
+  repartidorId?: string
+  sedeId?: string
+}
+
+export const pedidosAPI = {
+  getAll: async (filtros?: PedidosFilters): Promise<Pedido[]> => {
+    const queryParams = new URLSearchParams()
+    if (filtros?.fechaDesde) queryParams.append('fechaDesde', filtros.fechaDesde)
+    if (filtros?.fechaHasta) queryParams.append('fechaHasta', filtros.fechaHasta)
+    if (filtros?.clienteId) queryParams.append('clienteId', filtros.clienteId)
+    if (filtros?.estado) queryParams.append('estado', filtros.estado)
+    if (filtros?.tipoServicio) queryParams.append('tipoServicio', filtros.tipoServicio)
+    if (filtros?.repartidorId) queryParams.append('repartidorId', filtros.repartidorId)
+    if (filtros?.sedeId) queryParams.append('sedeId', filtros.sedeId)
+
+    const queryString = queryParams.toString()
+    const url = `/pedidos${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetchWithAuth(url)
+
+    if (!response.ok) {
+      if (response.status === 404) return []
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener pedidos')
+    }
+
+    return response.json()
+  },
+
+  getById: async (id: string): Promise<Pedido> => {
+    const response = await fetch(`${API_URL}/pedidos/${id}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener pedido')
+    }
+
+    return response.json()
+  },
+
+  create: async (data: CreatePedidoRequest): Promise<Pedido> => {
+    const response = await fetchWithAuth('/pedidos', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al crear pedido')
+    }
+
+    const result = await response.json()
+    return result.pedido || result
+  },
+
+  update: async (id: string, data: Partial<CreatePedidoRequest>): Promise<Pedido> => {
+    const response = await fetchWithAuth(`/pedidos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar pedido')
+    }
+
+    const result = await response.json()
+    return result.pedido || result
+  },
+
+  delete: async (id: string): Promise<void> => {
+    const response = await fetchWithAuth(`/pedidos/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al eliminar pedido')
+    }
+  },
+}
+
+// API de Ventas/Dashboard
+export interface ResumenVentas {
+  ventasHoy: number
+  crecimientoPorcentaje: number
+  pedidosCreados: number
+  pedidosEntregados: number
+  alertasCriticas: number
+  efectivoConsolidado: number
+}
+
+export interface CorteRepartidor {
+  rutasProgramadas: number
+  cortesEntregados: number
+  cortesValidados: number
+  cortesPendientes: number
+  totalVentas: number
+  totalServicios: number
+  totalAbonos: number
+}
+
+export const ventasAPI = {
+  getResumen: async (sedeId?: string): Promise<ResumenVentas> => {
+    const queryParams = new URLSearchParams()
+    if (sedeId) queryParams.append('sedeId', sedeId)
+
+    const queryString = queryParams.toString()
+    const url = `${API_URL}/ventas/resumen${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      // Si no existe el endpoint, retornar datos por defecto
+      if (response.status === 404) {
+        return {
+          ventasHoy: 0,
+          crecimientoPorcentaje: 0,
+          pedidosCreados: 0,
+          pedidosEntregados: 0,
+          alertasCriticas: 0,
+          efectivoConsolidado: 0,
+        }
+      }
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener resumen de ventas')
+    }
+
+    return response.json()
+  },
+
+  getCortePipas: async (sedeId?: string): Promise<CorteRepartidor> => {
+    const queryParams = new URLSearchParams()
+    if (sedeId) queryParams.append('sedeId', sedeId)
+
+    const queryString = queryParams.toString()
+    const url = `${API_URL}/ventas/corte/pipas${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return {
+          rutasProgramadas: 0,
+          cortesEntregados: 0,
+          cortesValidados: 0,
+          cortesPendientes: 0,
+          totalVentas: 0,
+          totalServicios: 0,
+          totalAbonos: 0,
+        }
+      }
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener corte de pipas')
+    }
+
+    return response.json()
+  },
+
+  getCorteCilindros: async (sedeId?: string): Promise<CorteRepartidor> => {
+    const queryParams = new URLSearchParams()
+    if (sedeId) queryParams.append('sedeId', sedeId)
+
+    const queryString = queryParams.toString()
+    const url = `${API_URL}/ventas/corte/cilindros${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return {
+          rutasProgramadas: 0,
+          cortesEntregados: 0,
+          cortesValidados: 0,
+          cortesPendientes: 0,
+          totalVentas: 0,
+          totalServicios: 0,
+          totalAbonos: 0,
+        }
+      }
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener corte de cilindros')
+    }
+
+    return response.json()
+  },
+}
+
+// API de Créditos y Abonos
+export interface NotaCredito {
+  id: string
+  numeroNota: string
+  clienteId: string
+  cliente?: Cliente
+  pedidoId?: string
+  pedido?: any
+  fechaVenta: string
+  fechaVencimiento: string
+  importe: number
+  saldoPendiente: number
+  diasVencimiento: number
+  estado: 'vigente' | 'por_vencer' | 'vencida' | 'pagada' | 'cancelada'
+  observaciones?: string
+  fechaCreacion: string
+  fechaModificacion: string
+}
+
+export interface Pago {
+  id: string
+  clienteId: string
+  cliente?: Cliente
+  notaCreditoId?: string
+  notaCredito?: NotaCredito
+  montoTotal: number
+  tipo: 'nota_especifica' | 'abono_general'
+  fechaPago: string
+  horaPago: string
+  observaciones?: string
+  usuarioRegistro: string
+  usuarioAutorizacion?: string
+  estado: 'pendiente' | 'autorizado' | 'rechazado' | 'cancelado'
+  fechaCreacion: string
+  fechaModificacion: string
+  formasPago?: PagoFormaPago[]
+}
+
+export interface PagoFormaPago {
+  id: string
+  pagoId: string
+  formaPagoId: string
+  formaPago?: FormaPago
+  monto: number
+  referencia?: string
+  banco?: string
+}
+
+export interface CreateNotaCreditoRequest {
+  clienteId: string
+  pedidoId?: string
+  fechaVenta: string
+  fechaVencimiento: string
+  importe: number
+  observaciones?: string
+}
+
+export interface CreatePagoRequest {
+  clienteId: string
+  notaCreditoId?: string
+  montoTotal: number
+  tipo: 'nota_especifica' | 'abono_general'
+  fechaPago?: string
+  horaPago?: string
+  observaciones?: string
+  estado?: 'pendiente' | 'autorizado' | 'rechazado' | 'cancelado'
+  formasPago: Array<{
+    formaPagoId: string
+    monto: number
+    referencia?: string
+    banco?: string
+  }>
+}
+
+export interface ResumenCartera {
+  carteraTotal: number
+  notasPendientes: number
+  carteraVencida: number
+  notasVencidas: number
+  porcentajeVencida: number
+  carteraPorVencer: number
+  notasPorVencer: number
+  porcentajePorVencer: number
+}
+
+export interface ClienteCredito {
+  id: string
+  nombre: string
+  direccion: string
+  telefono: string
+  ruta: string
+  limiteCredito: number
+  saldoActual: number
+  creditoDisponible: number
+  diasPromedioPago: number
+  estado: 'buen-pagador' | 'vencido' | 'critico' | 'bloqueado'
+  notasPendientes: NotaCredito[]
+}
+
+export interface HistorialLimiteCredito {
+  id: string
+  clienteId: string
+  cliente?: Cliente
+  usuarioId: string
+  usuario?: Usuario
+  limiteAnterior: number
+  limiteNuevo: number
+  motivo: string
+  fechaCreacion: string
+}
+
+export interface NotasCreditoFilters {
+  clienteId?: string
+  estado?: string
+  fechaDesde?: string
+  fechaHasta?: string
+}
+
+export interface PagosFilters {
+  clienteId?: string
+  estado?: string
+  fechaDesde?: string
+  fechaHasta?: string
+}
+
+export const creditosAbonosAPI = {
+  // Notas de Crédito
+  getAllNotasCredito: async (filtros?: NotasCreditoFilters): Promise<NotaCredito[]> => {
+    const queryParams = new URLSearchParams()
+    if (filtros?.clienteId) queryParams.append('clienteId', filtros.clienteId)
+    if (filtros?.estado) queryParams.append('estado', filtros.estado)
+    if (filtros?.fechaDesde) queryParams.append('fechaDesde', filtros.fechaDesde)
+    if (filtros?.fechaHasta) queryParams.append('fechaHasta', filtros.fechaHasta)
+
+    const queryString = queryParams.toString()
+    const url = `/creditos-abonos/notas-credito${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetchWithAuth(url)
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener notas de crédito')
+    }
+
+    return response.json()
+  },
+
+  getNotaCreditoById: async (id: string): Promise<NotaCredito> => {
+    const response = await fetchWithAuth(`/creditos-abonos/notas-credito/${id}`)
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener nota de crédito')
+    }
+
+    return response.json()
+  },
+
+  createNotaCredito: async (data: CreateNotaCreditoRequest): Promise<NotaCredito> => {
+    const response = await fetchWithAuth('/creditos-abonos/notas-credito', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al crear nota de crédito')
+    }
+
+    const result = await response.json()
+    return result.notaCredito || result
+  },
+
+  updateNotaCredito: async (id: string, data: Partial<CreateNotaCreditoRequest>): Promise<NotaCredito> => {
+    const response = await fetchWithAuth(`/creditos-abonos/notas-credito/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar nota de crédito')
+    }
+
+    const result = await response.json()
+    return result.notaCredito || result
+  },
+
+  deleteNotaCredito: async (id: string): Promise<void> => {
+    const response = await fetchWithAuth(`/creditos-abonos/notas-credito/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al eliminar nota de crédito')
+    }
+  },
+
+  // Pagos
+  getAllPagos: async (filtros?: PagosFilters): Promise<Pago[]> => {
+    const queryParams = new URLSearchParams()
+    if (filtros?.clienteId) queryParams.append('clienteId', filtros.clienteId)
+    if (filtros?.estado) queryParams.append('estado', filtros.estado)
+    if (filtros?.fechaDesde) queryParams.append('fechaDesde', filtros.fechaDesde)
+    if (filtros?.fechaHasta) queryParams.append('fechaHasta', filtros.fechaHasta)
+
+    const queryString = queryParams.toString()
+    const url = `/creditos-abonos/pagos${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetchWithAuth(url)
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener pagos')
+    }
+
+    return response.json()
+  },
+
+  getPagoById: async (id: string): Promise<Pago> => {
+    const response = await fetchWithAuth(`/creditos-abonos/pagos/${id}`)
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener pago')
+    }
+
+    return response.json()
+  },
+
+  createPago: async (data: CreatePagoRequest): Promise<Pago> => {
+    const response = await fetchWithAuth('/creditos-abonos/pagos', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al crear pago')
+    }
+
+    const result = await response.json()
+    return result.pago || result
+  },
+
+  updatePagoEstado: async (id: string, estado: 'pendiente' | 'autorizado' | 'rechazado' | 'cancelado'): Promise<Pago> => {
+    const response = await fetchWithAuth(`/creditos-abonos/pagos/${id}/estado`, {
+      method: 'PUT',
+      body: JSON.stringify({ estado }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar estado del pago')
+    }
+
+    const result = await response.json()
+    return result.pago || result
+  },
+
+  // Resumen de Cartera
+  getResumenCartera: async (clienteId?: string): Promise<ResumenCartera> => {
+    const queryParams = new URLSearchParams()
+    if (clienteId) queryParams.append('clienteId', clienteId)
+
+    const queryString = queryParams.toString()
+    const url = `/creditos-abonos/resumen-cartera${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetchWithAuth(url)
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener resumen de cartera')
+    }
+
+    return response.json()
+  },
+
+  // Clientes con Crédito
+  getClientesCredito: async (filtros?: ClientesFilters): Promise<ClienteCredito[]> => {
+    const queryParams = new URLSearchParams()
+    if (filtros?.nombre) queryParams.append('nombre', filtros.nombre)
+    if (filtros?.rutaId) queryParams.append('rutaId', filtros.rutaId)
+    if (filtros?.estadoCliente) queryParams.append('estadoCliente', filtros.estadoCliente)
+    if (filtros?.sedeId) queryParams.append('sedeId', filtros.sedeId)
+
+    const queryString = queryParams.toString()
+    const url = `/creditos-abonos/clientes-credito${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetchWithAuth(url)
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener clientes con crédito')
+    }
+
+    return response.json()
+  },
+
+  // Historial de Límites
+  getHistorialLimites: async (clienteId?: string): Promise<HistorialLimiteCredito[]> => {
+    const queryParams = new URLSearchParams()
+    if (clienteId) queryParams.append('clienteId', clienteId)
+
+    const queryString = queryParams.toString()
+    const url = `/creditos-abonos/historial-limites${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetchWithAuth(url)
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener historial de límites')
+    }
+
+    return response.json()
+  },
+
+  updateLimiteCredito: async (clienteId: string, limiteCredito: number, motivo?: string): Promise<Cliente> => {
+    const response = await fetchWithAuth(`/creditos-abonos/clientes/${clienteId}/limite-credito`, {
+      method: 'PUT',
+      body: JSON.stringify({ limiteCredito, motivo }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar límite de crédito')
+    }
+
+    const result = await response.json()
+    return result.cliente || result
+  },
+}
+
+// API de Newsletter
+export interface NewsletterItem {
+  id: string
+  type: 'image' | 'notification'
+  title?: string
+  content?: string
+  description?: string
+  imageUrl?: string
+  fechaCreacion: string
+  fechaVencimiento?: string
+  size?: 'small' | 'medium' | 'large'
+  activo: boolean
+  usuarioCreacion?: string
+  usuarioModificacion?: string
+  fechaModificacion?: string
+}
+
+export interface CreateNewsletterItemRequest {
+  type: 'image' | 'notification'
+  title?: string
+  content?: string
+  description?: string
+  imageUrl?: string
+  fechaVencimiento?: string
+  size?: 'small' | 'medium' | 'large'
+  activo?: boolean
+}
+
+export interface UpdateNewsletterItemRequest {
+  title?: string
+  content?: string
+  description?: string
+  imageUrl?: string
+  fechaVencimiento?: string
+  size?: 'small' | 'medium' | 'large'
+  activo?: boolean
+}
+
+export interface NewsletterFilters {
+  type?: 'image' | 'notification'
+  activo?: boolean
+  fechaDesde?: string
+  fechaHasta?: string
+}
+
+export const newsletterAPI = {
+  getAll: async (filtros?: NewsletterFilters): Promise<NewsletterItem[]> => {
+    const queryParams = new URLSearchParams()
+    if (filtros?.type) queryParams.append('type', filtros.type)
+    if (filtros?.activo !== undefined) queryParams.append('activo', String(filtros.activo))
+    if (filtros?.fechaDesde) queryParams.append('fechaDesde', filtros.fechaDesde)
+    if (filtros?.fechaHasta) queryParams.append('fechaHasta', filtros.fechaHasta)
+
+    const queryString = queryParams.toString()
+    const url = `/newsletter${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetchWithAuth(url)
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        // Si la ruta no existe, retornar array vacío en lugar de error
+        return []
+      }
+      const error = await response.json().catch(() => ({ message: 'Error al obtener items del newsletter' }))
+      throw new Error(error.message || 'Error al obtener items del newsletter')
+    }
+
+    return response.json()
+  },
+
+  getById: async (id: string): Promise<NewsletterItem> => {
+    const response = await fetchWithAuth(`/newsletter/${id}`)
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener item del newsletter')
+    }
+
+    return response.json()
+  },
+
+  create: async (data: CreateNewsletterItemRequest): Promise<NewsletterItem> => {
+    const response = await fetchWithAuth('/newsletter', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ 
+        message: response.status === 404 
+          ? 'La ruta del newsletter no está disponible. Por favor, asegúrese de que el backend esté corriendo y tenga la migración aplicada.'
+          : 'Error al crear item del newsletter'
+      }))
+      throw new Error(error.message || 'Error al crear item del newsletter')
+    }
+
+    const result = await response.json()
+    return result.newsletterItem || result
+  },
+
+  update: async (id: string, data: UpdateNewsletterItemRequest): Promise<NewsletterItem> => {
+    const response = await fetchWithAuth(`/newsletter/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar item del newsletter')
+    }
+
+    const result = await response.json()
+    return result.newsletterItem || result
+  },
+
+  delete: async (id: string): Promise<void> => {
+    const response = await fetchWithAuth(`/newsletter/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al eliminar item del newsletter')
+    }
+  },
+
+  // Historial de notificaciones
+  getHistorialNotificaciones: async (): Promise<NewsletterItem[]> => {
+    const response = await fetchWithAuth('/newsletter/historial/notificaciones')
+
+    if (!response.ok) {
+      if (response.status === 404) return []
+      const error = await response.json().catch(() => ({ message: 'Error al obtener historial de notificaciones' }))
+      throw new Error(error.message || 'Error al obtener historial de notificaciones')
+    }
+
+    return response.json()
+  },
+}
+

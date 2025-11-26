@@ -1,7 +1,7 @@
 'use client'
 
 // React Imports
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 // MUI Imports
 import {
@@ -20,7 +20,14 @@ import {
   Chip,
   IconButton,
   Box,
-  Typography
+  Typography,
+  CircularProgress,
+  Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  DialogContentText
 } from '@mui/material'
 
 // Component Imports
@@ -29,114 +36,154 @@ import EditUserModal from './components/EditUserModal'
 
 // Type Imports
 import type { User, UserRole } from './types'
-
-// Mock data para sedes
-const mockSedes = [
-  { id: 1, nombre: 'Sede Central' },
-  { id: 2, nombre: 'Sede Norte' },
-  { id: 3, nombre: 'Sede Sur' }
-]
-
-// Mock data para usuarios
-const mockUsers: User[] = [
-  {
-    id: 1,
-    nombres: 'Juan Carlos',
-    apellidoPaterno: 'García',
-    apellidoMaterno: 'López',
-    rol: 'Administrador',
-    correo: 'juan.garcia@empresa.com',
-    estado: 'Activo',
-    sedeId: 1,
-    sedeNombre: 'Sede Central',
-    fechaCreacion: '2024-01-15'
-  },
-  {
-    id: 2,
-    nombres: 'María Elena',
-    apellidoPaterno: 'Rodríguez',
-    apellidoMaterno: 'Sánchez',
-    rol: 'Gestor',
-    correo: 'maria.rodriguez@empresa.com',
-    estado: 'Activo',
-    sedeId: 2,
-    sedeNombre: 'Sede Norte',
-    fechaCreacion: '2024-02-20'
-  },
-  {
-    id: 3,
-    nombres: 'Carlos',
-    apellidoPaterno: 'Martínez',
-    apellidoMaterno: 'González',
-    rol: 'Repartidor',
-    correo: 'carlos.martinez@empresa.com',
-    estado: 'Inactivo',
-    sedeId: 3,
-    sedeNombre: 'Sede Sur',
-    fechaCreacion: '2024-03-10'
-  }
-]
+import { usuariosAPI } from '@lib/api'
 
 const UsuariosPage = () => {
-  const [users, setUsers] = useState<User[]>(mockUsers)
+  const [users, setUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [userToDelete, setUserToDelete] = useState<User | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
-  const handleCreateUser = (newUser: Omit<User, 'id' | 'fechaCreacion' | 'sedeNombre'>) => {
-    const sedeNombre = newUser.sedeId 
-      ? mockSedes.find(s => s.id === newUser.sedeId)?.nombre 
-      : undefined
-    
-    const user: User = {
-      ...newUser,
-      sedeNombre,
-      id: Math.max(...users.map(u => u.id), 0) + 1,
-      fechaCreacion: new Date().toISOString().split('T')[0]
+  // Cargar usuarios al montar el componente
+  useEffect(() => {
+    loadUsers()
+  }, [])
+
+  const loadUsers = async () => {
+    try {
+      setLoading(true)
+      setError('')
+      const data = await usuariosAPI.getAll()
+      setUsers(data)
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar usuarios')
+      console.error('Error loading users:', err)
+    } finally {
+      setLoading(false)
     }
-    setUsers([...users, user])
-    setIsCreateModalOpen(false)
   }
 
-  const handleEditUser = (updatedUser: User) => {
-    // Asegurar que el nombre de la sede esté actualizado
-    const sedeNombre = updatedUser.sedeId 
-      ? mockSedes.find(s => s.id === updatedUser.sedeId)?.nombre 
-      : undefined
-    
-    const userWithSede: User = {
-      ...updatedUser,
-      sedeNombre
+  const handleCreateUser = async (newUser: Omit<User, 'id' | 'fechaRegistro' | 'isTwoFactorEnabled'> & { password: string }) => {
+    try {
+      setError('')
+      await usuariosAPI.create({
+        nombres: newUser.nombres,
+        apellidoPaterno: newUser.apellidoPaterno,
+        apellidoMaterno: newUser.apellidoMaterno,
+        email: newUser.email,
+        password: newUser.password,
+        telefono: newUser.telefono,
+        rol: newUser.rol,
+        tipoRepartidor: newUser.tipoRepartidor,
+        estado: newUser.estado,
+        sede: newUser.sede
+      })
+      setIsCreateModalOpen(false)
+      await loadUsers() // Recargar la lista
+    } catch (err: any) {
+      setError(err.message || 'Error al crear usuario')
+      throw err // Re-lanzar para que el modal pueda manejarlo
     }
-    
-    setUsers(users.map(user => user.id === updatedUser.id ? userWithSede : user))
-    setIsEditModalOpen(false)
-    setSelectedUser(null)
   }
 
-  const handleDeleteUser = (userId: number) => {
-    setUsers(users.filter(user => user.id !== userId))
+  const handleEditUser = async (updatedUser: User) => {
+    try {
+      setError('')
+      await usuariosAPI.update(updatedUser.id, {
+        nombres: updatedUser.nombres,
+        apellidoPaterno: updatedUser.apellidoPaterno,
+        apellidoMaterno: updatedUser.apellidoMaterno,
+        email: updatedUser.email,
+        telefono: updatedUser.telefono,
+        rol: updatedUser.rol,
+        tipoRepartidor: updatedUser.tipoRepartidor,
+        estado: updatedUser.estado,
+        sede: updatedUser.sede
+      })
+      setIsEditModalOpen(false)
+      setSelectedUser(null)
+      await loadUsers() // Recargar la lista
+    } catch (err: any) {
+      setError(err.message || 'Error al actualizar usuario')
+      throw err // Re-lanzar para que el modal pueda manejarlo
+    }
+  }
+
+  const handleDeleteClick = (user: User) => {
+    setUserToDelete(user)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!userToDelete) return
+
+    try {
+      setDeleting(true)
+      setError('')
+      await usuariosAPI.delete(userToDelete.id)
+      setDeleteDialogOpen(false)
+      setUserToDelete(null)
+      await loadUsers() // Recargar la lista
+    } catch (err: any) {
+      setError(err.message || 'Error al eliminar usuario')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const getRoleColor = (rol: UserRole) => {
     switch (rol) {
-      case 'Administrador':
+      case 'superAdministrador':
         return 'error'
-      case 'Gestor':
+      case 'administrador':
         return 'warning'
-      case 'Repartidor':
+      case 'gestor':
         return 'info'
+      case 'repartidor':
+        return 'success'
       default:
         return 'default'
     }
   }
 
   const getStatusColor = (estado: string) => {
-    return estado === 'Activo' ? 'success' : 'error'
+    return estado === 'activo' ? 'success' : 'error'
+  }
+
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      })
+    } catch {
+      return dateString
+    }
+  }
+
+  if (loading && users.length === 0) {
+    return (
+      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <CircularProgress />
+      </Box>
+    )
   }
 
   return (
     <Box sx={{ p: 3 }}>
+      {error && (
+        <Alert severity='error' sx={{ mb: 2 }} onClose={() => setError('')}>
+          {error}
+        </Alert>
+      )}
+
       <Card>
         <CardHeader
           title="Gestión de Usuarios"
@@ -151,73 +198,79 @@ const UsuariosPage = () => {
           }
         />
         <CardContent>
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Nombres</TableCell>
-                  <TableCell>Apellido Paterno</TableCell>
-                  <TableCell>Apellido Materno</TableCell>
-                  <TableCell>Rol</TableCell>
-                  <TableCell>Correo</TableCell>
-                  <TableCell>Sede</TableCell>
-                  <TableCell>Estado</TableCell>
-                  <TableCell>Fecha Creación</TableCell>
-                  <TableCell align="center">Acciones</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>{user.nombres}</TableCell>
-                    <TableCell>{user.apellidoPaterno}</TableCell>
-                    <TableCell>{user.apellidoMaterno}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={user.rol}
-                        color={getRoleColor(user.rol)}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>{user.correo}</TableCell>
-                    <TableCell>
-                      {user.sedeNombre || (
-                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                          Sin sede
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={user.estado}
-                        color={getStatusColor(user.estado)}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>{user.fechaCreacion}</TableCell>
-                    <TableCell align="center">
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setSelectedUser(user)
-                          setIsEditModalOpen(true)
-                        }}
-                      >
-                        <i className="tabler-edit" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleDeleteUser(user.id)}
-                      >
-                        <i className="tabler-trash" />
-                      </IconButton>
-                    </TableCell>
+          {users.length === 0 && !loading ? (
+            <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+              No hay usuarios registrados
+            </Typography>
+          ) : (
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Nombres</TableCell>
+                    <TableCell>Apellido Paterno</TableCell>
+                    <TableCell>Apellido Materno</TableCell>
+                    <TableCell>Rol</TableCell>
+                    <TableCell>Correo</TableCell>
+                    <TableCell>Sede</TableCell>
+                    <TableCell>Estado</TableCell>
+                    <TableCell>Fecha Registro</TableCell>
+                    <TableCell align="center">Acciones</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {users.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>{user.nombres}</TableCell>
+                      <TableCell>{user.apellidoPaterno}</TableCell>
+                      <TableCell>{user.apellidoMaterno}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={user.rol}
+                          color={getRoleColor(user.rol)}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>
+                        {user.sede || (
+                          <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                            Sin sede asignada
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={user.estado}
+                          color={getStatusColor(user.estado)}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>{formatDate(user.fechaRegistro)}</TableCell>
+                      <TableCell align="center">
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setSelectedUser(user)
+                            setIsEditModalOpen(true)
+                          }}
+                        >
+                          <i className="tabler-edit" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleDeleteClick(user)}
+                        >
+                          <i className="tabler-trash" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </CardContent>
       </Card>
 
@@ -226,7 +279,6 @@ const UsuariosPage = () => {
         open={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onCreateUser={handleCreateUser}
-        sedes={mockSedes}
       />
 
       <EditUserModal
@@ -237,18 +289,31 @@ const UsuariosPage = () => {
         }}
         onEditUser={handleEditUser}
         user={selectedUser}
-        sedes={mockSedes}
       />
+
+      {/* Dialog de confirmación para eliminar */}
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+        <DialogTitle>Confirmar Eliminación</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            ¿Estás seguro de que deseas eliminar al usuario{' '}
+            <strong>
+              {userToDelete?.nombres} {userToDelete?.apellidoPaterno} {userToDelete?.apellidoMaterno}
+            </strong>
+            ? Esta acción no se puede deshacer.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
+            Cancelar
+          </Button>
+          <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleting}>
+            {deleting ? 'Eliminando...' : 'Eliminar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }
 
 export default UsuariosPage
-
-
-
-
-
-
-
-

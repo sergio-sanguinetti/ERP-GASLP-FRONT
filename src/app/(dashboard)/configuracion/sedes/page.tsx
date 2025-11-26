@@ -1,7 +1,7 @@
 'use client'
 
 // React Imports
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 // MUI Imports
 import {
@@ -20,7 +20,14 @@ import {
   Chip,
   IconButton,
   Box,
-  Typography
+  Typography,
+  CircularProgress,
+  Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  DialogContentText
 } from '@mui/material'
 
 // Component Imports
@@ -29,70 +36,130 @@ import EditSedeModal from './components/EditSedeModal'
 
 // Type Imports
 import type { Sede } from './types'
-
-// Mock data para sedes
-const mockSedes: Sede[] = [
-  {
-    id: 1,
-    nombre: 'Sede Central',
-    direccion: 'Av. Principal 123, Ciudad',
-    telefono: '555-0101',
-    email: 'sede.central@empresa.com',
-    estado: 'Activa',
-    fechaCreacion: '2024-01-15'
-  },
-  {
-    id: 2,
-    nombre: 'Sede Norte',
-    direccion: 'Calle Norte 456, Ciudad',
-    telefono: '555-0202',
-    email: 'sede.norte@empresa.com',
-    estado: 'Activa',
-    fechaCreacion: '2024-02-20'
-  },
-  {
-    id: 3,
-    nombre: 'Sede Sur',
-    direccion: 'Boulevard Sur 789, Ciudad',
-    telefono: '555-0303',
-    email: 'sede.sur@empresa.com',
-    estado: 'Inactiva',
-    fechaCreacion: '2024-03-10'
-  }
-]
+import { sedesAPI } from '@lib/api'
 
 const SedesPage = () => {
-  const [sedes, setSedes] = useState<Sede[]>(mockSedes)
+  const [sedes, setSedes] = useState<Sede[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [selectedSede, setSelectedSede] = useState<Sede | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [sedeToDelete, setSedeToDelete] = useState<Sede | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
-  const handleCreateSede = (newSede: Omit<Sede, 'id' | 'fechaCreacion'>) => {
-    const sede: Sede = {
-      ...newSede,
-      id: Math.max(...sedes.map(s => s.id), 0) + 1,
-      fechaCreacion: new Date().toISOString().split('T')[0]
+  // Cargar sedes al montar el componente
+  useEffect(() => {
+    loadSedes()
+  }, [])
+
+  const loadSedes = async () => {
+    try {
+      setLoading(true)
+      setError('')
+      const data = await sedesAPI.getAll()
+      setSedes(data)
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar sedes')
+      console.error('Error loading sedes:', err)
+    } finally {
+      setLoading(false)
     }
-    setSedes([...sedes, sede])
-    setIsCreateModalOpen(false)
   }
 
-  const handleEditSede = (updatedSede: Sede) => {
-    setSedes(sedes.map(sede => sede.id === updatedSede.id ? updatedSede : sede))
-    setIsEditModalOpen(false)
-    setSelectedSede(null)
+  const handleCreateSede = async (newSede: Omit<Sede, 'id' | 'fechaCreacion'>) => {
+    try {
+      setError('')
+      await sedesAPI.create({
+        nombre: newSede.nombre,
+        direccion: newSede.direccion,
+        telefono: newSede.telefono,
+        email: newSede.email,
+        estado: newSede.estado
+      })
+      setIsCreateModalOpen(false)
+      await loadSedes() // Recargar la lista
+    } catch (err: any) {
+      setError(err.message || 'Error al crear sede')
+      throw err // Re-lanzar para que el modal pueda manejarlo
+    }
   }
 
-  const handleDeleteSede = (sedeId: number) => {
-    setSedes(sedes.filter(sede => sede.id !== sedeId))
+  const handleEditSede = async (updatedSede: Sede) => {
+    try {
+      setError('')
+      await sedesAPI.update(updatedSede.id, {
+        nombre: updatedSede.nombre,
+        direccion: updatedSede.direccion,
+        telefono: updatedSede.telefono,
+        email: updatedSede.email,
+        estado: updatedSede.estado
+      })
+      setIsEditModalOpen(false)
+      setSelectedSede(null)
+      await loadSedes() // Recargar la lista
+    } catch (err: any) {
+      setError(err.message || 'Error al actualizar sede')
+      throw err // Re-lanzar para que el modal pueda manejarlo
+    }
+  }
+
+  const handleDeleteClick = (sede: Sede) => {
+    setSedeToDelete(sede)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!sedeToDelete) return
+
+    try {
+      setDeleting(true)
+      setError('')
+      await sedesAPI.delete(sedeToDelete.id)
+      setDeleteDialogOpen(false)
+      setSedeToDelete(null)
+      await loadSedes() // Recargar la lista
+    } catch (err: any) {
+      setError(err.message || 'Error al eliminar sede')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const getStatusColor = (estado: string) => {
-    return estado === 'Activa' ? 'success' : 'error'
+    return estado === 'activa' ? 'success' : 'error'
+  }
+
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      })
+    } catch {
+      return dateString
+    }
+  }
+
+  if (loading && sedes.length === 0) {
+    return (
+      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <CircularProgress />
+      </Box>
+    )
   }
 
   return (
     <Box sx={{ p: 3 }}>
+      {error && (
+        <Alert severity='error' sx={{ mb: 2 }} onClose={() => setError('')}>
+          {error}
+        </Alert>
+      )}
+
       <Card>
         <CardHeader
           title="Gestión de Sedes"
@@ -107,61 +174,67 @@ const SedesPage = () => {
           }
         />
         <CardContent>
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Nombre</TableCell>
-                  <TableCell>Dirección</TableCell>
-                  <TableCell>Teléfono</TableCell>
-                  <TableCell>Correo</TableCell>
-                  <TableCell>Estado</TableCell>
-                  <TableCell>Fecha Creación</TableCell>
-                  <TableCell align="center">Acciones</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {sedes.map((sede) => (
-                  <TableRow key={sede.id}>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight="medium">
-                        {sede.nombre}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{sede.direccion}</TableCell>
-                    <TableCell>{sede.telefono}</TableCell>
-                    <TableCell>{sede.email}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={sede.estado}
-                        color={getStatusColor(sede.estado)}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>{sede.fechaCreacion}</TableCell>
-                    <TableCell align="center">
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setSelectedSede(sede)
-                          setIsEditModalOpen(true)
-                        }}
-                      >
-                        <i className="tabler-edit" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleDeleteSede(sede.id)}
-                      >
-                        <i className="tabler-trash" />
-                      </IconButton>
-                    </TableCell>
+          {sedes.length === 0 && !loading ? (
+            <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+              No hay sedes registradas
+            </Typography>
+          ) : (
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Nombre</TableCell>
+                    <TableCell>Dirección</TableCell>
+                    <TableCell>Teléfono</TableCell>
+                    <TableCell>Correo</TableCell>
+                    <TableCell>Estado</TableCell>
+                    <TableCell>Fecha Creación</TableCell>
+                    <TableCell align="center">Acciones</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {sedes.map((sede) => (
+                    <TableRow key={sede.id}>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight="medium">
+                          {sede.nombre}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{sede.direccion}</TableCell>
+                      <TableCell>{sede.telefono}</TableCell>
+                      <TableCell>{sede.email}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={sede.estado}
+                          color={getStatusColor(sede.estado)}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>{formatDate(sede.fechaCreacion)}</TableCell>
+                      <TableCell align="center">
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setSelectedSede(sede)
+                            setIsEditModalOpen(true)
+                          }}
+                        >
+                          <i className="tabler-edit" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleDeleteClick(sede)}
+                        >
+                          <i className="tabler-trash" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </CardContent>
       </Card>
 
@@ -181,9 +254,27 @@ const SedesPage = () => {
         onEditSede={handleEditSede}
         sede={selectedSede}
       />
+
+      {/* Dialog de confirmación para eliminar */}
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+        <DialogTitle>Confirmar Eliminación</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            ¿Estás seguro de que deseas eliminar la sede <strong>{sedeToDelete?.nombre}</strong>? 
+            Esta acción no se puede deshacer.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
+            Cancelar
+          </Button>
+          <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleting}>
+            {deleting ? 'Eliminando...' : 'Eliminar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }
 
 export default SedesPage
-

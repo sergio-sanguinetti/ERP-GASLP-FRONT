@@ -16,7 +16,8 @@ import {
   Select,
   MenuItem,
   Box,
-  Grid
+  Grid,
+  Alert
 } from '@mui/material'
 
 // Type Imports
@@ -25,7 +26,7 @@ import type { CreateSedeData } from '../types'
 interface CreateSedeModalProps {
   open: boolean
   onClose: () => void
-  onCreateSede: (sede: CreateSedeData) => void
+  onCreateSede: (sede: CreateSedeData) => Promise<void>
 }
 
 const CreateSedeModal = ({ open, onClose, onCreateSede }: CreateSedeModalProps) => {
@@ -34,10 +35,12 @@ const CreateSedeModal = ({ open, onClose, onCreateSede }: CreateSedeModalProps) 
     direccion: '',
     telefono: '',
     email: '',
-    estado: 'Activa'
+    estado: 'activa'
   })
 
   const [errors, setErrors] = useState<Partial<CreateSedeData>>({})
+  const [loading, setLoading] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   const handleChange = (field: keyof CreateSedeData) => (event: any) => {
     const value = event.target.value
@@ -47,6 +50,7 @@ const CreateSedeModal = ({ open, onClose, onCreateSede }: CreateSedeModalProps) 
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }))
     }
+    setSubmitError('')
   }
 
   const validateForm = (): boolean => {
@@ -74,17 +78,30 @@ const CreateSedeModal = ({ open, onClose, onCreateSede }: CreateSedeModalProps) 
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSubmit = () => {
-    if (validateForm()) {
-      onCreateSede(formData)
+  const handleSubmit = async () => {
+    if (!validateForm()) {
+      return
+    }
+
+    setLoading(true)
+    setSubmitError('')
+
+    try {
+      await onCreateSede(formData)
+      
+      // Limpiar formulario
       setFormData({
         nombre: '',
         direccion: '',
         telefono: '',
         email: '',
-        estado: 'Activa'
+        estado: 'activa'
       })
       setErrors({})
+    } catch (err: any) {
+      setSubmitError(err.message || 'Error al crear sede')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -94,9 +111,10 @@ const CreateSedeModal = ({ open, onClose, onCreateSede }: CreateSedeModalProps) 
       direccion: '',
       telefono: '',
       email: '',
-      estado: 'Activa'
+      estado: 'activa'
     })
     setErrors({})
+    setSubmitError('')
     onClose()
   }
 
@@ -105,6 +123,11 @@ const CreateSedeModal = ({ open, onClose, onCreateSede }: CreateSedeModalProps) 
       <DialogTitle>Crear Nueva Sede</DialogTitle>
       <DialogContent>
         <Box sx={{ pt: 2 }}>
+          {submitError && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setSubmitError('')}>
+              {submitError}
+            </Alert>
+          )}
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <TextField
@@ -161,8 +184,8 @@ const CreateSedeModal = ({ open, onClose, onCreateSede }: CreateSedeModalProps) 
                   onChange={handleChange('estado')}
                   label="Estado"
                 >
-                  <MenuItem value="Activa">Activa</MenuItem>
-                  <MenuItem value="Inactiva">Inactiva</MenuItem>
+                  <MenuItem value="activa">Activa</MenuItem>
+                  <MenuItem value="inactiva">Inactiva</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -170,9 +193,11 @@ const CreateSedeModal = ({ open, onClose, onCreateSede }: CreateSedeModalProps) 
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose}>Cancelar</Button>
-        <Button onClick={handleSubmit} variant="contained">
-          Crear Sede
+        <Button onClick={handleClose} disabled={loading}>
+          Cancelar
+        </Button>
+        <Button onClick={handleSubmit} variant="contained" disabled={loading}>
+          {loading ? 'Creando...' : 'Crear Sede'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -180,4 +205,3 @@ const CreateSedeModal = ({ open, onClose, onCreateSede }: CreateSedeModalProps) 
 }
 
 export default CreateSedeModal
-

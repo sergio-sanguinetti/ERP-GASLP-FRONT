@@ -1,10 +1,12 @@
+// Tipos actualizados para coincidir con el backend
+
 export interface Sede {
-  id: number
+  id: string
   nombre: string
   direccion: string
   telefono: string
   email: string
-  estado: 'Activa' | 'Inactiva'
+  estado: 'activa' | 'inactiva'
   fechaCreacion: string
 }
 
@@ -13,6 +15,5 @@ export interface CreateSedeData {
   direccion: string
   telefono: string
   email: string
-  estado: 'Activa' | 'Inactiva'
+  estado: 'activa' | 'inactiva'
 }
-

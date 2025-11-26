@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 
 import {
   Box,
@@ -54,177 +54,30 @@ import {
   Map as MapIcon
 } from '@mui/icons-material'
 
-// Tipos de datos
-interface Ruta {
-  id: string
-  nombre: string
-  codigo: string
-  descripcion: string
-  zona: string
-  activa: boolean
-  repartidorAsignado?: string
-  vehiculoAsignado?: string
-  configuracion: {
-    capacidadMaxima: number
-    tiempoEstimado: number // en minutos
-    distanciaTotal: number // en km
-    requiereValidacion: boolean
-    permiteCambios: boolean
-    horarioInicio: string
-    horarioFin: string
-  }
-  puntosEntrega: PuntoEntrega[]
-  estadisticas: {
-    entregasCompletadas: number
-    tiempoPromedio: number
-    eficiencia: number
-  }
-  fechaCreacion: string
-  fechaModificacion: string
-  usuarioCreacion: string
-  usuarioModificacion: string
-}
-
-interface PuntoEntrega {
-  id: string
-  nombre: string
-  direccion: string
-  coordenadas: {
-    latitud: number
-    longitud: number
-  }
-  ordenVisita: number
-  tiempoEstimado: number
-  activo: boolean
-}
-
-// Datos de ejemplo
-const rutas: Ruta[] = [
-  {
-    id: '1',
-    nombre: 'Ruta Centro',
-    codigo: 'RTC-001',
-    descripcion: 'Ruta principal del centro de la ciudad',
-    zona: 'Centro',
-    activa: true,
-    repartidorAsignado: 'Juan Pérez',
-    vehiculoAsignado: 'Vehículo A',
-    configuracion: {
-      capacidadMaxima: 50,
-      tiempoEstimado: 180,
-      distanciaTotal: 25.5,
-      requiereValidacion: true,
-      permiteCambios: true,
-      horarioInicio: '08:00',
-      horarioFin: '17:00'
-    },
-    puntosEntrega: [
-      {
-        id: '1',
-        nombre: 'Cliente Centro 1',
-        direccion: 'Av. Principal 123',
-        coordenadas: { latitud: 19.4326, longitud: -99.1332 },
-        ordenVisita: 1,
-        tiempoEstimado: 15,
-        activo: true
-      },
-      {
-        id: '2',
-        nombre: 'Cliente Centro 2',
-        direccion: 'Calle Secundaria 456',
-        coordenadas: { latitud: 19.4330, longitud: -99.1335 },
-        ordenVisita: 2,
-        tiempoEstimado: 20,
-        activo: true
-      }
-    ],
-    estadisticas: {
-      entregasCompletadas: 245,
-      tiempoPromedio: 165,
-      eficiencia: 92
-    },
-    fechaCreacion: '2024-01-01',
-    fechaModificacion: '2024-01-15',
-    usuarioCreacion: 'Admin Sistema',
-    usuarioModificacion: 'Gerente Logística'
-  },
-  {
-    id: '2',
-    nombre: 'Ruta Norte',
-    codigo: 'RTN-002',
-    descripcion: 'Ruta de la zona norte de la ciudad',
-    zona: 'Norte',
-    activa: true,
-    repartidorAsignado: 'María García',
-    vehiculoAsignado: 'Vehículo B',
-    configuracion: {
-      capacidadMaxima: 40,
-      tiempoEstimado: 200,
-      distanciaTotal: 32.0,
-      requiereValidacion: true,
-      permiteCambios: false,
-      horarioInicio: '09:00',
-      horarioFin: '18:00'
-    },
-    puntosEntrega: [
-      {
-        id: '3',
-        nombre: 'Cliente Norte 1',
-        direccion: 'Av. Norte 789',
-        coordenadas: { latitud: 19.4500, longitud: -99.1200 },
-        ordenVisita: 1,
-        tiempoEstimado: 25,
-        activo: true
-      }
-    ],
-    estadisticas: {
-      entregasCompletadas: 180,
-      tiempoPromedio: 195,
-      eficiencia: 88
-    },
-    fechaCreacion: '2024-01-01',
-    fechaModificacion: '2024-01-20',
-    usuarioCreacion: 'Admin Sistema',
-    usuarioModificacion: 'Admin Sistema'
-  },
-  {
-    id: '3',
-    nombre: 'Ruta Sur',
-    codigo: 'RTS-003',
-    descripcion: 'Ruta de la zona sur de la ciudad',
-    zona: 'Sur',
-    activa: false,
-    repartidorAsignado: 'Carlos López',
-    vehiculoAsignado: 'Vehículo C',
-    configuracion: {
-      capacidadMaxima: 35,
-      tiempoEstimado: 150,
-      distanciaTotal: 28.5,
-      requiereValidacion: false,
-      permiteCambios: true,
-      horarioInicio: '08:30',
-      horarioFin: '16:30'
-    },
-    puntosEntrega: [],
-    estadisticas: {
-      entregasCompletadas: 120,
-      tiempoPromedio: 140,
-      eficiencia: 85
-    },
-    fechaCreacion: '2024-01-01',
-    fechaModificacion: '2024-01-10',
-    usuarioCreacion: 'Admin Sistema',
-    usuarioModificacion: 'Admin Sistema'
-  }
-]
+// Type Imports
+import { rutasAPI, usuariosAPI, zonasAPI, type Ruta, type User, type Ciudad, type Municipio, type Zona } from '@lib/api'
+import { useAuth } from '@contexts/AuthContext'
 
 export default function ConfiguracionRutasPage() {
-  const [rutasList, setRutasList] = useState<Ruta[]>(rutas)
+  const { user } = useAuth()
+  const [rutasList, setRutasList] = useState<Ruta[]>([])
+  const [repartidores, setRepartidores] = useState<User[]>([])
+  const [ciudades, setCiudades] = useState<Ciudad[]>([])
+  const [municipios, setMunicipios] = useState<Municipio[]>([])
+  const [zonas, setZonas] = useState<Zona[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
   const [tipoDialogo, setTipoDialogo] = useState<'crear' | 'editar' | 'eliminar' | 'ver'>('crear')
   const [rutaSeleccionada, setRutaSeleccionada] = useState<Ruta | null>(null)
-  const [formulario, setFormulario] = useState<Partial<Ruta>>({})
+  const [formulario, setFormulario] = useState<Partial<Ruta & { repartidoresIds: string[] }>>({})
   const [snackbar, setSnackbar] = useState({ abierto: false, mensaje: '', tipo: 'success' as 'success' | 'error' })
+  
+  // Estados para los selectores en cascada
+  const [ciudadSeleccionada, setCiudadSeleccionada] = useState<string>('')
+  const [municipioSeleccionado, setMunicipioSeleccionado] = useState<string>('')
+  const [zonaSeleccionada, setZonaSeleccionada] = useState<string>('')
 
   const [filtros, setFiltros] = useState({
     nombre: '',
@@ -233,6 +86,95 @@ export default function ConfiguracionRutasPage() {
     repartidor: ''
   })
 
+  // Cargar repartidores y zonas al montar
+  useEffect(() => {
+    loadRepartidores()
+    loadCiudades()
+  }, [])
+
+  // Cargar municipios cuando se selecciona una ciudad
+  useEffect(() => {
+    if (ciudadSeleccionada) {
+      loadMunicipios(ciudadSeleccionada)
+    } else {
+      setMunicipios([])
+      setMunicipioSeleccionado('')
+    }
+  }, [ciudadSeleccionada])
+
+  // Cargar zonas cuando se selecciona un municipio
+  useEffect(() => {
+    if (municipioSeleccionado) {
+      loadZonas(municipioSeleccionado)
+    } else {
+      setZonas([])
+      setZonaSeleccionada('')
+    }
+  }, [municipioSeleccionado])
+
+  // Cargar rutas al montar y cuando cambian los filtros
+  useEffect(() => {
+    loadRutas()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros.nombre, filtros.zona, filtros.activa, filtros.repartidor])
+
+  const loadRepartidores = async () => {
+    try {
+      const usuarios = await usuariosAPI.getAll()
+      const repartidoresList = usuarios.filter(u => u.rol === 'repartidor' && u.estado === 'activo')
+      setRepartidores(repartidoresList)
+    } catch (err: any) {
+      console.error('Error loading repartidores:', err)
+    }
+  }
+
+  const loadCiudades = async () => {
+    try {
+      const data = await zonasAPI.ciudades.getAll()
+      setCiudades(data)
+    } catch (err: any) {
+      console.error('Error loading ciudades:', err)
+    }
+  }
+
+  const loadMunicipios = async (ciudadId: string) => {
+    try {
+      const data = await zonasAPI.municipios.getAll(ciudadId)
+      setMunicipios(data)
+      setMunicipioSeleccionado('')
+      setZonaSeleccionada('')
+    } catch (err: any) {
+      console.error('Error loading municipios:', err)
+    }
+  }
+
+  const loadZonas = async (municipioId: string) => {
+    try {
+      const data = await zonasAPI.getAll(municipioId)
+      setZonas(data)
+      setZonaSeleccionada('')
+    } catch (err: any) {
+      console.error('Error loading zonas:', err)
+    }
+  }
+
+  const loadRutas = async () => {
+    try {
+      setLoading(true)
+      const data = await rutasAPI.getAll({
+        nombre: filtros.nombre || undefined,
+        zona: filtros.zona || undefined,
+        activa: filtros.activa || undefined,
+        repartidor: filtros.repartidor || undefined
+      })
+      setRutasList(data)
+    } catch (err: any) {
+      setSnackbar({ abierto: true, mensaje: err.message || 'Error al cargar rutas', tipo: 'error' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const abrirDialogo = (tipo: 'crear' | 'editar' | 'eliminar' | 'ver', ruta?: Ruta) => {
     setTipoDialogo(tipo)
     setRutaSeleccionada(ruta || null)
@@ -240,28 +182,53 @@ export default function ConfiguracionRutasPage() {
     if (tipo === 'crear') {
       setFormulario({
         activa: true,
-        configuracion: {
-          capacidadMaxima: 50,
-          tiempoEstimado: 180,
-          distanciaTotal: 0,
-          requiereValidacion: true,
-          permiteCambios: true,
-          horarioInicio: '08:00',
-          horarioFin: '17:00'
-        },
-        puntosEntrega: [],
-        estadisticas: {
-          entregasCompletadas: 0,
-          tiempoPromedio: 0,
-          eficiencia: 0
-        },
-        fechaCreacion: new Date().toISOString().split('T')[0],
-        fechaModificacion: new Date().toISOString().split('T')[0],
-        usuarioCreacion: 'Usuario Actual',
-        usuarioModificacion: 'Usuario Actual'
+        horarioInicio: '08:00',
+        horarioFin: '17:00',
+        repartidoresIds: []
       })
+      setCiudadSeleccionada('')
+      setMunicipioSeleccionado('')
+      setZonaSeleccionada('')
     } else if (tipo === 'editar' && ruta) {
-      setFormulario({ ...ruta })
+      setFormulario({
+        ...ruta,
+        repartidoresIds: ruta.repartidores?.map(r => r.id) || []
+      })
+      // Si la ruta tiene zonaRelacion, establecer los selectores
+      if (ruta.zonaRelacion) {
+        const zona = ruta.zonaRelacion
+        const municipio = zona.municipio
+        const ciudad = municipio?.ciudad
+        
+        if (ciudad) {
+          setCiudadSeleccionada(ciudad.id)
+          loadMunicipios(ciudad.id).then(() => {
+            if (municipio) {
+              setMunicipioSeleccionado(municipio.id)
+              loadZonas(municipio.id).then(() => {
+                setZonaSeleccionada(zona.id)
+              })
+            }
+          })
+        }
+      } else if (ruta.zonaId) {
+        // Si solo tiene zonaId, cargar la zona completa
+        zonasAPI.getById(ruta.zonaId).then(zona => {
+          if (zona.municipio) {
+            const municipio = zona.municipio
+            const ciudad = municipio.ciudad
+            if (ciudad) {
+              setCiudadSeleccionada(ciudad.id)
+              loadMunicipios(ciudad.id).then(() => {
+                setMunicipioSeleccionado(municipio.id)
+                loadZonas(municipio.id).then(() => {
+                  setZonaSeleccionada(zona.id)
+                })
+              })
+            }
+          }
+        }).catch(err => console.error('Error loading zona:', err))
+      }
     }
 
     setDialogoAbierto(true)
@@ -271,67 +238,78 @@ export default function ConfiguracionRutasPage() {
     setDialogoAbierto(false)
     setRutaSeleccionada(null)
     setFormulario({})
+    setCiudadSeleccionada('')
+    setMunicipioSeleccionado('')
+    setZonaSeleccionada('')
   }
 
   const manejarCambioFormulario = (campo: string, valor: any) => {
     setFormulario(prev => ({ ...prev, [campo]: valor }))
   }
 
-  const manejarCambioConfiguracion = (campo: string, valor: any) => {
-    setFormulario(prev => ({
-      ...prev,
-      configuracion: {
-        ...prev.configuracion,
-        [campo]: valor
-      }
-    }))
-  }
-
-  const guardarRuta = () => {
-    if (!formulario.nombre || !formulario.codigo || !formulario.zona) {
-      setSnackbar({ abierto: true, mensaje: 'Por favor complete todos los campos obligatorios', tipo: 'error' })
+  const guardarRuta = async () => {
+    if (!formulario.nombre || !formulario.codigo || !zonaSeleccionada) {
+      setSnackbar({ abierto: true, mensaje: 'Por favor complete todos los campos obligatorios y seleccione una zona', tipo: 'error' })
       return
     }
 
-    if (tipoDialogo === 'crear') {
-      const nuevaRuta: Ruta = {
-        id: Date.now().toString(),
-        ...formulario as Ruta
+    setSaving(true)
+    try {
+      if (tipoDialogo === 'crear') {
+        await rutasAPI.create({
+          nombre: formulario.nombre!,
+          codigo: formulario.codigo!,
+          descripcion: formulario.descripcion,
+          zonaId: zonaSeleccionada,
+          activa: formulario.activa !== undefined ? formulario.activa : true,
+          horarioInicio: formulario.horarioInicio,
+          horarioFin: formulario.horarioFin,
+          repartidoresIds: formulario.repartidoresIds || [],
+          usuarioCreacion: user?.nombres || user?.email || 'Sistema',
+          usuarioModificacion: user?.nombres || user?.email || 'Sistema'
+        })
+        setSnackbar({ abierto: true, mensaje: 'Ruta creada exitosamente', tipo: 'success' })
+      } else if (tipoDialogo === 'editar' && rutaSeleccionada) {
+        await rutasAPI.update(rutaSeleccionada.id, {
+          nombre: formulario.nombre,
+          codigo: formulario.codigo,
+          descripcion: formulario.descripcion,
+          zonaId: zonaSeleccionada,
+          activa: formulario.activa,
+          horarioInicio: formulario.horarioInicio,
+          horarioFin: formulario.horarioFin,
+          repartidoresIds: formulario.repartidoresIds || [],
+          usuarioModificacion: user?.nombres || user?.email || 'Sistema'
+        })
+        setSnackbar({ abierto: true, mensaje: 'Ruta actualizada exitosamente', tipo: 'success' })
       }
-      setRutasList(prev => [...prev, nuevaRuta])
-      setSnackbar({ abierto: true, mensaje: 'Ruta creada exitosamente', tipo: 'success' })
-    } else if (tipoDialogo === 'editar') {
-      setRutasList(prev => prev.map(ruta => 
-        ruta.id === rutaSeleccionada?.id 
-          ? { ...ruta, ...formulario, fechaModificacion: new Date().toISOString().split('T')[0] }
-          : ruta
-      ))
-      setSnackbar({ abierto: true, mensaje: 'Ruta actualizada exitosamente', tipo: 'success' })
+      cerrarDialogo()
+      await loadRutas()
+    } catch (err: any) {
+      setSnackbar({ abierto: true, mensaje: err.message || 'Error al guardar ruta', tipo: 'error' })
+    } finally {
+      setSaving(false)
     }
-
-    cerrarDialogo()
   }
 
-  const eliminarRuta = () => {
-    if (rutaSeleccionada) {
-      setRutasList(prev => prev.filter(ruta => ruta.id !== rutaSeleccionada.id))
+  const eliminarRuta = async () => {
+    if (!rutaSeleccionada) return
+
+    setDeleting(true)
+    try {
+      await rutasAPI.delete(rutaSeleccionada.id)
       setSnackbar({ abierto: true, mensaje: 'Ruta eliminada exitosamente', tipo: 'success' })
       cerrarDialogo()
+      await loadRutas()
+    } catch (err: any) {
+      setSnackbar({ abierto: true, mensaje: err.message || 'Error al eliminar ruta', tipo: 'error' })
+    } finally {
+      setDeleting(false)
     }
   }
 
-  const filtrarRutas = () => {
-    return rutasList.filter(ruta => {
-      const cumpleNombre = !filtros.nombre || ruta.nombre.toLowerCase().includes(filtros.nombre.toLowerCase())
-      const cumpleZona = !filtros.zona || ruta.zona.toLowerCase().includes(filtros.zona.toLowerCase())
-      const cumpleEstado = !filtros.activa || (filtros.activa === 'activa' && ruta.activa) || (filtros.activa === 'inactiva' && !ruta.activa)
-      const cumpleRepartidor = !filtros.repartidor || (ruta.repartidorAsignado && ruta.repartidorAsignado.toLowerCase().includes(filtros.repartidor.toLowerCase()))
-
-      return cumpleNombre && cumpleZona && cumpleEstado && cumpleRepartidor
-    })
-  }
-
-  const rutasFiltradas = filtrarRutas()
+  // Los filtros ya se aplican en el backend
+  const rutasFiltradas = rutasList
 
   const obtenerIconoTipo = (zona: string) => {
     switch (zona.toLowerCase()) {
@@ -461,16 +439,24 @@ export default function ConfiguracionRutasPage() {
 
       {/* Tabla de Rutas */}
       <Card>
-        <TableContainer>
-          <Table>
+        {loading && rutasList.length === 0 ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <Typography>Cargando rutas...</Typography>
+          </Box>
+        ) : rutasFiltradas.length === 0 ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <Typography color="text.secondary">No hay rutas registradas</Typography>
+          </Box>
+        ) : (
+          <TableContainer>
+            <Table>
             <TableHead>
               <TableRow>
                 <TableCell>Ruta</TableCell>
                 <TableCell>Zona</TableCell>
-                <TableCell>Repartidor</TableCell>
-                <TableCell>Vehículo</TableCell>
-                <TableCell>Configuración</TableCell>
-                <TableCell>Estadísticas</TableCell>
+                <TableCell>Repartidores</TableCell>
+                <TableCell>Horario</TableCell>
+                <TableCell>Descripción</TableCell>
                 <TableCell>Estado</TableCell>
                 <TableCell align="center">Acciones</TableCell>
               </TableRow>
@@ -491,46 +477,57 @@ export default function ConfiguracionRutasPage() {
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       {obtenerIconoTipo(ruta.zona)}
-                      <Typography variant="body2">{ruta.zona}</Typography>
+                      <Box>
+                        {ruta.zonaRelacion ? (
+                          <>
+                            <Typography variant="body2" fontWeight="bold">
+                              {ruta.zonaRelacion.nombre}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {ruta.zonaRelacion.municipio?.nombre} - {ruta.zonaRelacion.municipio?.ciudad?.estado}
+                            </Typography>
+                          </>
+                        ) : (
+                          <Typography variant="body2">{ruta.zona}</Typography>
+                        )}
+                      </Box>
                     </Box>
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2">
-                      {ruta.repartidorAsignado || 'Sin asignar'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">
-                      {ruta.vehiculoAsignado || 'Sin asignar'}
-                    </Typography>
+                    {ruta.repartidores && ruta.repartidores.length > 0 ? (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {ruta.repartidores.map(repartidor => (
+                          <Chip
+                            key={repartidor.id}
+                            label={`${repartidor.nombres} ${repartidor.apellidoPaterno}`}
+                            size="small"
+                            variant="outlined"
+                          />
+                        ))}
+                      </Box>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        Sin asignar
+                      </Typography>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Box>
-                      <Typography variant="caption" color="text.secondary">
-                        Capacidad: {ruta.configuracion.capacidadMaxima}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        Tiempo: {ruta.configuracion.tiempoEstimado} min
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        Distancia: {ruta.configuracion.distanciaTotal} km
-                      </Typography>
+                      {ruta.horarioInicio && ruta.horarioFin ? (
+                        <Typography variant="caption" color="text.secondary">
+                          Horario: {ruta.horarioInicio} - {ruta.horarioFin}
+                        </Typography>
+                      ) : (
+                        <Typography variant="caption" color="text.secondary">
+                          Sin horario definido
+                        </Typography>
+                      )}
                     </Box>
                   </TableCell>
                   <TableCell>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">
-                        Entregas: {ruta.estadisticas.entregasCompletadas}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        Tiempo prom: {ruta.estadisticas.tiempoPromedio} min
-                      </Typography>
-                      <Chip
-                        size="small"
-                        label={`${ruta.estadisticas.eficiencia}%`}
-                        color={obtenerColorEficiencia(ruta.estadisticas.eficiencia)}
-                      />
-                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                      {ruta.descripcion || 'Sin descripción'}
+                    </Typography>
                   </TableCell>
                   <TableCell>
                     <Chip
@@ -572,6 +569,7 @@ export default function ConfiguracionRutasPage() {
             </TableBody>
           </Table>
         </TableContainer>
+        )}
       </Card>
 
       {/* Dialog para Crear/Editar/Ver/Eliminar */}
@@ -602,29 +600,33 @@ export default function ConfiguracionRutasPage() {
                       <Typography variant="subtitle2" gutterBottom>Información General</Typography>
                       <Typography variant="body2"><strong>Nombre:</strong> {rutaSeleccionada.nombre}</Typography>
                       <Typography variant="body2"><strong>Código:</strong> {rutaSeleccionada.codigo}</Typography>
-                      <Typography variant="body2"><strong>Zona:</strong> {rutaSeleccionada.zona}</Typography>
+                      <Typography variant="body2">
+                        <strong>Zona:</strong>{' '}
+                        {rutaSeleccionada.zonaRelacion ? (
+                          <>
+                            {rutaSeleccionada.zonaRelacion.nombre} 
+                            {' - '}
+                            {rutaSeleccionada.zonaRelacion.municipio?.nombre} 
+                            {' - '}
+                            {rutaSeleccionada.zonaRelacion.municipio?.ciudad?.estado}
+                          </>
+                        ) : (
+                          rutaSeleccionada.zona
+                        )}
+                      </Typography>
                       <Typography variant="body2"><strong>Descripción:</strong> {rutaSeleccionada.descripcion}</Typography>
                     </Grid>
                     <Grid item xs={12} md={6}>
                       <Typography variant="subtitle2" gutterBottom>Asignaciones</Typography>
-                      <Typography variant="body2"><strong>Repartidor:</strong> {rutaSeleccionada.repartidorAsignado || 'Sin asignar'}</Typography>
-                      <Typography variant="body2"><strong>Vehículo:</strong> {rutaSeleccionada.vehiculoAsignado || 'Sin asignar'}</Typography>
-                    </Grid>
-                  </Grid>
-                  <Divider sx={{ my: 2 }} />
-                  <Typography variant="subtitle2" gutterBottom>Configuración</Typography>
-                  <Grid container spacing={2}>
-                    <Grid item xs={6} md={3}>
-                      <Typography variant="body2"><strong>Capacidad:</strong> {rutaSeleccionada.configuracion.capacidadMaxima}</Typography>
-                    </Grid>
-                    <Grid item xs={6} md={3}>
-                      <Typography variant="body2"><strong>Tiempo:</strong> {rutaSeleccionada.configuracion.tiempoEstimado} min</Typography>
-                    </Grid>
-                    <Grid item xs={6} md={3}>
-                      <Typography variant="body2"><strong>Distancia:</strong> {rutaSeleccionada.configuracion.distanciaTotal} km</Typography>
-                    </Grid>
-                    <Grid item xs={6} md={3}>
-                      <Typography variant="body2"><strong>Horario:</strong> {rutaSeleccionada.configuracion.horarioInicio} - {rutaSeleccionada.configuracion.horarioFin}</Typography>
+                      <Typography variant="body2" gutterBottom>
+                        <strong>Repartidores:</strong>{' '}
+                        {rutaSeleccionada.repartidores && rutaSeleccionada.repartidores.length > 0
+                          ? rutaSeleccionada.repartidores.map(r => `${r.nombres} ${r.apellidoPaterno}`).join(', ')
+                          : 'Sin asignar'}
+                      </Typography>
+                      {rutaSeleccionada.horarioInicio && rutaSeleccionada.horarioFin && (
+                        <Typography variant="body2"><strong>Horario:</strong> {rutaSeleccionada.horarioInicio} - {rutaSeleccionada.horarioFin}</Typography>
+                      )}
                     </Grid>
                   </Grid>
                 </>
@@ -651,29 +653,91 @@ export default function ConfiguracionRutasPage() {
                     required
                   />
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} md={4}>
                   <FormControl fullWidth required>
+                    <InputLabel>Ciudad</InputLabel>
+                    <Select
+                      value={ciudadSeleccionada}
+                      onChange={(e) => {
+                        setCiudadSeleccionada(e.target.value)
+                        setMunicipioSeleccionado('')
+                        setZonaSeleccionada('')
+                      }}
+                      label="Ciudad"
+                    >
+                      <MenuItem value="">Seleccione una ciudad</MenuItem>
+                      {ciudades.filter(c => c.activa).map((ciudad) => (
+                        <MenuItem key={ciudad.id} value={ciudad.id}>
+                          {ciudad.estado}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth required disabled={!ciudadSeleccionada}>
+                    <InputLabel>Municipio</InputLabel>
+                    <Select
+                      value={municipioSeleccionado}
+                      onChange={(e) => {
+                        setMunicipioSeleccionado(e.target.value)
+                        setZonaSeleccionada('')
+                      }}
+                      label="Municipio"
+                    >
+                      <MenuItem value="">Seleccione un municipio</MenuItem>
+                      {municipios.filter(m => m.activo).map((municipio) => (
+                        <MenuItem key={municipio.id} value={municipio.id}>
+                          {municipio.nombre}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth required disabled={!municipioSeleccionado}>
                     <InputLabel>Zona</InputLabel>
                     <Select
-                      value={formulario.zona || ''}
-                      onChange={(e) => manejarCambioFormulario('zona', e.target.value)}
+                      value={zonaSeleccionada}
+                      onChange={(e) => setZonaSeleccionada(e.target.value)}
                       label="Zona"
                     >
-                      <MenuItem value="centro">Centro</MenuItem>
-                      <MenuItem value="norte">Norte</MenuItem>
-                      <MenuItem value="sur">Sur</MenuItem>
-                      <MenuItem value="este">Este</MenuItem>
-                      <MenuItem value="oeste">Oeste</MenuItem>
+                      <MenuItem value="">Seleccione una zona</MenuItem>
+                      {zonas.filter(z => z.activa).map((zona) => (
+                        <MenuItem key={zona.id} value={zona.id}>
+                          {zona.nombre}
+                        </MenuItem>
+                      ))}
                     </Select>
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Repartidor Asignado"
-                    value={formulario.repartidorAsignado || ''}
-                    onChange={(e) => manejarCambioFormulario('repartidorAsignado', e.target.value)}
-                  />
+                  <FormControl fullWidth>
+                    <InputLabel>Repartidores Asignados</InputLabel>
+                    <Select
+                      multiple
+                      value={formulario.repartidoresIds || []}
+                      onChange={(e) => manejarCambioFormulario('repartidoresIds', e.target.value)}
+                      label="Repartidores Asignados"
+                      renderValue={(selected) => (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {(selected as string[]).map((id) => {
+                            const repartidor = repartidores.find(r => r.id === id)
+                            return repartidor ? (
+                              <Chip key={id} label={`${repartidor.nombres} ${repartidor.apellidoPaterno}`} size="small" />
+                            ) : null
+                          })}
+                        </Box>
+                      )}
+                    >
+                      {repartidores.map((repartidor) => (
+                        <MenuItem key={repartidor.id} value={repartidor.id}>
+                          <Checkbox checked={(formulario.repartidoresIds || []).indexOf(repartidor.id) > -1} />
+                          {repartidor.nombres} {repartidor.apellidoPaterno} {repartidor.apellidoMaterno}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                 </Grid>
                 <Grid item xs={12}>
                   <TextField
@@ -683,14 +747,6 @@ export default function ConfiguracionRutasPage() {
                     onChange={(e) => manejarCambioFormulario('descripcion', e.target.value)}
                     multiline
                     rows={2}
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Vehículo Asignado"
-                    value={formulario.vehiculoAsignado || ''}
-                    onChange={(e) => manejarCambioFormulario('vehiculoAsignado', e.target.value)}
                   />
                 </Grid>
                 <Grid item xs={12} md={6}>
@@ -704,46 +760,13 @@ export default function ConfiguracionRutasPage() {
                     label="Ruta Activa"
                   />
                 </Grid>
-                <Grid item xs={12}>
-                  <Divider sx={{ my: 2 }}>
-                    <Typography variant="subtitle2">Configuración de la Ruta</Typography>
-                  </Divider>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    label="Capacidad Máxima"
-                    type="number"
-                    value={formulario.configuracion?.capacidadMaxima || ''}
-                    onChange={(e) => manejarCambioConfiguracion('capacidadMaxima', parseInt(e.target.value))}
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    label="Tiempo Estimado (min)"
-                    type="number"
-                    value={formulario.configuracion?.tiempoEstimado || ''}
-                    onChange={(e) => manejarCambioConfiguracion('tiempoEstimado', parseInt(e.target.value))}
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    label="Distancia Total (km)"
-                    type="number"
-                    step="0.1"
-                    value={formulario.configuracion?.distanciaTotal || ''}
-                    onChange={(e) => manejarCambioConfiguracion('distanciaTotal', parseFloat(e.target.value))}
-                  />
-                </Grid>
                 <Grid item xs={12} md={6}>
                   <TextField
                     fullWidth
                     label="Horario de Inicio"
                     type="time"
-                    value={formulario.configuracion?.horarioInicio || ''}
-                    onChange={(e) => manejarCambioConfiguracion('horarioInicio', e.target.value)}
+                    value={formulario.horarioInicio || ''}
+                    onChange={(e) => manejarCambioFormulario('horarioInicio', e.target.value)}
                     InputLabelProps={{ shrink: true }}
                   />
                 </Grid>
@@ -752,31 +775,9 @@ export default function ConfiguracionRutasPage() {
                     fullWidth
                     label="Horario de Fin"
                     type="time"
-                    value={formulario.configuracion?.horarioFin || ''}
-                    onChange={(e) => manejarCambioConfiguracion('horarioFin', e.target.value)}
+                    value={formulario.horarioFin || ''}
+                    onChange={(e) => manejarCambioFormulario('horarioFin', e.target.value)}
                     InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={formulario.configuracion?.requiereValidacion || false}
-                        onChange={(e) => manejarCambioConfiguracion('requiereValidacion', e.target.checked)}
-                      />
-                    }
-                    label="Requiere Validación"
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={formulario.configuracion?.permiteCambios || false}
-                        onChange={(e) => manejarCambioConfiguracion('permiteCambios', e.target.checked)}
-                      />
-                    }
-                    label="Permite Cambios"
                   />
                 </Grid>
               </Grid>
@@ -788,13 +789,13 @@ export default function ConfiguracionRutasPage() {
             {tipoDialogo === 'eliminar' ? 'Cancelar' : 'Cerrar'}
           </Button>
           {tipoDialogo === 'eliminar' && (
-            <Button onClick={eliminarRuta} color="error" variant="contained">
-              Eliminar
+            <Button onClick={eliminarRuta} color="error" variant="contained" disabled={deleting}>
+              {deleting ? 'Eliminando...' : 'Eliminar'}
             </Button>
           )}
           {(tipoDialogo === 'crear' || tipoDialogo === 'editar') && (
-            <Button onClick={guardarRuta} variant="contained" startIcon={<SaveIcon />}>
-              {tipoDialogo === 'crear' ? 'Crear' : 'Guardar'}
+            <Button onClick={guardarRuta} variant="contained" startIcon={<SaveIcon />} disabled={saving}>
+              {saving ? 'Guardando...' : tipoDialogo === 'crear' ? 'Crear' : 'Guardar'}
             </Button>
           )}
         </DialogActions>
@@ -817,6 +818,7 @@ export default function ConfiguracionRutasPage() {
     </Box>
   )
 }
+
 
 
 
