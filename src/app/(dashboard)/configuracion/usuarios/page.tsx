@@ -91,10 +91,10 @@ const UsuariosPage = () => {
     }
   }
 
-  const handleEditUser = async (updatedUser: User) => {
+  const handleEditUser = async (updatedUser: User & { password?: string }) => {
     try {
       setError('')
-      await usuariosAPI.update(updatedUser.id, {
+      const updateData: any = {
         nombres: updatedUser.nombres,
         apellidoPaterno: updatedUser.apellidoPaterno,
         apellidoMaterno: updatedUser.apellidoMaterno,
@@ -104,7 +104,14 @@ const UsuariosPage = () => {
         tipoRepartidor: updatedUser.tipoRepartidor,
         estado: updatedUser.estado,
         sede: updatedUser.sede
-      })
+      }
+      
+      // Solo incluir la contraseña si se proporcionó una nueva
+      if (updatedUser.password && updatedUser.password.trim()) {
+        updateData.password = updatedUser.password
+      }
+      
+      await usuariosAPI.update(updatedUser.id, updateData)
       setIsEditModalOpen(false)
       setSelectedUser(null)
       await loadUsers() // Recargar la lista

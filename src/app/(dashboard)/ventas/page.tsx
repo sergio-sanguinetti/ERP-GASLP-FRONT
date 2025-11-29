@@ -10,6 +10,9 @@ import {
   ventasAPI,
   descuentosRepartidorAPI,
   sedesAPI,
+  configuracionesAPI,
+  categoriasProductoAPI,
+  rutasAPI,
   type Cliente,
   type Usuario,
   type Producto,
@@ -17,9 +20,13 @@ import {
   type ResumenVentas,
   type CorteRepartidor,
   type DescuentoRepartidor,
+  type CategoriaProducto,
   type CreateProductoRequest,
   type CreatePedidoRequest,
-  type Sede
+  type CreateCategoriaProductoRequest,
+  type Sede,
+  type Ruta,
+  type CreateClienteRequest
 } from '@/lib/api'
 
 import {
@@ -54,6 +61,8 @@ import {
   MenuItem,
   Switch,
   FormControlLabel,
+  RadioGroup,
+  Radio,
   LinearProgress,
   Avatar,
   List,
@@ -61,7 +70,8 @@ import {
   ListItemText,
   ListItemIcon,
   ListItemAvatar,
-  InputAdornment
+  InputAdornment,
+  Autocomplete
 } from '@mui/material'
 import {
   TrendingUp as TrendingUpIcon,
@@ -109,7 +119,7 @@ interface ClienteAnalisis extends Cliente {
 }
 
 export default function VentasPage() {
-  const [vistaActual, setVistaActual] = useState<'dashboard' | 'catalogo' | 'listado-pedidos' | 'analisis-clientes'>(
+  const [vistaActual, setVistaActual] = useState<'dashboard' | 'catalogo' | 'listado-pedidos' | 'analisis-clientes' | 'categorias'>(
     'dashboard'
   )
 
@@ -125,19 +135,34 @@ export default function VentasPage() {
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [repartidores, setRepartidores] = useState<Usuario[]>([])
   const [descuentosRepartidor, setDescuentosRepartidor] = useState<DescuentoRepartidor[]>([])
+  const [categoriasProducto, setCategoriasProducto] = useState<CategoriaProducto[]>([])
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [clientesAnalisis, setClientesAnalisis] = useState<ClienteAnalisis[]>([])
+  const [rutas, setRutas] = useState<Ruta[]>([])
+  const [clienteBuscado, setClienteBuscado] = useState<Cliente | null>(null)
+  const [mostrarCrearCliente, setMostrarCrearCliente] = useState(false)
+  const [formularioClienteRapido, setFormularioClienteRapido] = useState({
+    nombre: '',
+    apellidoPaterno: '',
+    apellidoMaterno: '',
+    calle: '',
+    numeroExterior: '',
+    colonia: '',
+    rutaId: ''
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   // Estados de UI
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
-  const [tipoDialogo, setTipoDialogo] = useState<'precios' | 'descuentos' | 'pedido' | 'producto' | 'pedido-detalles'>(
+  const [tipoDialogo, setTipoDialogo] = useState<'precios' | 'descuentos' | 'pedido' | 'producto' | 'pedido-detalles' | 'categoria'>(
     'precios'
   )
   const [productoSeleccionado, setProductoSeleccionado] = useState<Producto | null>(null)
   const [repartidorSeleccionado, setRepartidorSeleccionado] = useState<Usuario | null>(null)
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState<Pedido | null>(null)
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<CategoriaProducto | null>(null)
   const [filtrosPedidos, setFiltrosPedidos] = useState<FiltrosPedidos>({
     fechaDesde: '',
     fechaHasta: '',
@@ -165,25 +190,60 @@ export default function VentasPage() {
     categoriaFiltro: '' // Filtro por categoría del catálogo
   })
 
+  // Estado para cálculo de pipas
+  const [calculoPipas, setCalculoPipas] = useState({
+    tipoCalculo: 'ninguno' as 'ninguno' | 'litros' | 'porcentajes' | 'dinero', // Tipo de cálculo seleccionado
+    // Para cálculo por litros
+    cantidadLitros: 0,
+    precioPorLitro: 18.50,
+    totalPorLitros: 0,
+    // Para cálculo por porcentajes
+    capacidadTanque: 0, // Litros del tanque
+    porcentajeInicial: 0, // Porcentaje inicial de llenado
+    porcentajeFinal: 100, // Porcentaje final deseado
+    litrosALlenar: 0, // Calculado automáticamente
+    totalPorPorcentajes: 0, // Total calculado en dinero
+    // Para cálculo por dinero
+    cantidadDinero: 0,
+    litrosPorDinero: 0 // Calculado automáticamente
+  })
+
   const [formularioProducto, setFormularioProducto] = useState<CreateProductoRequest>({
     nombre: '',
-    categoria: 'gas_lp',
+    categoriaId: '',
     precio: 0,
     unidad: '',
     descripcion: '',
+    cantidadKilos: undefined,
     activo: true
     // No incluir sedeId - los productos son para todas las sedes
   })
 
   const [formularioDescuento, setFormularioDescuento] = useState({
     repartidorId: '',
-    descuentoAutorizado: 0
+    descuentoAutorizado: 0,
+    descuentoPorLitro: 0
   })
+
+  const [formularioCategoria, setFormularioCategoria] = useState<CreateCategoriaProductoRequest>({
+    nombre: '',
+    codigo: '',
+    descripcion: '',
+    activa: true
+  })
+
+  // Estados para actualización de precios
+  const [preciosBase, setPreciosBase] = useState({
+    precioPorLitro: 18.50,
+    precioPorKG: 18.50
+  })
+  const [actualizandoPrecios, setActualizandoPrecios] = useState(false)
 
   // Estados para el modal de eliminación
   const [eliminando, setEliminando] = useState(false)
   const [dialogoEliminar, setDialogoEliminar] = useState(false)
   const [pedidoAEliminar, setPedidoAEliminar] = useState<Pedido | null>(null)
+  const [descuentoAEliminar, setDescuentoAEliminar] = useState<DescuentoRepartidor | null>(null)
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -196,15 +256,45 @@ export default function VentasPage() {
       loadDashboardData()
     } else if (vistaActual === 'catalogo') {
       loadProductos()
+      loadCategoriasProducto()
       loadDescuentos()
+      loadConfiguraciones()
+      loadRepartidores() // Cargar repartidores para la gestión de descuentos
     } else if (vistaActual === 'listado-pedidos') {
       loadClientes()
       loadRepartidores()
       loadPedidos()
+      // loadRutas se llama cuando usuario esté disponible
     } else if (vistaActual === 'analisis-clientes') {
       loadClientesAnalisis()
+    } else if (vistaActual === 'categorias') {
+      loadCategoriasProducto()
     }
   }, [vistaActual, sedeId])
+
+  // Cargar rutas cuando el usuario esté disponible y estemos en la vista de pedidos
+  useEffect(() => {
+    if (usuario && vistaActual === 'listado-pedidos') {
+      loadRutas()
+    }
+  }, [usuario, vistaActual, sedeId])
+
+  // Cargar rutas cuando se abre el modal de crear cliente
+  useEffect(() => {
+    if (mostrarCrearCliente && usuario) {
+      loadRutas()
+    }
+  }, [mostrarCrearCliente, usuario, sedeId])
+
+  // Actualizar precio por litro cuando cambie la configuración
+  useEffect(() => {
+    if (preciosBase.precioPorLitro > 0) {
+      setCalculoPipas(prev => ({
+        ...prev,
+        precioPorLitro: preciosBase.precioPorLitro
+      }))
+    }
+  }, [preciosBase.precioPorLitro])
 
   const esSuperAdministrador = usuario?.rol === 'superAdministrador'
 
@@ -300,6 +390,28 @@ export default function VentasPage() {
     }
   }
 
+  const loadConfiguraciones = async () => {
+    try {
+      // Cargar la configuración única
+      const configuracion = await configuracionesAPI.get()
+
+      if (configuracion) {
+        setPreciosBase({
+          precioPorLitro: configuracion.precioPorLitroGasLP,
+          precioPorKG: configuracion.precioPorKG
+        })
+        // Actualizar el precio por litro en el cálculo de pipas
+        setCalculoPipas(prev => ({
+          ...prev,
+          precioPorLitro: configuracion.precioPorLitroGasLP
+        }))
+      }
+    } catch (err: any) {
+      console.error('Error loading configuraciones:', err)
+      // Si no existe la configuración, usar valores por defecto
+    }
+  }
+
   const loadClientes = async () => {
     try {
       const data = await clientesAPI.getAll({ estadoCliente: 'activo' })
@@ -313,70 +425,87 @@ export default function VentasPage() {
     }
   }
 
+  const loadRutas = async () => {
+    try {
+      // Obtener todas las rutas activas primero (sin filtro de activa para ver todas)
+      let todasLasRutas = await rutasAPI.getAll({ activa: 'true' })
+      console.log('Todas las rutas activas:', todasLasRutas.length)
+      console.log('Rutas con sede:', todasLasRutas.map(r => ({ nombre: r.nombre, sedeId: r.sedeId, sede: r.sede?.nombre, activa: r.activa })))
+      
+      // Si no hay rutas con el filtro activa, intentar sin filtro
+      if (todasLasRutas.length === 0) {
+        console.log('No se encontraron rutas con filtro activa=true, intentando sin filtro...')
+        todasLasRutas = await rutasAPI.getAll({})
+        console.log('Todas las rutas (sin filtro):', todasLasRutas.length)
+        // Filtrar solo las activas en el frontend
+        todasLasRutas = todasLasRutas.filter(r => r.activa === true)
+        console.log('Rutas activas (filtradas en frontend):', todasLasRutas.length)
+        console.log('Detalles de rutas:', todasLasRutas.map(r => ({ nombre: r.nombre, activa: r.activa, sedeId: r.sedeId })))
+      }
+      
+      let rutasFiltradas = todasLasRutas
+      
+      // Si hay una sede seleccionada, filtrar por esa sede
+      if (sedeId) {
+        console.log(`Filtrando por sedeId: ${sedeId}`)
+        const rutasConSede = rutasFiltradas.filter(ruta => {
+          const coincide = ruta.sedeId === sedeId || ruta.sede?.id === sedeId
+          if (!coincide) {
+            console.log(`Ruta ${ruta.nombre} no coincide - sedeId: ${ruta.sedeId}, sede?.id: ${ruta.sede?.id}`)
+          }
+          return coincide
+        })
+        
+        // Si hay rutas con sede asignada, usarlas
+        // Si no hay rutas con sede, mostrar todas (las rutas pueden no tener sede asignada aún)
+        if (rutasConSede.length > 0) {
+          rutasFiltradas = rutasConSede
+          console.log(`✅ Rutas filtradas por sede ${sedeId}: ${rutasFiltradas.length} rutas`)
+          console.log('Rutas encontradas:', rutasFiltradas.map(r => r.nombre))
+        } else {
+          console.warn(`⚠️ No se encontraron rutas con sedeId ${sedeId}. Mostrando todas las rutas activas.`)
+          console.log('Rutas disponibles:', rutasFiltradas.map(r => ({ nombre: r.nombre, sedeId: r.sedeId })))
+          console.log('Sugerencia: Verifica que las rutas tengan la sede correcta asignada')
+          // Mantener todas las rutas si no hay ninguna con esa sede
+        }
+      }
+      
+      // Si el usuario es repartidor, filtrar por sus rutas asignadas
+      if (usuario?.rol === 'repartidor' && usuario?.id) {
+        // Filtrar rutas donde el usuario es repartidor
+        const rutasDelUsuario = rutasFiltradas.filter(ruta => 
+          ruta.repartidores?.some((rep: any) => rep.id === usuario.id)
+        )
+        
+        // Extraer las zonas únicas de las rutas del usuario
+        const zonasDelUsuario = [...new Set(rutasDelUsuario.map(r => r.zona).filter(Boolean))]
+        
+        // Si el usuario tiene rutas asignadas, filtrar todas las rutas por esas zonas
+        if (zonasDelUsuario.length > 0) {
+          rutasFiltradas = rutasFiltradas.filter(ruta => zonasDelUsuario.includes(ruta.zona))
+          console.log(`Rutas filtradas por zona para repartidor: ${rutasFiltradas.length} rutas en zonas: ${zonasDelUsuario.join(', ')}`)
+        } else {
+          // Si no tiene rutas asignadas, no mostrar ninguna
+          rutasFiltradas = []
+          console.log('El repartidor no tiene rutas asignadas')
+        }
+      }
+      
+      setRutas(rutasFiltradas)
+      console.log(`Rutas finales: ${rutasFiltradas.length}`, rutasFiltradas.map(r => ({ nombre: r.nombre, sedeId: r.sedeId, sede: r.sede?.nombre })))
+    } catch (err: any) {
+      console.error('Error loading rutas:', err)
+      setRutas([])
+    }
+  }
+
   const loadRepartidores = async () => {
     try {
-      if (!sedeId) {
-        console.warn('No hay sedeId, no se pueden cargar repartidores')
-        setRepartidores([])
-        return
-      }
-
-      // Asegurarse de que las sedes estén cargadas
-      if (sedes.length === 0) {
-        console.warn('Las sedes no están cargadas aún, esperando...')
-        const sedesData = await sedesAPI.getAll()
-        setSedes(sedesData)
-
-        // Buscar el nombre de la sede
-        const sedeEncontrada = sedesData.find(s => s.id === sedeId)
-        const sedeNombre = sedeEncontrada?.nombre
-
-        if (!sedeNombre) {
-          console.error('No se encontró el nombre de la sede para el ID:', sedeId, 'Sedes disponibles:', sedesData)
-          setRepartidores([])
-          return
-        }
-
-        // Filtrar repartidores por sede y rol desde el backend
-        const data = await usuariosAPI.getAll({
-          rol: 'repartidor',
-          estado: 'activo',
-          sede: sedeNombre
-        })
-
-        console.log('Repartidores cargados (con sedes recargadas):', data.length, data)
-        setRepartidores(data)
-        return
-      }
-
-      // Debug: verificar sedeId antes de cargar repartidores
-      console.log('Cargando repartidores para sedeId:', sedeId)
-      console.log(
-        'Sedes disponibles:',
-        sedes.map(s => ({ id: s.id, nombre: s.nombre }))
-      )
-
-      // Obtener el nombre de la sede para el filtro
-      // El campo 'sede' en Usuario es un string que almacena el nombre de la sede (ej: "SEDE 2")
-      const sedeEncontrada = sedes.find(s => s.id === sedeId)
-      const sedeNombre = sedeEncontrada?.nombre
-
-      if (!sedeNombre) {
-        console.error('No se encontró el nombre de la sede para el ID:', sedeId)
-        console.error('SedeId buscado:', sedeId)
-        console.error('Sedes disponibles:', sedes)
-        setRepartidores([])
-        return
-      }
-
-      console.log('Buscando repartidores con sede:', sedeNombre)
-
-      // Filtrar repartidores por sede y rol desde el backend
-      // El backend busca por el campo 'sede' que es un string (nombre de sede como "SEDE 2")
+      // Cargar todos los repartidores activos sin filtrar por sede
+      // Los repartidores se gestionan desde /configuracion/usuarios
       const data = await usuariosAPI.getAll({
         rol: 'repartidor',
-        estado: 'activo',
-        sede: sedeNombre // Usar el nombre de la sede, no el ID
+        estado: 'activo'
       })
 
       console.log('Repartidores cargados:', data.length, 'repartidores')
@@ -465,29 +594,67 @@ export default function VentasPage() {
     }
   }
 
-  const abrirDialogo = async (tipo: 'precios' | 'descuentos' | 'pedido' | 'producto', item?: any) => {
+  const abrirDialogo = async (tipo: 'precios' | 'descuentos' | 'pedido' | 'producto' | 'categoria', item?: any) => {
     setTipoDialogo(tipo)
-    if (tipo === 'producto' && item) {
+    if (tipo === 'categoria' && item) {
+      setCategoriaSeleccionada(item)
+      setFormularioCategoria({
+        nombre: item.nombre,
+        codigo: item.codigo,
+        descripcion: item.descripcion || '',
+        activa: item.activa
+      })
+    } else if (tipo === 'categoria') {
+      setCategoriaSeleccionada(null)
+      setFormularioCategoria({
+        nombre: '',
+        codigo: '',
+        descripcion: '',
+        activa: true
+      })
+    } else if (tipo === 'producto' && item) {
       setProductoSeleccionado(item)
       setFormularioProducto({
         nombre: item.nombre,
-        categoria: item.categoria,
+        categoriaId: item.categoriaId || (item.categoria?.id || ''),
         precio: item.precio,
         unidad: item.unidad,
         descripcion: item.descripcion,
+        cantidadKilos: item.cantidadKilos,
         activo: item.activo
         // No incluir sedeId - los productos del catálogo son para todas las sedes
       })
-    } else if (tipo === 'descuentos' && item) {
-      setRepartidorSeleccionado(item)
-      const descuento = descuentosRepartidor.find(d => d.repartidorId === item.id)
-      setFormularioDescuento({
-        repartidorId: item.id,
-        descuentoAutorizado: descuento?.descuentoAutorizado || 0
-      })
+    } else if (tipo === 'descuentos') {
+      // Cargar repartidores si no están cargados
+      if (repartidores.length === 0) {
+        console.log('Cargando repartidores para diálogo de descuentos...')
+        await loadRepartidores()
+      }
+      
+      if (item) {
+        setRepartidorSeleccionado(item)
+        const descuento = descuentosRepartidor.find(d => d.repartidorId === item.id)
+        setFormularioDescuento({
+          repartidorId: item.id,
+          descuentoAutorizado: descuento?.descuentoAutorizado || 0,
+          descuentoPorLitro: descuento?.descuentoPorLitro || 0
+        })
+      } else {
+        // Abrir diálogo para crear nuevo descuento sin repartidor seleccionado
+        setRepartidorSeleccionado(null)
+        setFormularioDescuento({
+          repartidorId: '',
+          descuentoAutorizado: 0,
+          descuentoPorLitro: 0
+        })
+      }
     } else if (tipo === 'pedido') {
-      // Cargar productos, clientes y repartidores cuando se abre el diálogo de pedido
+      // Cargar productos, clientes, repartidores y categorías cuando se abre el diálogo de pedido
       console.log('Abriendo diálogo de pedido, cargando datos...')
+      if (categoriasProducto.length === 0) {
+        console.log('Cargando categorías...')
+        await loadCategoriasProducto()
+      }
       if (productos.length === 0) {
         console.log('Cargando productos...')
         await loadProductos()
@@ -500,6 +667,13 @@ export default function VentasPage() {
         console.log('Cargando repartidores...')
         await loadRepartidores()
       }
+      if (rutas.length === 0) {
+        console.log('Cargando rutas...')
+        await loadRutas()
+      }
+      // Resetear cliente buscado
+      setClienteBuscado(null)
+      console.log('Categorías disponibles:', categoriasProducto.length)
       console.log('Productos disponibles:', productos.length)
     }
     setDialogoAbierto(true)
@@ -524,14 +698,34 @@ export default function VentasPage() {
       cantidad: 1,
       categoriaFiltro: ''
     })
+    setCalculoPipas({
+      tipoCalculo: 'ninguno',
+      cantidadLitros: 0,
+      precioPorLitro: preciosBase.precioPorLitro || 18.50,
+      totalPorLitros: 0,
+      capacidadTanque: 0,
+      porcentajeInicial: 0,
+      porcentajeFinal: 100,
+      litrosALlenar: 0,
+      totalPorPorcentajes: 0,
+      cantidadDinero: 0,
+      litrosPorDinero: 0
+    })
     setFormularioProducto({
       nombre: '',
-      categoria: 'gas_lp',
+      categoriaId: categoriasProducto.length > 0 ? categoriasProducto[0].id : '',
       precio: 0,
       unidad: '',
       descripcion: '',
+      cantidadKilos: undefined,
       activo: true
       // No incluir sedeId - los productos del catálogo son para todas las sedes
+    })
+    setFormularioCategoria({
+      nombre: '',
+      codigo: '',
+      descripcion: '',
+      activa: true
     })
   }
 
@@ -568,6 +762,60 @@ export default function VentasPage() {
     setFormularioPedido(prev => ({ ...prev, [campo]: valor }))
   }
 
+  const crearClienteRapido = async () => {
+    try {
+      if (!formularioClienteRapido.nombre || !formularioClienteRapido.apellidoPaterno || !formularioClienteRapido.calle) {
+        alert('Debe completar al menos nombre, apellido y dirección')
+        return
+      }
+
+      const clienteData: CreateClienteRequest = {
+        nombre: formularioClienteRapido.nombre,
+        apellidoPaterno: formularioClienteRapido.apellidoPaterno,
+        apellidoMaterno: formularioClienteRapido.apellidoMaterno || '',
+        email: '', // Email opcional
+        telefono: '', // Teléfono opcional
+        calle: formularioClienteRapido.calle,
+        numeroExterior: formularioClienteRapido.numeroExterior || 'S/N',
+        colonia: formularioClienteRapido.colonia || '',
+        municipio: '', // Valores por defecto
+        estado: '',
+        codigoPostal: '',
+        rutaId: formularioClienteRapido.rutaId || undefined,
+        estadoCliente: 'activo',
+        limiteCredito: 0,
+        saldoActual: 0,
+        pagosEspecialesAutorizados: false
+      }
+
+      const nuevoCliente = await clientesAPI.create(clienteData)
+      
+      // Recargar clientes
+      await loadClientes()
+      
+      // Seleccionar el nuevo cliente
+      setClienteBuscado(nuevoCliente)
+      setFormularioPedido(prev => ({ ...prev, clienteId: nuevoCliente.id }))
+      
+      // Cerrar modal y limpiar formulario
+      setMostrarCrearCliente(false)
+      setFormularioClienteRapido({
+        nombre: '',
+        apellidoPaterno: '',
+        apellidoMaterno: '',
+        calle: '',
+        numeroExterior: '',
+        colonia: '',
+        rutaId: ''
+      })
+      
+      alert('Cliente creado exitosamente')
+    } catch (err: any) {
+      alert('Error al crear cliente: ' + (err.message || 'Error desconocido'))
+      console.error('Error creating cliente:', err)
+    }
+  }
+
   const crearPedido = async () => {
     try {
       if (!formularioPedido.clienteId) {
@@ -581,6 +829,33 @@ export default function VentasPage() {
       }
 
       const ahora = new Date()
+      
+      // Preparar el objeto de cálculo para guardar en JSON
+      let calculoPipasData: any = undefined
+      
+      if (formularioPedido.tipoServicio === 'pipas' && calculoPipas.tipoCalculo !== 'ninguno') {
+        calculoPipasData = {
+          tipoCalculo: calculoPipas.tipoCalculo
+        }
+        
+        if (calculoPipas.tipoCalculo === 'litros') {
+          calculoPipasData.cantidadLitros = calculoPipas.cantidadLitros
+          calculoPipasData.precioPorLitro = calculoPipas.precioPorLitro
+          calculoPipasData.totalPorLitros = calculoPipas.totalPorLitros
+        } else if (calculoPipas.tipoCalculo === 'porcentajes') {
+          calculoPipasData.capacidadTanque = calculoPipas.capacidadTanque
+          calculoPipasData.porcentajeInicial = calculoPipas.porcentajeInicial
+          calculoPipasData.porcentajeFinal = calculoPipas.porcentajeFinal
+          calculoPipasData.litrosALlenar = calculoPipas.litrosALlenar
+          calculoPipasData.precioPorLitro = calculoPipas.precioPorLitro
+          calculoPipasData.totalPorPorcentajes = calculoPipas.totalPorPorcentajes
+        } else if (calculoPipas.tipoCalculo === 'dinero') {
+          calculoPipasData.cantidadDinero = calculoPipas.cantidadDinero
+          calculoPipasData.precioPorLitro = calculoPipas.precioPorLitro
+          calculoPipasData.litrosPorDinero = calculoPipas.litrosPorDinero
+        }
+      }
+      
       const data: CreatePedidoRequest = {
         clienteId: formularioPedido.clienteId,
         tipoServicio: formularioPedido.tipoServicio,
@@ -588,6 +863,7 @@ export default function VentasPage() {
         fechaPedido: ahora.toISOString().split('T')[0],
         repartidorId: formularioPedido.repartidorId || undefined,
         observaciones: formularioPedido.observaciones || undefined,
+        calculoPipas: calculoPipasData,
         sedeId: sedeId || undefined, // Incluir la sede del usuario
         productos: formularioPedido.productos.map(p => ({
           productoId: p.productoId,
@@ -610,18 +886,42 @@ export default function VentasPage() {
 
   const guardarProducto = async () => {
     try {
-      // Normalizar categoría: convertir guiones a guiones bajos para el backend
+      // Validar que se haya seleccionado una categoría
+      if (!formularioProducto.categoriaId) {
+        alert('Por favor seleccione una categoría para el producto.')
+        return
+      }
+
+      // Validar que no se intente crear un nuevo producto de GAS LP (solo debe existir uno)
+      const categoriaSeleccionada = categoriasProducto.find(c => c.id === formularioProducto.categoriaId)
+      if (!productoSeleccionado && categoriaSeleccionada && (categoriaSeleccionada.codigo === 'gas_lp' || categoriaSeleccionada.codigo === 'gas-lp')) {
+        const productoGasLPExistente = productos.find(
+          p => p.categoriaId === formularioProducto.categoriaId && p.id === 'b9d63c0e-22b5-4022-a359-72657bc127a4'
+        )
+        if (productoGasLPExistente) {
+          alert('Ya existe un producto de la categoría GAS LP. Solo se permite un producto de esta categoría.')
+          return
+        }
+      }
+
+      // No permitir editar el producto específico de GAS LP desde el diálogo
+      if (productoSeleccionado && productoSeleccionado.id === 'b9d63c0e-22b5-4022-a359-72657bc127a4') {
+        alert('Este producto no se puede editar manualmente. Use la sección "Actualización de Precios" para modificar su precio.')
+        return
+      }
+
       // Asegurar que el precio sea un número
       // Los productos del catálogo NO tienen sede asignada (son para todas las sedes)
       const datosProducto: CreateProductoRequest = {
         nombre: formularioProducto.nombre,
-        categoria: formularioProducto.categoria.replace(/-/g, '_') as any,
+        categoriaId: formularioProducto.categoriaId,
         precio:
           typeof formularioProducto.precio === 'string'
             ? parseFloat(formularioProducto.precio.replace(/[^0-9.]/g, '')) || 0
             : formularioProducto.precio,
         unidad: formularioProducto.unidad,
         descripcion: formularioProducto.descripcion || undefined,
+        cantidadKilos: formularioProducto.cantidadKilos,
         activo: formularioProducto.activo !== undefined ? formularioProducto.activo : true
         // No incluir sedeId - los productos son para todas las sedes
       }
@@ -646,13 +946,15 @@ export default function VentasPage() {
       const descuentoExistente = descuentosRepartidor.find(d => d.repartidorId === formularioDescuento.repartidorId)
       if (descuentoExistente) {
         await descuentosRepartidorAPI.update(descuentoExistente.id, {
-          descuentoAutorizado: formularioDescuento.descuentoAutorizado
+          descuentoAutorizado: formularioDescuento.descuentoAutorizado,
+          descuentoPorLitro: formularioDescuento.descuentoPorLitro
         })
         alert('Descuento actualizado exitosamente')
       } else {
         await descuentosRepartidorAPI.create({
           repartidorId: formularioDescuento.repartidorId,
           descuentoAutorizado: formularioDescuento.descuentoAutorizado,
+          descuentoPorLitro: formularioDescuento.descuentoPorLitro,
           activo: true
         })
         alert('Descuento creado exitosamente')
@@ -662,6 +964,129 @@ export default function VentasPage() {
     } catch (err: any) {
       alert('Error al guardar descuento: ' + (err.message || 'Error desconocido'))
       console.error('Error saving descuento:', err)
+    }
+  }
+
+  const actualizarPrecios = async () => {
+    try {
+      setActualizandoPrecios(true)
+      setError(null)
+
+      // Actualizar la configuración única en la base de datos
+      await configuracionesAPI.update({
+        precioPorLitroGasLP: preciosBase.precioPorLitro,
+        precioPorKG: preciosBase.precioPorKG
+      })
+
+      // Actualizar el producto específico de GAS LP
+      const productoGasLPId = 'b9d63c0e-22b5-4022-a359-72657bc127a4'
+      const productoGasLP = productos.find(p => p.id === productoGasLPId)
+      
+      if (productoGasLP) {
+        await productosAPI.update(productoGasLPId, {
+          nombre: productoGasLP.nombre,
+          categoriaId: productoGasLP.categoriaId,
+          precio: preciosBase.precioPorLitro,
+          unidad: productoGasLP.unidad,
+          descripcion: productoGasLP.descripcion,
+          activo: productoGasLP.activo
+        })
+      }
+
+      // Actualizar todos los productos de cilindros que tengan cantidadKilos definida
+      const productosCilindros = productos.filter(
+        p => (p.categoria?.codigo === 'cilindros' || p.categoriaId && categoriasProducto.find(c => c.id === p.categoriaId)?.codigo === 'cilindros') && p.cantidadKilos && p.cantidadKilos > 0
+      )
+      
+      for (const producto of productosCilindros) {
+        const nuevoPrecio = preciosBase.precioPorKG * producto.cantidadKilos!
+        await productosAPI.update(producto.id, {
+          nombre: producto.nombre,
+          categoriaId: producto.categoriaId,
+          precio: nuevoPrecio,
+          unidad: producto.unidad,
+          descripcion: producto.descripcion,
+          cantidadKilos: producto.cantidadKilos,
+          activo: producto.activo
+        })
+      }
+
+      // Recargar productos para reflejar los cambios
+      await loadProductos()
+
+      setSuccessMessage('Configuraciones de precios actualizadas exitosamente')
+      setTimeout(() => setSuccessMessage(null), 5000)
+    } catch (err: any) {
+      const errorMsg = 'Error al actualizar configuraciones: ' + (err.message || 'Error desconocido')
+      setError(errorMsg)
+      console.error('Error updating configuraciones:', err)
+      alert(errorMsg)
+    } finally {
+      setActualizandoPrecios(false)
+    }
+  }
+
+  const eliminarDescuento = async () => {
+    if (!descuentoAEliminar) return
+
+    try {
+      setEliminando(true)
+      setError(null)
+      await descuentosRepartidorAPI.delete(descuentoAEliminar.id)
+      setDialogoEliminar(false)
+      setDescuentoAEliminar(null)
+      await loadDescuentos()
+      alert('Descuento eliminado exitosamente')
+    } catch (err: any) {
+      setError('Error al eliminar descuento: ' + (err.message || 'Error desconocido'))
+      console.error('Error deleting descuento:', err)
+    } finally {
+      setEliminando(false)
+    }
+  }
+
+  const loadCategoriasProducto = async () => {
+    try {
+      const data = await categoriasProductoAPI.getAll()
+      setCategoriasProducto(data)
+    } catch (err: any) {
+      console.error('Error loading categorias:', err)
+    }
+  }
+
+  const guardarCategoria = async () => {
+    try {
+      if (categoriaSeleccionada) {
+        await categoriasProductoAPI.update(categoriaSeleccionada.id, formularioCategoria)
+        alert('Categoría actualizada exitosamente')
+      } else {
+        await categoriasProductoAPI.create(formularioCategoria)
+        alert('Categoría creada exitosamente')
+      }
+      cerrarDialogo()
+      loadCategoriasProducto()
+    } catch (err: any) {
+      alert('Error al guardar categoría: ' + (err.message || 'Error desconocido'))
+      console.error('Error saving categoria:', err)
+    }
+  }
+
+  const eliminarCategoria = async () => {
+    if (!categoriaSeleccionada) return
+
+    try {
+      setEliminando(true)
+      setError(null)
+      await categoriasProductoAPI.delete(categoriaSeleccionada.id)
+      setDialogoEliminar(false)
+      setCategoriaSeleccionada(null)
+      await loadCategoriasProducto()
+      alert('Categoría eliminada exitosamente')
+    } catch (err: any) {
+      setError('Error al eliminar categoría: ' + (err.message || 'Error desconocido'))
+      console.error('Error deleting categoria:', err)
+    } finally {
+      setEliminando(false)
     }
   }
 
@@ -811,6 +1236,13 @@ export default function VentasPage() {
             startIcon={<TrendingUpIcon />}
           >
             Análisis de Clientes
+          </Button>
+          <Button
+            variant={vistaActual === 'categorias' ? 'contained' : 'outlined'}
+            onClick={() => setVistaActual('categorias')}
+            startIcon={<GasMeterIcon />}
+          >
+            Categorías
           </Button>
         </Box>
       </Box>
@@ -1111,6 +1543,16 @@ export default function VentasPage() {
       {/* Gestión de Catálogo, Precios y Descuentos */}
       {vistaActual === 'catalogo' && (
         <Box>
+          {error && (
+            <Alert severity='error' sx={{ mb: 2 }} onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
+          {successMessage && (
+            <Alert severity='success' sx={{ mb: 2 }} onClose={() => setSuccessMessage(null)}>
+              {successMessage}
+            </Alert>
+          )}
           <Grid container spacing={3}>
             {/* Catálogo de Productos */}
             <Grid item xs={12} md={8}>
@@ -1127,10 +1569,11 @@ export default function VentasPage() {
                         setProductoSeleccionado(null)
                         setFormularioProducto({
                           nombre: '',
-                          categoria: 'gas_lp',
+                          categoriaId: categoriasProducto.length > 0 ? categoriasProducto[0].id : '',
                           precio: 0,
                           unidad: '',
                           descripcion: '',
+                          cantidadKilos: undefined,
                           activo: true
                           // No incluir sedeId - los productos del catálogo son para todas las sedes
                         })
@@ -1158,7 +1601,11 @@ export default function VentasPage() {
                         </TableHead>
                         <TableBody>
                           {productos
-                            .filter(p => p.categoria === 'gas_lp' || p.categoria === 'gas-lp')
+                            .filter(p => {
+                              const categoriaCodigo = p.categoria?.codigo || categoriasProducto.find(c => c.id === p.categoriaId)?.codigo
+                              return (categoriaCodigo === 'gas_lp' || categoriaCodigo === 'gas-lp') && p.id === 'b9d63c0e-22b5-4022-a359-72657bc127a4'
+                            })
+                            .slice(0, 1) // Solo mostrar el primer producto (el único permitido)
                             .map(producto => (
                               <TableRow key={producto.id}>
                                 <TableCell>
@@ -1174,11 +1621,7 @@ export default function VentasPage() {
                                 </TableCell>
                                 <TableCell>{producto.unidad}</TableCell>
                                 <TableCell align='center'>
-                                  <Tooltip title='Editar producto'>
-                                    <IconButton size='small' onClick={() => abrirDialogo('producto', producto)}>
-                                      <EditIcon />
-                                    </IconButton>
-                                  </Tooltip>
+                                  {/* No mostrar botón de editar para el producto de GAS LP */}
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -1204,7 +1647,10 @@ export default function VentasPage() {
                         </TableHead>
                         <TableBody>
                           {productos
-                            .filter(p => p.categoria === 'cilindros')
+                            .filter(p => {
+                              const categoriaCodigo = p.categoria?.codigo || categoriasProducto.find(c => c.id === p.categoriaId)?.codigo
+                              return categoriaCodigo === 'cilindros'
+                            })
                             .map(producto => (
                               <TableRow key={producto.id}>
                                 <TableCell>
@@ -1250,7 +1696,10 @@ export default function VentasPage() {
                         </TableHead>
                         <TableBody>
                           {productos
-                            .filter(p => p.categoria === 'tanques_nuevos' || p.categoria === 'tanques-nuevos')
+                            .filter(p => {
+                              const categoriaCodigo = p.categoria?.codigo || categoriasProducto.find(c => c.id === p.categoriaId)?.codigo
+                              return categoriaCodigo === 'tanques_nuevos' || categoriaCodigo === 'tanques-nuevos'
+                            })
                             .map(producto => (
                               <TableRow key={producto.id}>
                                 <TableCell>
@@ -1295,9 +1744,10 @@ export default function VentasPage() {
                       fullWidth
                       label='Precio por Litro Gas LP'
                       type='number'
-                      defaultValue='18.50'
+                      value={preciosBase.precioPorLitro}
+                      onChange={(e) => setPreciosBase(prev => ({ ...prev, precioPorLitro: parseFloat(e.target.value) || 0 }))}
                       InputProps={{
-                        startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>
+                        startAdornment: <InputAdornment position="start">$</InputAdornment>
                       }}
                     />
                   </Box>
@@ -1307,9 +1757,10 @@ export default function VentasPage() {
                       fullWidth
                       label='Precio por KG'
                       type='number'
-                      defaultValue='18.50'
+                      value={preciosBase.precioPorKG}
+                      onChange={(e) => setPreciosBase(prev => ({ ...prev, precioPorKG: parseFloat(e.target.value) || 0 }))}
                       InputProps={{
-                        startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>
+                        startAdornment: <InputAdornment position="start">$</InputAdornment>
                       }}
                     />
                     <Typography variant='caption' color='text.secondary'>
@@ -1317,8 +1768,14 @@ export default function VentasPage() {
                     </Typography>
                   </Box>
 
-                  <Button variant='contained' fullWidth startIcon={<EditIcon />}>
-                    Actualizar Precios
+                  <Button 
+                    variant='contained' 
+                    fullWidth 
+                    startIcon={<EditIcon />}
+                    onClick={actualizarPrecios}
+                    disabled={actualizandoPrecios}
+                  >
+                    {actualizandoPrecios ? 'Actualizando...' : 'Actualizar Precios'}
                   </Button>
                 </CardContent>
               </Card>
@@ -1326,49 +1783,91 @@ export default function VentasPage() {
               {/* Gestión de Descuentos */}
               <Card sx={{ mt: 3 }}>
                 <CardContent>
-                  <Typography variant='h6' gutterBottom>
-                    Gestión de Descuentos por Repartidor
-                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant='h6' gutterBottom>
+                      Gestión de Descuentos por Repartidor
+                    </Typography>
+                    <Button
+                      variant='outlined'
+                      size='small'
+                      startIcon={<AddIcon />}
+                      onClick={() => abrirDialogo('descuentos')}
+                    >
+                      Agregar Descuento
+                    </Button>
+                  </Box>
 
                   <TableContainer component={Paper} variant='outlined'>
                     <Table size='small'>
                       <TableHead>
                         <TableRow>
                           <TableCell>Repartidor</TableCell>
-                          <TableCell align='right'>Descuento</TableCell>
+                          <TableCell align='right'>Descuento (%)</TableCell>
+                          <TableCell align='right'>Descuento por Litro</TableCell>
                           <TableCell align='center'>Acciones</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {repartidores.map(repartidor => {
-                          const descuento = descuentosRepartidor.find(d => d.repartidorId === repartidor.id)
-                          return (
-                            <TableRow key={repartidor.id}>
-                              <TableCell>
-                                <Typography variant='subtitle2'>
-                                  {repartidor.nombres} {repartidor.apellidoPaterno}
-                                </Typography>
-                                <Chip
-                                  label={repartidor.tipoRepartidor || 'N/A'}
-                                  size='small'
-                                  color={repartidor.tipoRepartidor === 'pipas' ? 'primary' : 'secondary'}
-                                />
-                              </TableCell>
-                              <TableCell align='right'>
-                                <Typography variant='h6' color='success.main'>
-                                  ${descuento?.descuentoAutorizado || 0}
-                                </Typography>
-                              </TableCell>
-                              <TableCell align='center'>
-                                <Tooltip title='Gestionar descuentos'>
-                                  <IconButton size='small' onClick={() => abrirDialogo('descuentos', repartidor)}>
-                                    <EditIcon />
-                                  </IconButton>
-                                </Tooltip>
-                              </TableCell>
-                            </TableRow>
-                          )
-                        })}
+                        {repartidores.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} align='center'>
+                              <Typography variant='body2' color='text.secondary' sx={{ py: 2 }}>
+                                No hay repartidores disponibles
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          repartidores.map(repartidor => {
+                            const descuento = descuentosRepartidor.find(d => d.repartidorId === repartidor.id)
+                            return (
+                              <TableRow key={repartidor.id}>
+                                <TableCell>
+                                  <Typography variant='subtitle2'>
+                                    {repartidor.nombres} {repartidor.apellidoPaterno}
+                                  </Typography>
+                                  <Chip
+                                    label={repartidor.tipoRepartidor || 'N/A'}
+                                    size='small'
+                                    color={repartidor.tipoRepartidor === 'pipas' ? 'primary' : 'secondary'}
+                                  />
+                                </TableCell>
+                                <TableCell align='right'>
+                                  <Typography variant='h6' color='success.main'>
+                                    {descuento?.descuentoAutorizado || 0}%
+                                  </Typography>
+                                </TableCell>
+                                <TableCell align='right'>
+                                  <Typography variant='h6' color='info.main'>
+                                    ${descuento?.descuentoPorLitro || 0}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell align='center'>
+                                  <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                                    <Tooltip title='Editar descuento'>
+                                      <IconButton size='small' onClick={() => abrirDialogo('descuentos', repartidor)}>
+                                        <EditIcon />
+                                      </IconButton>
+                                    </Tooltip>
+                                    {descuento && (
+                                      <Tooltip title='Eliminar descuento'>
+                                        <IconButton 
+                                          size='small' 
+                                          color='error'
+                                          onClick={() => {
+                                            setDescuentoAEliminar(descuento)
+                                            setDialogoEliminar(true)
+                                          }}
+                                        >
+                                          <DeleteIcon />
+                                        </IconButton>
+                                      </Tooltip>
+                                    )}
+                                  </Box>
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })
+                        )}
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -2016,13 +2515,48 @@ export default function VentasPage() {
               <FormControl fullWidth required>
                 <InputLabel>Categoría</InputLabel>
                 <Select
-                  value={formularioProducto.categoria}
-                  onChange={e => setFormularioProducto(prev => ({ ...prev, categoria: e.target.value as any }))}
+                  value={formularioProducto.categoriaId}
+                  onChange={e => {
+                    const nuevaCategoriaId = e.target.value as string
+                    const categoriaSeleccionada = categoriasProducto.find(c => c.id === nuevaCategoriaId)
+                    setFormularioProducto(prev => {
+                      const nuevo = { ...prev, categoriaId: nuevaCategoriaId }
+                      // Si cambia a cilindros y hay cantidadKilos, calcular precio automáticamente
+                      if (categoriaSeleccionada && (categoriaSeleccionada.codigo === 'cilindros') && prev.cantidadKilos) {
+                        nuevo.precio = preciosBase.precioPorKG * prev.cantidadKilos
+                      }
+                      // Si cambia de cilindros a otra categoría, limpiar cantidadKilos
+                      const categoriaAnterior = categoriasProducto.find(c => c.id === prev.categoriaId)
+                      if (categoriaAnterior && categoriaAnterior.codigo === 'cilindros' && categoriaSeleccionada && categoriaSeleccionada.codigo !== 'cilindros') {
+                        nuevo.cantidadKilos = undefined
+                      }
+                      return nuevo
+                    })
+                  }}
                   label='Categoría'
+                  disabled={productoSeleccionado?.id === 'b9d63c0e-22b5-4022-a359-72657bc127a4'}
                 >
-                  <MenuItem value='gas_lp'>Gas LP</MenuItem>
-                  <MenuItem value='cilindros'>Cilindros</MenuItem>
-                  <MenuItem value='tanques_nuevos'>Tanques Nuevos</MenuItem>
+                  {categoriasProducto.length === 0 ? (
+                    <MenuItem disabled>Cargando categorías...</MenuItem>
+                  ) : (
+                    categoriasProducto
+                      .filter(c => c.activa)
+                      .map(categoria => {
+                        const productoGasLPExistente = productos.find(
+                          p => p.categoriaId === categoria.id && p.id === 'b9d63c0e-22b5-4022-a359-72657bc127a4'
+                        )
+                        const isGasLP = categoria.codigo === 'gas_lp' || categoria.codigo === 'gas-lp'
+                        return (
+                          <MenuItem
+                            key={categoria.id}
+                            value={categoria.id}
+                            disabled={!productoSeleccionado && isGasLP && !!productoGasLPExistente}
+                          >
+                            {categoria.nombre}
+                          </MenuItem>
+                        )
+                      })
+                  )}
                 </Select>
               </FormControl>
             </Grid>
@@ -2036,7 +2570,36 @@ export default function VentasPage() {
                 placeholder='litro, recarga, pieza, etc.'
               />
             </Grid>
-            <Grid item xs={12}>
+            {(() => {
+              const categoriaSeleccionada = categoriasProducto.find(c => c.id === formularioProducto.categoriaId)
+              return categoriaSeleccionada && categoriaSeleccionada.codigo === 'cilindros'
+            })() && (
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label='Cantidad de Kilos'
+                  type='number'
+                  value={formularioProducto.cantidadKilos || ''}
+                  onChange={e => {
+                    const cantidadKilos = parseFloat(e.target.value) || 0
+                    setFormularioProducto(prev => ({
+                      ...prev,
+                      cantidadKilos: cantidadKilos > 0 ? cantidadKilos : undefined,
+                      precio: cantidadKilos > 0 ? preciosBase.precioPorKG * cantidadKilos : prev.precio
+                    }))
+                  }}
+                  required
+                  InputProps={{
+                    endAdornment: <Typography sx={{ ml: 1 }}>KG</Typography>
+                  }}
+                  helperText={`Precio calculado: $${((formularioProducto.cantidadKilos || 0) * preciosBase.precioPorKG).toFixed(2)}`}
+                />
+              </Grid>
+            )}
+            <Grid item xs={12} sm={(() => {
+              const categoriaSeleccionada = categoriasProducto.find(c => c.id === formularioProducto.categoriaId)
+              return categoriaSeleccionada && categoriaSeleccionada.codigo === 'cilindros'
+            })() ? 6 : 12}>
               <TextField
                 fullWidth
                 label='Precio'
@@ -2044,9 +2607,17 @@ export default function VentasPage() {
                 value={formularioProducto.precio}
                 onChange={e => setFormularioProducto(prev => ({ ...prev, precio: parseFloat(e.target.value) || 0 }))}
                 required
+                disabled={(() => {
+                  const categoriaSeleccionada = categoriasProducto.find(c => c.id === formularioProducto.categoriaId)
+                  return categoriaSeleccionada && categoriaSeleccionada.codigo === 'cilindros' && formularioProducto.cantidadKilos !== undefined && formularioProducto.cantidadKilos > 0
+                })()}
                 InputProps={{
                   startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>
                 }}
+                helperText={(() => {
+                  const categoriaSeleccionada = categoriasProducto.find(c => c.id === formularioProducto.categoriaId)
+                  return categoriaSeleccionada && categoriaSeleccionada.codigo === 'cilindros' && formularioProducto.cantidadKilos ? 'Calculado automáticamente' : ''
+                })()}
               />
             </Grid>
             <Grid item xs={12}>
@@ -2085,45 +2656,115 @@ export default function VentasPage() {
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <EditIcon />
-            Gestionar Descuento por Repartidor
+            {repartidorSeleccionado ? 'Editar Descuento por Repartidor' : 'Agregar Descuento por Repartidor'}
           </Box>
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label='Repartidor'
-                value={
-                  repartidorSeleccionado
-                    ? `${repartidorSeleccionado.nombres} ${repartidorSeleccionado.apellidoPaterno}`
-                    : ''
-                }
-                disabled
-              />
+              <FormControl fullWidth required>
+                <InputLabel>Repartidor</InputLabel>
+                <Select
+                  value={formularioDescuento.repartidorId}
+                  onChange={(e) => setFormularioDescuento(prev => ({ ...prev, repartidorId: e.target.value }))}
+                  label='Repartidor'
+                  disabled={!!repartidorSeleccionado}
+                >
+                  {repartidores.length === 0 ? (
+                    <MenuItem disabled>No hay repartidores disponibles. Cargando...</MenuItem>
+                  ) : (
+                    repartidores.map(repartidor => {
+                      const descuentoExistente = descuentosRepartidor.find(d => d.repartidorId === repartidor.id)
+                      return (
+                        <MenuItem key={repartidor.id} value={repartidor.id}>
+                          {repartidor.nombres} {repartidor.apellidoPaterno} 
+                          {descuentoExistente && (
+                            ` (${descuentoExistente.descuentoAutorizado}%${descuentoExistente.descuentoPorLitro ? `, $${descuentoExistente.descuentoPorLitro}/L` : ''})`
+                          )}
+                        </MenuItem>
+                      )
+                    })
+                  )}
+                </Select>
+              </FormControl>
             </Grid>
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label='Descuento Autorizado ($)'
+                label='Descuento Autorizado (%)'
                 type='number'
                 value={formularioDescuento.descuentoAutorizado}
                 onChange={e =>
                   setFormularioDescuento(prev => ({ ...prev, descuentoAutorizado: parseFloat(e.target.value) || 0 }))
                 }
                 required
+                inputProps={{ min: 0, max: 100, step: 0.01 }}
                 InputProps={{
-                  startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>
+                  startAdornment: <InputAdornment position="start">%</InputAdornment>
                 }}
-                helperText='Monto máximo de descuento que puede aplicar este repartidor'
+                helperText='Porcentaje máximo de descuento que puede aplicar este repartidor (0-100%)'
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label='Descuento por Litro ($)'
+                type='number'
+                value={formularioDescuento.descuentoPorLitro}
+                onChange={e =>
+                  setFormularioDescuento(prev => ({ ...prev, descuentoPorLitro: parseFloat(e.target.value) || 0 }))
+                }
+                inputProps={{ min: 0, step: 0.01 }}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">$</InputAdornment>
+                }}
+                helperText='Descuento fijo por litro que puede aplicar este repartidor'
               />
             </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
           <Button onClick={cerrarDialogo}>Cancelar</Button>
-          <Button onClick={guardarDescuento} variant='contained' startIcon={<EditIcon />}>
-            Guardar Descuento
+          <Button 
+            onClick={guardarDescuento} 
+            variant='contained' 
+            startIcon={<EditIcon />}
+            disabled={!formularioDescuento.repartidorId}
+          >
+            {repartidorSeleccionado ? 'Actualizar Descuento' : 'Crear Descuento'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Diálogo de Confirmación para Eliminar Descuento */}
+      <Dialog open={dialogoEliminar && !!descuentoAEliminar} onClose={() => {
+        setDialogoEliminar(false)
+        setDescuentoAEliminar(null)
+      }}>
+        <DialogTitle>Confirmar Eliminación</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            ¿Está seguro de que desea eliminar el descuento del repartidor{' '}
+            <strong>
+              {repartidores.find(r => r.id === descuentoAEliminar?.repartidorId)?.nombres} {repartidores.find(r => r.id === descuentoAEliminar?.repartidorId)?.apellidoPaterno}
+            </strong>
+            ? Esta acción no se puede deshacer.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setDialogoEliminar(false)
+            setDescuentoAEliminar(null)
+          }} disabled={eliminando}>
+            Cancelar
+          </Button>
+          <Button 
+            onClick={eliminarDescuento} 
+            color="error" 
+            variant="contained" 
+            disabled={eliminando}
+          >
+            {eliminando ? 'Eliminando...' : 'Eliminar'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2291,15 +2932,15 @@ export default function VentasPage() {
                             const producto = item.producto
                             let nombreCategoria = ''
                             if (producto) {
-                              if (producto.categoria === 'gas_lp' || producto.categoria === 'gas-lp') {
+                              const categoriaCodigo = producto.categoria?.codigo || categoriasProducto.find(c => c.id === producto.categoriaId)?.codigo
+                              if (categoriaCodigo === 'gas_lp' || categoriaCodigo === 'gas-lp') {
                                 nombreCategoria = 'GAS LP'
-                              } else if (producto.categoria === 'cilindros') {
+                              } else if (categoriaCodigo === 'cilindros') {
                                 nombreCategoria = 'CILINDROS'
-                              } else if (
-                                producto.categoria === 'tanques_nuevos' ||
-                                producto.categoria === 'tanques-nuevos'
-                              ) {
+                              } else if (categoriaCodigo === 'tanques_nuevos' || categoriaCodigo === 'tanques-nuevos') {
                                 nombreCategoria = 'TANQUES NUEVOS'
+                              } else {
+                                nombreCategoria = producto.categoria?.nombre || 'OTROS'
                               }
                             }
 
@@ -2358,6 +2999,61 @@ export default function VentasPage() {
                     </Typography>
                   </Alert>
                 </Grid>
+              )}
+
+              {/* Información de Cálculo de Pipas */}
+              {pedidoSeleccionado.tipoServicio === 'pipas' && pedidoSeleccionado.calculoPipas && pedidoSeleccionado.calculoPipas.tipoCalculo !== 'ninguno' && (
+                <>
+                  <Grid item xs={12}>
+                    <Typography variant='subtitle1' fontWeight='bold' sx={{ mt: 2, mb: 1 }}>
+                      Información de Cálculo
+                    </Typography>
+                    <Divider sx={{ mb: 2 }} />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Paper variant='outlined' sx={{ p: 2, bgcolor: 'info.light', bgcolor: 'rgba(33, 150, 243, 0.1)' }}>
+                      {pedidoSeleccionado.calculoPipas.tipoCalculo === 'litros' && (
+                        <Box>
+                          <Typography variant='body2' fontWeight='bold' gutterBottom>
+                            Método: Por Cantidad de Litros
+                          </Typography>
+                          <Typography variant='body2'>Cantidad de Litros: {pedidoSeleccionado.calculoPipas.cantidadLitros?.toFixed(2) || 0}</Typography>
+                          <Typography variant='body2'>Precio por Litro: ${pedidoSeleccionado.calculoPipas.precioPorLitro?.toFixed(2) || 0}</Typography>
+                          <Typography variant='body2' fontWeight='bold' color='success.main'>
+                            Total: ${pedidoSeleccionado.calculoPipas.totalPorLitros?.toFixed(2) || 0}
+                          </Typography>
+                        </Box>
+                      )}
+                      {pedidoSeleccionado.calculoPipas.tipoCalculo === 'porcentajes' && (
+                        <Box>
+                          <Typography variant='body2' fontWeight='bold' gutterBottom>
+                            Método: Por Porcentajes de Llenado
+                          </Typography>
+                          <Typography variant='body2'>Capacidad del Tanque: {pedidoSeleccionado.calculoPipas.capacidadTanque?.toFixed(2) || 0} litros</Typography>
+                          <Typography variant='body2'>Porcentaje Inicial: {pedidoSeleccionado.calculoPipas.porcentajeInicial?.toFixed(2) || 0}%</Typography>
+                          <Typography variant='body2'>Porcentaje Final: {pedidoSeleccionado.calculoPipas.porcentajeFinal?.toFixed(2) || 0}%</Typography>
+                          <Typography variant='body2'>Litros a Llenar: {pedidoSeleccionado.calculoPipas.litrosALlenar?.toFixed(2) || 0}</Typography>
+                          <Typography variant='body2'>Precio por Litro: ${pedidoSeleccionado.calculoPipas.precioPorLitro?.toFixed(2) || 0}</Typography>
+                          <Typography variant='body2' fontWeight='bold' color='success.main'>
+                            Total: ${pedidoSeleccionado.calculoPipas.totalPorPorcentajes?.toFixed(2) || 0}
+                          </Typography>
+                        </Box>
+                      )}
+                      {pedidoSeleccionado.calculoPipas.tipoCalculo === 'dinero' && (
+                        <Box>
+                          <Typography variant='body2' fontWeight='bold' gutterBottom>
+                            Método: Por Cantidad de Dinero
+                          </Typography>
+                          <Typography variant='body2'>Cantidad: ${pedidoSeleccionado.calculoPipas.cantidadDinero?.toFixed(2) || 0}</Typography>
+                          <Typography variant='body2'>Precio por Litro: ${pedidoSeleccionado.calculoPipas.precioPorLitro?.toFixed(2) || 0}</Typography>
+                          <Typography variant='body2' fontWeight='bold' color='info.main'>
+                            Litros Calculados: {pedidoSeleccionado.calculoPipas.litrosPorDinero?.toFixed(2) || 0}
+                          </Typography>
+                        </Box>
+                      )}
+                    </Paper>
+                  </Grid>
+                </>
               )}
 
               {/* Observaciones */}
@@ -2439,20 +3135,70 @@ export default function VentasPage() {
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
-              <FormControl fullWidth required>
-                <InputLabel>Cliente</InputLabel>
-                <Select
-                  value={formularioPedido.clienteId}
-                  onChange={e => manejarCambioFormulario('clienteId', e.target.value)}
-                  label='Cliente'
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                <Autocomplete
+                  fullWidth
+                  options={clientes}
+                  value={clienteBuscado}
+                  onChange={(event, newValue) => {
+                    setClienteBuscado(newValue)
+                    manejarCambioFormulario('clienteId', newValue?.id || '')
+                  }}
+                  getOptionLabel={(option) => {
+                    const nombreCompleto = `${option.nombre} ${option.apellidoPaterno} ${option.apellidoMaterno || ''}`.trim()
+                    const direccion = `${option.calle} ${option.numeroExterior}, ${option.colonia}`.trim()
+                    return `${nombreCompleto} - ${direccion}`
+                  }}
+                  filterOptions={(options, { inputValue }) => {
+                    const searchTerm = inputValue.toLowerCase()
+                    return options.filter(option => {
+                      const nombreCompleto = `${option.nombre} ${option.apellidoPaterno} ${option.apellidoMaterno || ''}`.toLowerCase()
+                      const direccion = `${option.calle} ${option.numeroExterior} ${option.colonia}`.toLowerCase()
+                      return nombreCompleto.includes(searchTerm) || direccion.includes(searchTerm)
+                    })
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label='Cliente *'
+                      placeholder='Buscar por nombre o dirección...'
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: (
+                          <>
+                            <InputAdornment position='start'>
+                              <SearchIcon />
+                            </InputAdornment>
+                            {params.InputProps.startAdornment}
+                          </>
+                        )
+                      }}
+                    />
+                  )}
+                  renderOption={(props, option) => (
+                    <Box component='li' {...props}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                        <Typography variant='body2' fontWeight='bold'>
+                          {option.nombre} {option.apellidoPaterno} {option.apellidoMaterno || ''}
+                        </Typography>
+                        <Typography variant='caption' color='text.secondary'>
+                          <LocationOnIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.5 }} />
+                          {option.calle} {option.numeroExterior}, {option.colonia}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  )}
+                  noOptionsText='No se encontraron clientes'
+                />
+                <Button
+                  variant='outlined'
+                  startIcon={<AddIcon />}
+                  onClick={() => setMostrarCrearCliente(true)}
+                  sx={{ minWidth: 'auto', whiteSpace: 'nowrap' }}
                 >
-                  {clientes.map(cliente => (
-                    <MenuItem key={cliente.id} value={cliente.id}>
-                      {cliente.nombre} {cliente.apellidoPaterno} {cliente.apellidoMaterno}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                  Nuevo
+                </Button>
+              </Box>
             </Grid>
 
             <Grid item xs={12}>
@@ -2468,6 +3214,396 @@ export default function VentasPage() {
                 </Select>
               </FormControl>
             </Grid>
+
+            {/* Sección de cálculo para pipas */}
+            {formularioPedido.tipoServicio === 'pipas' && (
+              <>
+                <Grid item xs={12}>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant='subtitle1' sx={{ mb: 2, fontWeight: 'bold' }}>
+                    Método de Cálculo (Opcional)
+                  </Typography>
+                  <FormControl component="fieldset">
+                    <RadioGroup
+                      row
+                      value={calculoPipas.tipoCalculo}
+                      onChange={e => {
+                        setCalculoPipas(prev => ({ ...prev, tipoCalculo: e.target.value as any }))
+                      }}
+                    >
+                      <FormControlLabel value="ninguno" control={<Radio />} label="Sin especificar" />
+                      <FormControlLabel value="litros" control={<Radio />} label="Por Cantidad de Litros" />
+                      <FormControlLabel value="porcentajes" control={<Radio />} label="Por Porcentajes de Llenado" />
+                      <FormControlLabel value="dinero" control={<Radio />} label="Por Cantidad de Dinero" />
+                    </RadioGroup>
+                  </FormControl>
+                </Grid>
+
+                {/* Opción 1: Por Cantidad de Litros */}
+                {calculoPipas.tipoCalculo === 'litros' && (
+                  <>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        fullWidth
+                        label='Cantidad de Litros'
+                        type='number'
+                        value={calculoPipas.cantidadLitros || ''}
+                        onChange={e => {
+                          const cantidadLitros = parseFloat(e.target.value) || 0
+                          setCalculoPipas(prev => {
+                            const total = cantidadLitros * prev.precioPorLitro
+                            return {
+                              ...prev,
+                              cantidadLitros,
+                              totalPorLitros: total
+                            }
+                          })
+                        }}
+                        inputProps={{ min: 0, step: 0.1 }}
+                        required
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        fullWidth
+                        label='Precio por Litro ($)'
+                        type='number'
+                        value={calculoPipas.precioPorLitro || ''}
+                        onChange={e => {
+                          const precioPorLitro = parseFloat(e.target.value) || 0
+                          setCalculoPipas(prev => {
+                            const total = prev.cantidadLitros * precioPorLitro
+                            return {
+                              ...prev,
+                              precioPorLitro,
+                              totalPorLitros: total
+                            }
+                          })
+                        }}
+                        inputProps={{ min: 0, step: 0.01 }}
+                        required
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        fullWidth
+                        label='Total Calculado ($)'
+                        type='number'
+                        value={calculoPipas.totalPorLitros.toFixed(2)}
+                        disabled
+                        helperText='Total en dinero'
+                        sx={{
+                          '& .MuiInputBase-input': {
+                            fontWeight: 'bold',
+                            color: 'success.main'
+                          }
+                        }}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12}>
+                      <Button
+                        variant='outlined'
+                        onClick={() => {
+                          const productoGasLP = productos.find(
+                            p => {
+                              const categoriaCodigo = p.categoria?.codigo || categoriasProducto.find(c => c.id === p.categoriaId)?.codigo
+                              return (categoriaCodigo === 'gas_lp' || categoriaCodigo === 'gas-lp') && p.id === 'b9d63c0e-22b5-4022-a359-72657bc127a4'
+                            }
+                          )
+
+                          if (productoGasLP && calculoPipas.cantidadLitros > 0) {
+                            setFormularioPedido(prev => ({
+                              ...prev,
+                              productos: [
+                                ...prev.productos.filter(p => p.productoId !== productoGasLP.id),
+                                {
+                                  productoId: productoGasLP.id,
+                                  cantidad: Math.ceil(calculoPipas.cantidadLitros),
+                                  precio: calculoPipas.precioPorLitro,
+                                  nombre: productoGasLP.nombre
+                                }
+                              ]
+                            }))
+                            alert(`Producto agregado: ${Math.ceil(calculoPipas.cantidadLitros)} litros a $${calculoPipas.precioPorLitro.toFixed(2)} por litro`)
+                          } else {
+                            alert('No se encontró el producto de Gas LP o la cantidad de litros es 0')
+                          }
+                        }}
+                        disabled={calculoPipas.cantidadLitros <= 0}
+                      >
+                        Agregar al Pedido ({calculoPipas.cantidadLitros.toFixed(2)} litros)
+                      </Button>
+                    </Grid>
+                  </>
+                )}
+
+                {/* Opción 2: Por Porcentajes de Llenado */}
+                {calculoPipas.tipoCalculo === 'porcentajes' && (
+                  <>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        fullWidth
+                        label='Capacidad del Tanque (Litros)'
+                        type='number'
+                        value={calculoPipas.capacidadTanque || ''}
+                        onChange={e => {
+                          const capacidad = parseFloat(e.target.value) || 0
+                          setCalculoPipas(prev => {
+                            const litrosALlenar = capacidad * ((prev.porcentajeFinal - prev.porcentajeInicial) / 100)
+                            const total = litrosALlenar * prev.precioPorLitro
+                            return {
+                              ...prev,
+                              capacidadTanque: capacidad,
+                              litrosALlenar,
+                              totalPorPorcentajes: total
+                            }
+                          })
+                        }}
+                        inputProps={{ min: 0, step: 0.1 }}
+                        required
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        fullWidth
+                        label='Porcentaje Inicial (%)'
+                        type='number'
+                        value={calculoPipas.porcentajeInicial || ''}
+                        onChange={e => {
+                          const porcentajeInicial = parseFloat(e.target.value) || 0
+                          setCalculoPipas(prev => {
+                            const litrosALlenar = prev.capacidadTanque * ((prev.porcentajeFinal - porcentajeInicial) / 100)
+                            const total = litrosALlenar * prev.precioPorLitro
+                            return {
+                              ...prev,
+                              porcentajeInicial,
+                              litrosALlenar,
+                              totalPorPorcentajes: total
+                            }
+                          })
+                        }}
+                        inputProps={{ min: 0, max: 100, step: 0.1 }}
+                        required
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        fullWidth
+                        label='Porcentaje Final (%)'
+                        type='number'
+                        value={calculoPipas.porcentajeFinal || ''}
+                        onChange={e => {
+                          const porcentajeFinal = parseFloat(e.target.value) || 100
+                          setCalculoPipas(prev => {
+                            const litrosALlenar = prev.capacidadTanque * ((porcentajeFinal - prev.porcentajeInicial) / 100)
+                            const total = litrosALlenar * prev.precioPorLitro
+                            return {
+                              ...prev,
+                              porcentajeFinal,
+                              litrosALlenar,
+                              totalPorPorcentajes: total
+                            }
+                          })
+                        }}
+                        inputProps={{ min: 0, max: 100, step: 0.1 }}
+                        required
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        fullWidth
+                        label='Precio por Litro ($)'
+                        type='number'
+                        value={calculoPipas.precioPorLitro || ''}
+                        onChange={e => {
+                          const precioPorLitro = parseFloat(e.target.value) || 0
+                          setCalculoPipas(prev => {
+                            const total = prev.litrosALlenar * precioPorLitro
+                            return {
+                              ...prev,
+                              precioPorLitro,
+                              totalPorPorcentajes: total
+                            }
+                          })
+                        }}
+                        inputProps={{ min: 0, step: 0.01 }}
+                        required
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        fullWidth
+                        label='Litros a Llenar'
+                        type='number'
+                        value={calculoPipas.litrosALlenar.toFixed(2)}
+                        disabled
+                        helperText='Calculado automáticamente'
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        fullWidth
+                        label='Total Calculado ($)'
+                        type='number'
+                        value={calculoPipas.totalPorPorcentajes.toFixed(2)}
+                        disabled
+                        helperText='Total en dinero'
+                        sx={{
+                          '& .MuiInputBase-input': {
+                            fontWeight: 'bold',
+                            color: 'success.main'
+                          }
+                        }}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12}>
+                      <Button
+                        variant='outlined'
+                        onClick={() => {
+                          const productoGasLP = productos.find(
+                            p => {
+                              const categoriaCodigo = p.categoria?.codigo || categoriasProducto.find(c => c.id === p.categoriaId)?.codigo
+                              return (categoriaCodigo === 'gas_lp' || categoriaCodigo === 'gas-lp') && p.id === 'b9d63c0e-22b5-4022-a359-72657bc127a4'
+                            }
+                          )
+
+                          if (productoGasLP && calculoPipas.litrosALlenar > 0) {
+                            setFormularioPedido(prev => ({
+                              ...prev,
+                              productos: [
+                                ...prev.productos.filter(p => p.productoId !== productoGasLP.id),
+                                {
+                                  productoId: productoGasLP.id,
+                                  cantidad: Math.ceil(calculoPipas.litrosALlenar),
+                                  precio: calculoPipas.precioPorLitro,
+                                  nombre: productoGasLP.nombre
+                                }
+                              ]
+                            }))
+                            alert(`Producto agregado: ${Math.ceil(calculoPipas.litrosALlenar)} litros a $${calculoPipas.precioPorLitro.toFixed(2)} por litro`)
+                          } else {
+                            alert('No se encontró el producto de Gas LP o los litros a llenar son 0')
+                          }
+                        }}
+                        disabled={calculoPipas.litrosALlenar <= 0}
+                      >
+                        Agregar al Pedido ({calculoPipas.litrosALlenar.toFixed(2)} litros)
+                      </Button>
+                    </Grid>
+                  </>
+                )}
+
+                {/* Opción 3: Por Cantidad de Dinero */}
+                {calculoPipas.tipoCalculo === 'dinero' && (
+                  <>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        fullWidth
+                        label='Cantidad de Dinero ($)'
+                        type='number'
+                        value={calculoPipas.cantidadDinero || ''}
+                        onChange={e => {
+                          const cantidadDinero = parseFloat(e.target.value) || 0
+                          setCalculoPipas(prev => {
+                            const litros = cantidadDinero / prev.precioPorLitro
+                            return {
+                              ...prev,
+                              cantidadDinero,
+                              litrosPorDinero: litros
+                            }
+                          })
+                        }}
+                        inputProps={{ min: 0, step: 0.01 }}
+                        required
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        fullWidth
+                        label='Precio por Litro ($)'
+                        type='number'
+                        value={calculoPipas.precioPorLitro || ''}
+                        onChange={e => {
+                          const precioPorLitro = parseFloat(e.target.value) || 0
+                          setCalculoPipas(prev => {
+                            const litros = prev.cantidadDinero / precioPorLitro
+                            return {
+                              ...prev,
+                              precioPorLitro,
+                              litrosPorDinero: litros
+                            }
+                          })
+                        }}
+                        inputProps={{ min: 0, step: 0.01 }}
+                        required
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        fullWidth
+                        label='Litros Calculados'
+                        type='number'
+                        value={calculoPipas.litrosPorDinero.toFixed(2)}
+                        disabled
+                        helperText='Calculado automáticamente'
+                        sx={{
+                          '& .MuiInputBase-input': {
+                            fontWeight: 'bold',
+                            color: 'info.main'
+                          }
+                        }}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12}>
+                      <Button
+                        variant='outlined'
+                        onClick={() => {
+                          const productoGasLP = productos.find(
+                            p => {
+                              const categoriaCodigo = p.categoria?.codigo || categoriasProducto.find(c => c.id === p.categoriaId)?.codigo
+                              return (categoriaCodigo === 'gas_lp' || categoriaCodigo === 'gas-lp') && p.id === 'b9d63c0e-22b5-4022-a359-72657bc127a4'
+                            }
+                          )
+
+                          if (productoGasLP && calculoPipas.litrosPorDinero > 0) {
+                            setFormularioPedido(prev => ({
+                              ...prev,
+                              productos: [
+                                ...prev.productos.filter(p => p.productoId !== productoGasLP.id),
+                                {
+                                  productoId: productoGasLP.id,
+                                  cantidad: Math.ceil(calculoPipas.litrosPorDinero),
+                                  precio: calculoPipas.precioPorLitro,
+                                  nombre: productoGasLP.nombre
+                                }
+                              ]
+                            }))
+                            alert(`Producto agregado: ${Math.ceil(calculoPipas.litrosPorDinero)} litros a $${calculoPipas.precioPorLitro.toFixed(2)} por litro (Total: $${calculoPipas.cantidadDinero.toFixed(2)})`)
+                          } else {
+                            alert('No se encontró el producto de Gas LP o la cantidad de dinero es 0')
+                          }
+                        }}
+                        disabled={calculoPipas.litrosPorDinero <= 0}
+                      >
+                        Agregar al Pedido ({calculoPipas.litrosPorDinero.toFixed(2)} litros)
+                      </Button>
+                    </Grid>
+                  </>
+                )}
+              </>
+            )}
 
             <Grid item xs={12} sm={6}>
               <TextField
@@ -2512,9 +3648,13 @@ export default function VentasPage() {
                   label='Categoría del Catálogo'
                 >
                   <MenuItem value=''>Todas las categorías</MenuItem>
-                  <MenuItem value='gas_lp'>GAS LP</MenuItem>
-                  <MenuItem value='cilindros'>CILINDROS</MenuItem>
-                  <MenuItem value='tanques_nuevos'>TANQUES NUEVOS</MenuItem>
+                  {categoriasProducto
+                    .filter(c => c.activa)
+                    .map(categoria => (
+                      <MenuItem key={categoria.id} value={categoria.codigo}>
+                        {categoria.nombre}
+                      </MenuItem>
+                    ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -2535,13 +3675,8 @@ export default function VentasPage() {
                       .filter(p => {
                         // Filtrar por categoría del catálogo si está seleccionada
                         if (productoAgregar.categoriaFiltro) {
-                          if (productoAgregar.categoriaFiltro === 'gas_lp') {
-                            if (p.categoria !== 'gas_lp' && p.categoria !== 'gas-lp') return false
-                          } else if (productoAgregar.categoriaFiltro === 'cilindros') {
-                            if (p.categoria !== 'cilindros') return false
-                          } else if (productoAgregar.categoriaFiltro === 'tanques_nuevos') {
-                            if (p.categoria !== 'tanques_nuevos' && p.categoria !== 'tanques-nuevos') return false
-                          }
+                          const categoriaCodigo = p.categoria?.codigo || categoriasProducto.find(c => c.id === p.categoriaId)?.codigo
+                          if (categoriaCodigo !== productoAgregar.categoriaFiltro) return false
                         }
                         return p.activo
                       })
@@ -2552,12 +3687,15 @@ export default function VentasPage() {
                       .map(producto => {
                         // Obtener el nombre de la categoría para mostrar
                         let nombreCategoria = ''
-                        if (producto.categoria === 'gas_lp' || producto.categoria === 'gas-lp') {
+                        const categoriaCodigo = producto.categoria?.codigo || categoriasProducto.find(c => c.id === producto.categoriaId)?.codigo
+                        if (categoriaCodigo === 'gas_lp' || categoriaCodigo === 'gas-lp') {
                           nombreCategoria = 'GAS LP'
-                        } else if (producto.categoria === 'cilindros') {
+                        } else if (categoriaCodigo === 'cilindros') {
                           nombreCategoria = 'CILINDROS'
-                        } else if (producto.categoria === 'tanques_nuevos' || producto.categoria === 'tanques-nuevos') {
+                        } else if (categoriaCodigo === 'tanques_nuevos' || categoriaCodigo === 'tanques-nuevos') {
                           nombreCategoria = 'TANQUES NUEVOS'
+                        } else {
+                          nombreCategoria = producto.categoria?.nombre || 'OTROS'
                         }
 
                         return (
@@ -2761,6 +3899,206 @@ export default function VentasPage() {
         </DialogActions>
       </Dialog>
 
+      {/* Modal Crear Cliente Rápido */}
+      <Dialog open={mostrarCrearCliente} onClose={() => setMostrarCrearCliente(false)} maxWidth='sm' fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PersonIcon />
+            <Typography variant='h6'>Crear Cliente Rápido</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label='Nombre *'
+                value={formularioClienteRapido.nombre}
+                onChange={e => setFormularioClienteRapido(prev => ({ ...prev, nombre: e.target.value }))}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label='Apellido Paterno *'
+                value={formularioClienteRapido.apellidoPaterno}
+                onChange={e => setFormularioClienteRapido(prev => ({ ...prev, apellidoPaterno: e.target.value }))}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label='Apellido Materno'
+                value={formularioClienteRapido.apellidoMaterno}
+                onChange={e => setFormularioClienteRapido(prev => ({ ...prev, apellidoMaterno: e.target.value }))}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Ruta</InputLabel>
+                <Select
+                  value={formularioClienteRapido.rutaId}
+                  onChange={e => setFormularioClienteRapido(prev => ({ ...prev, rutaId: e.target.value }))}
+                  label='Ruta'
+                >
+                  <MenuItem value=''>Sin ruta</MenuItem>
+                  {rutas
+                    .filter(r => r.activa)
+                    .map(ruta => (
+                      <MenuItem key={ruta.id} value={ruta.id}>
+                        {ruta.nombre} ({ruta.codigo})
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <Divider sx={{ my: 1 }}>
+                <Typography variant='caption' color='text.secondary'>
+                  Dirección
+                </Typography>
+              </Divider>
+            </Grid>
+            <Grid item xs={12} sm={8}>
+              <TextField
+                fullWidth
+                label='Calle *'
+                value={formularioClienteRapido.calle}
+                onChange={e => setFormularioClienteRapido(prev => ({ ...prev, calle: e.target.value }))}
+                required
+                placeholder='Nombre de la calle'
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                label='Número Exterior'
+                value={formularioClienteRapido.numeroExterior}
+                onChange={e => setFormularioClienteRapido(prev => ({ ...prev, numeroExterior: e.target.value }))}
+                placeholder='S/N'
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label='Colonia'
+                value={formularioClienteRapido.colonia}
+                onChange={e => setFormularioClienteRapido(prev => ({ ...prev, colonia: e.target.value }))}
+                placeholder='Colonia o zona'
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMostrarCrearCliente(false)}>Cancelar</Button>
+          <Button onClick={crearClienteRapido} variant='contained' startIcon={<AddIcon />}>
+            Crear Cliente
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal Crear Cliente Rápido */}
+      <Dialog open={mostrarCrearCliente} onClose={() => setMostrarCrearCliente(false)} maxWidth='sm' fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PersonIcon />
+            <Typography variant='h6'>Crear Cliente Rápido</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label='Nombre *'
+                value={formularioClienteRapido.nombre}
+                onChange={e => setFormularioClienteRapido(prev => ({ ...prev, nombre: e.target.value }))}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label='Apellido Paterno *'
+                value={formularioClienteRapido.apellidoPaterno}
+                onChange={e => setFormularioClienteRapido(prev => ({ ...prev, apellidoPaterno: e.target.value }))}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label='Apellido Materno'
+                value={formularioClienteRapido.apellidoMaterno}
+                onChange={e => setFormularioClienteRapido(prev => ({ ...prev, apellidoMaterno: e.target.value }))}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Ruta</InputLabel>
+                <Select
+                  value={formularioClienteRapido.rutaId}
+                  onChange={e => setFormularioClienteRapido(prev => ({ ...prev, rutaId: e.target.value }))}
+                  label='Ruta'
+                >
+                  <MenuItem value=''>Sin ruta</MenuItem>
+                  {rutas
+                    .filter(r => r.activa)
+                    .map(ruta => (
+                      <MenuItem key={ruta.id} value={ruta.id}>
+                        {ruta.nombre} ({ruta.codigo})
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <Divider sx={{ my: 1 }}>
+                <Typography variant='caption' color='text.secondary'>
+                  Dirección
+                </Typography>
+              </Divider>
+            </Grid>
+            <Grid item xs={12} sm={8}>
+              <TextField
+                fullWidth
+                label='Calle *'
+                value={formularioClienteRapido.calle}
+                onChange={e => setFormularioClienteRapido(prev => ({ ...prev, calle: e.target.value }))}
+                required
+                placeholder='Nombre de la calle'
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                label='Número Exterior'
+                value={formularioClienteRapido.numeroExterior}
+                onChange={e => setFormularioClienteRapido(prev => ({ ...prev, numeroExterior: e.target.value }))}
+                placeholder='S/N'
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label='Colonia'
+                value={formularioClienteRapido.colonia}
+                onChange={e => setFormularioClienteRapido(prev => ({ ...prev, colonia: e.target.value }))}
+                placeholder='Colonia o zona'
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMostrarCrearCliente(false)}>Cancelar</Button>
+          <Button onClick={crearClienteRapido} variant='contained' startIcon={<AddIcon />}>
+            Crear Cliente
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Diálogo de Confirmación para Eliminar Pedido */}
       <Dialog open={dialogoEliminar} onClose={cerrarDialogoEliminar}>
         <DialogTitle>Confirmar Eliminación</DialogTitle>
@@ -2782,6 +4120,204 @@ export default function VentasPage() {
             color="error" 
             variant="contained" 
             disabled={eliminando}
+          >
+            {eliminando ? 'Eliminando...' : 'Eliminar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Vista de Categorías de Productos */}
+      {vistaActual === 'categorias' && (
+        <Box>
+          <Typography variant='h6' gutterBottom>
+            Gestión de Categorías de Productos
+          </Typography>
+
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant='h6' gutterBottom>
+                  Categorías
+                </Typography>
+                <Button
+                  variant='contained'
+                  startIcon={<AddIcon />}
+                  onClick={() => abrirDialogo('categoria')}
+                >
+                  Nueva Categoría
+                </Button>
+              </Box>
+
+              <TableContainer component={Paper} variant='outlined'>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Nombre</TableCell>
+                      <TableCell>Código</TableCell>
+                      <TableCell>Descripción</TableCell>
+                      <TableCell align='center'>Productos</TableCell>
+                      <TableCell align='center'>Estado</TableCell>
+                      <TableCell align='center'>Acciones</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {categoriasProducto.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} align='center'>
+                          <Typography variant='body2' color='text.secondary' sx={{ py: 2 }}>
+                            No hay categorías disponibles
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      categoriasProducto.map(categoria => (
+                        <TableRow key={categoria.id}>
+                          <TableCell>
+                            <Typography variant='subtitle2'>{categoria.nombre}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip label={categoria.codigo} size='small' variant='outlined' />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant='body2' color='text.secondary'>
+                              {categoria.descripcion || '-'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align='center'>
+                            <Typography variant='body2'>
+                              {categoria._count?.productos || 0}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align='center'>
+                            <Chip
+                              label={categoria.activa ? 'Activa' : 'Inactiva'}
+                              color={categoria.activa ? 'success' : 'default'}
+                              size='small'
+                            />
+                          </TableCell>
+                          <TableCell align='center'>
+                            <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                              <Tooltip title='Editar categoría'>
+                                <IconButton size='small' onClick={() => abrirDialogo('categoria', categoria)}>
+                                  <EditIcon />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title='Eliminar categoría'>
+                                <IconButton
+                                  size='small'
+                                  color='error'
+                                  onClick={() => {
+                                    setCategoriaSeleccionada(categoria)
+                                    setDialogoEliminar(true)
+                                  }}
+                                  disabled={(categoria._count?.productos || 0) > 0}
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </CardContent>
+          </Card>
+        </Box>
+      )}
+
+      {/* Modal Crear/Editar Categoría */}
+      <Dialog open={dialogoAbierto && tipoDialogo === 'categoria'} onClose={cerrarDialogo} maxWidth='sm' fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AddIcon />
+            {categoriaSeleccionada ? 'Editar Categoría' : 'Nueva Categoría'}
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label='Nombre de la Categoría'
+                value={formularioCategoria.nombre}
+                onChange={e => setFormularioCategoria(prev => ({ ...prev, nombre: e.target.value }))}
+                required
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label='Código'
+                value={formularioCategoria.codigo}
+                onChange={e => setFormularioCategoria(prev => ({ ...prev, codigo: e.target.value.toLowerCase().replace(/\s+/g, '_') }))}
+                required
+                helperText='Código único para identificar la categoría (se convertirá a minúsculas y guiones bajos)'
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label='Descripción'
+                multiline
+                rows={2}
+                value={formularioCategoria.descripcion}
+                onChange={e => setFormularioCategoria(prev => ({ ...prev, descripcion: e.target.value }))}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formularioCategoria.activa}
+                    onChange={e => setFormularioCategoria(prev => ({ ...prev, activa: e.target.checked }))}
+                  />
+                }
+                label='Categoría Activa'
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cerrarDialogo}>Cancelar</Button>
+          <Button onClick={guardarCategoria} variant='contained' startIcon={<AddIcon />}>
+            {categoriaSeleccionada ? 'Actualizar' : 'Crear'} Categoría
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Diálogo de Confirmación para Eliminar Categoría */}
+      <Dialog open={dialogoEliminar && !!categoriaSeleccionada && tipoDialogo !== 'descuentos'} onClose={() => {
+        setDialogoEliminar(false)
+        setCategoriaSeleccionada(null)
+      }}>
+        <DialogTitle>Confirmar Eliminación</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            ¿Está seguro de que desea eliminar la categoría{' '}
+            <strong>{categoriaSeleccionada?.nombre}</strong>?
+            {categoriaSeleccionada && (categoriaSeleccionada._count?.productos || 0) > 0 && (
+              <Typography variant='body2' color='error' sx={{ mt: 1 }}>
+                Esta categoría tiene productos asociados y no se puede eliminar.
+              </Typography>
+            )}
+            Esta acción no se puede deshacer.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setDialogoEliminar(false)
+            setCategoriaSeleccionada(null)
+          }}>
+            Cancelar
+          </Button>
+          <Button 
+            onClick={eliminarCategoria} 
+            color="error" 
+            variant="contained" 
+            disabled={eliminando || (categoriaSeleccionada?._count?.productos || 0) > 0}
           >
             {eliminando ? 'Eliminando...' : 'Eliminar'}
           </Button>

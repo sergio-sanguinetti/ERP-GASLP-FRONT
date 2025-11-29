@@ -55,13 +55,14 @@ import {
 } from '@mui/icons-material'
 
 // Type Imports
-import { rutasAPI, usuariosAPI, zonasAPI, type Ruta, type User, type Ciudad, type Municipio, type Zona } from '@lib/api'
+import { rutasAPI, usuariosAPI, zonasAPI, sedesAPI, type Ruta, type User, type Ciudad, type Municipio, type Zona, type Sede } from '@lib/api'
 import { useAuth } from '@contexts/AuthContext'
 
 export default function ConfiguracionRutasPage() {
   const { user } = useAuth()
   const [rutasList, setRutasList] = useState<Ruta[]>([])
   const [repartidores, setRepartidores] = useState<User[]>([])
+  const [sedes, setSedes] = useState<Sede[]>([])
   const [ciudades, setCiudades] = useState<Ciudad[]>([])
   const [municipios, setMunicipios] = useState<Municipio[]>([])
   const [zonas, setZonas] = useState<Zona[]>([])
@@ -86,9 +87,10 @@ export default function ConfiguracionRutasPage() {
     repartidor: ''
   })
 
-  // Cargar repartidores y zonas al montar
+  // Cargar repartidores, sedes y zonas al montar
   useEffect(() => {
     loadRepartidores()
+    loadSedes()
     loadCiudades()
   }, [])
 
@@ -125,6 +127,15 @@ export default function ConfiguracionRutasPage() {
       setRepartidores(repartidoresList)
     } catch (err: any) {
       console.error('Error loading repartidores:', err)
+    }
+  }
+
+  const loadSedes = async () => {
+    try {
+      const data = await sedesAPI.getAll()
+      setSedes(data.filter(s => s.estado === 'activa'))
+    } catch (err: any) {
+      console.error('Error loading sedes:', err)
     }
   }
 
@@ -184,7 +195,8 @@ export default function ConfiguracionRutasPage() {
         activa: true,
         horarioInicio: '08:00',
         horarioFin: '17:00',
-        repartidoresIds: []
+        repartidoresIds: [],
+        sedeId: ''
       })
       setCiudadSeleccionada('')
       setMunicipioSeleccionado('')
@@ -192,7 +204,8 @@ export default function ConfiguracionRutasPage() {
     } else if (tipo === 'editar' && ruta) {
       setFormulario({
         ...ruta,
-        repartidoresIds: ruta.repartidores?.map(r => r.id) || []
+        repartidoresIds: ruta.repartidores?.map(r => r.id) || [],
+        sedeId: ruta.sedeId || ''
       })
       // Si la ruta tiene zonaRelacion, establecer los selectores
       if (ruta.zonaRelacion) {
@@ -261,6 +274,7 @@ export default function ConfiguracionRutasPage() {
           codigo: formulario.codigo!,
           descripcion: formulario.descripcion,
           zonaId: zonaSeleccionada,
+          sedeId: formulario.sedeId || undefined,
           activa: formulario.activa !== undefined ? formulario.activa : true,
           horarioInicio: formulario.horarioInicio,
           horarioFin: formulario.horarioFin,
@@ -275,6 +289,7 @@ export default function ConfiguracionRutasPage() {
           codigo: formulario.codigo,
           descripcion: formulario.descripcion,
           zonaId: zonaSeleccionada,
+          sedeId: formulario.sedeId || undefined,
           activa: formulario.activa,
           horarioInicio: formulario.horarioInicio,
           horarioFin: formulario.horarioFin,
@@ -454,6 +469,7 @@ export default function ConfiguracionRutasPage() {
               <TableRow>
                 <TableCell>Ruta</TableCell>
                 <TableCell>Zona</TableCell>
+                <TableCell>Sede</TableCell>
                 <TableCell>Repartidores</TableCell>
                 <TableCell>Horario</TableCell>
                 <TableCell>Descripción</TableCell>
@@ -492,6 +508,17 @@ export default function ConfiguracionRutasPage() {
                         )}
                       </Box>
                     </Box>
+                  </TableCell>
+                  <TableCell>
+                    {ruta.sede ? (
+                      <Typography variant="body2" fontWeight="medium">
+                        {ruta.sede.nombre}
+                      </Typography>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        Sin sede asignada
+                      </Typography>
+                    )}
                   </TableCell>
                   <TableCell>
                     {ruta.repartidores && ruta.repartidores.length > 0 ? (
@@ -614,6 +641,10 @@ export default function ConfiguracionRutasPage() {
                           rutaSeleccionada.zona
                         )}
                       </Typography>
+                      <Typography variant="body2">
+                        <strong>Sede:</strong>{' '}
+                        {rutaSeleccionada.sede ? rutaSeleccionada.sede.nombre : 'Sin sede asignada'}
+                      </Typography>
                       <Typography variant="body2"><strong>Descripción:</strong> {rutaSeleccionada.descripcion}</Typography>
                     </Grid>
                     <Grid item xs={12} md={6}>
@@ -706,6 +737,23 @@ export default function ConfiguracionRutasPage() {
                       {zonas.filter(z => z.activa).map((zona) => (
                         <MenuItem key={zona.id} value={zona.id}>
                           {zona.nombre}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Sede</InputLabel>
+                    <Select
+                      value={formulario.sedeId || ''}
+                      onChange={(e) => manejarCambioFormulario('sedeId', e.target.value)}
+                      label="Sede"
+                    >
+                      <MenuItem value="">Sin sede asignada</MenuItem>
+                      {sedes.map((sede) => (
+                        <MenuItem key={sede.id} value={sede.id}>
+                          {sede.nombre}
                         </MenuItem>
                       ))}
                     </Select>

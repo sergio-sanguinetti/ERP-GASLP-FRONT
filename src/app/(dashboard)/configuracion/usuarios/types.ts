@@ -42,6 +42,7 @@ export interface EditUserData {
   apellidoPaterno?: string
   apellidoMaterno?: string
   email?: string
+  password?: string
   telefono?: string
   rol?: UserRole
   tipoRepartidor?: TipoRepartidor

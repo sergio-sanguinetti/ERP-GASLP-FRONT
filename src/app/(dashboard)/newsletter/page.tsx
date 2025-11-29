@@ -35,7 +35,8 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  Tooltip
 } from '@mui/material'
 
 // Icon Imports
@@ -48,6 +49,7 @@ import HistoryIcon from '@mui/icons-material/History'
 import SaveIcon from '@mui/icons-material/Save'
 import CloseIcon from '@mui/icons-material/Close'
 import EventIcon from '@mui/icons-material/Event'
+import EditIcon from '@mui/icons-material/Edit'
 
 const NewsletterPage = () => {
   const [items, setItems] = useState<NewsletterItem[]>([])
@@ -55,6 +57,8 @@ const NewsletterPage = () => {
   const [tabValue, setTabValue] = useState(0)
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
   const [isNotificationDialogOpen, setIsNotificationDialogOpen] = useState(false)
+  const [isEditNotificationDialogOpen, setIsEditNotificationDialogOpen] = useState(false)
+  const [editingNotification, setEditingNotification] = useState<NewsletterItem | null>(null)
   const [newNotification, setNewNotification] = useState({ 
     title: '', 
     content: '',
@@ -205,6 +209,56 @@ const NewsletterPage = () => {
       setTimeout(() => setSuccessMessage(null), 3000)
     } catch (err: any) {
       setError(err.message || 'Error al crear la notificación')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleEditNotification = (notificacion: NewsletterItem) => {
+    setEditingNotification(notificacion)
+    setNewNotification({
+      title: notificacion.title || '',
+      content: notificacion.content || '',
+      fechaVencimiento: notificacion.fechaVencimiento ? new Date(notificacion.fechaVencimiento).toISOString().split('T')[0] : ''
+    })
+    setIsEditNotificationDialogOpen(true)
+  }
+
+  const handleUpdateNotification = async () => {
+    if (!editingNotification) return
+
+    if (!newNotification.title || !newNotification.content) {
+      setError('Por favor complete todos los campos requeridos')
+      return
+    }
+
+    if (!newNotification.fechaVencimiento) {
+      setError('Por favor seleccione una fecha de vencimiento')
+      return
+    }
+
+    try {
+      setSaving(true)
+      setError(null)
+      
+      const updatedItem = await newsletterAPI.update(editingNotification.id, {
+        title: newNotification.title,
+        content: newNotification.content,
+        fechaVencimiento: newNotification.fechaVencimiento,
+        activo: editingNotification.activo
+      })
+      
+      // Actualizar en historial de notificaciones
+      setHistorialNotificaciones(historialNotificaciones.map(item => 
+        item.id === editingNotification.id ? updatedItem : item
+      ))
+      setNewNotification({ title: '', content: '', fechaVencimiento: '' })
+      setEditingNotification(null)
+      setIsEditNotificationDialogOpen(false)
+      setSuccessMessage('Notificación actualizada exitosamente')
+      setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (err: any) {
+      setError(err.message || 'Error al actualizar la notificación')
     } finally {
       setSaving(false)
     }
@@ -454,12 +508,13 @@ const NewsletterPage = () => {
                       <TableCell>Fecha Creación</TableCell>
                       <TableCell>Fecha Vencimiento</TableCell>
                       <TableCell align="center">Estado</TableCell>
+                      <TableCell align="center">Acciones</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {historialNotificaciones.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} align="center">
+                        <TableCell colSpan={6} align="center">
                           <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
                             No hay notificaciones en el historial
                           </Typography>
@@ -503,6 +558,28 @@ const NewsletterPage = () => {
                                 color={esVencida ? 'error' : notificacion.activo ? 'success' : 'default'}
                                 size="small"
                               />
+                            </TableCell>
+                            <TableCell align="center">
+                              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                                <Tooltip title="Editar">
+                                  <IconButton
+                                    size="small"
+                                    color="primary"
+                                    onClick={() => handleEditNotification(notificacion)}
+                                  >
+                                    <EditIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Eliminar">
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleDeleteItem(notificacion.id)}
+                                  >
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
                             </TableCell>
                           </TableRow>
                         )
@@ -746,6 +823,84 @@ const NewsletterPage = () => {
             startIcon={<SaveIcon />}
           >
             {saving ? 'Guardando...' : 'Guardar Notificación'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog para editar notificación */}
+      <Dialog open={isEditNotificationDialogOpen} onClose={() => setIsEditNotificationDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <EditIcon />
+              Editar Notificación
+            </Box>
+            <IconButton onClick={() => {
+              setIsEditNotificationDialogOpen(false)
+              setEditingNotification(null)
+              setNewNotification({ title: '', content: '', fechaVencimiento: '' })
+            }} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Título"
+            fullWidth
+            variant="outlined"
+            value={newNotification.title}
+            onChange={(e) => setNewNotification({ ...newNotification, title: e.target.value })}
+            sx={{ mb: 2, mt: 2 }}
+            required
+          />
+          <TextField
+            margin="dense"
+            label="Contenido"
+            fullWidth
+            multiline
+            rows={4}
+            variant="outlined"
+            value={newNotification.content}
+            onChange={(e) => setNewNotification({ ...newNotification, content: e.target.value })}
+            sx={{ mb: 2 }}
+            required
+          />
+          <TextField
+            margin="dense"
+            label="Fecha de Vencimiento"
+            type="date"
+            fullWidth
+            variant="outlined"
+            value={newNotification.fechaVencimiento}
+            onChange={(e) => setNewNotification({ ...newNotification, fechaVencimiento: e.target.value })}
+            InputLabelProps={{
+              shrink: true,
+            }}
+            required
+            helperText="La notificación se marcará como vencida después de esta fecha"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => {
+              setIsEditNotificationDialogOpen(false)
+              setEditingNotification(null)
+              setNewNotification({ title: '', content: '', fechaVencimiento: '' })
+            }}
+            disabled={saving}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleUpdateNotification}
+            disabled={!newNotification.title || !newNotification.content || !newNotification.fechaVencimiento || saving}
+            startIcon={<SaveIcon />}
+          >
+            {saving ? 'Guardando...' : 'Guardar Cambios'}
           </Button>
         </DialogActions>
       </Dialog>

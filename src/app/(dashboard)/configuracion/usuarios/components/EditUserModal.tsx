@@ -37,6 +37,7 @@ const EditUserModal = ({ open, onClose, onEditUser, user }: EditUserModalProps) 
     apellidoPaterno: '',
     apellidoMaterno: '',
     email: '',
+    password: '',
     telefono: '',
     rol: 'repartidor',
     tipoRepartidor: undefined,
@@ -71,6 +72,7 @@ const EditUserModal = ({ open, onClose, onEditUser, user }: EditUserModalProps) 
         apellidoPaterno: user.apellidoPaterno,
         apellidoMaterno: user.apellidoMaterno,
         email: user.email,
+        password: '',
         telefono: user.telefono || '',
         rol: user.rol,
         tipoRepartidor: user.tipoRepartidor,
@@ -112,6 +114,10 @@ const EditUserModal = ({ open, onClose, onEditUser, user }: EditUserModalProps) 
       newErrors.email = 'El correo no es válido'
     }
 
+    if (formData.password && formData.password.length < 6) {
+      newErrors.password = 'La contraseña debe tener al menos 6 caracteres'
+    }
+
     if (formData.rol === 'repartidor' && !formData.tipoRepartidor) {
       newErrors.tipoRepartidor = 'El tipo de repartidor es requerido'
     }
@@ -132,6 +138,7 @@ const EditUserModal = ({ open, onClose, onEditUser, user }: EditUserModalProps) 
       await onEditUser({
         ...user,
         ...formData,
+        password: formData.password?.trim() || undefined,
         telefono: formData.telefono || undefined,
         tipoRepartidor: formData.rol === 'repartidor' ? formData.tipoRepartidor : undefined,
         sede: formData.sede || undefined
@@ -146,6 +153,20 @@ const EditUserModal = ({ open, onClose, onEditUser, user }: EditUserModalProps) 
   const handleClose = () => {
     setErrors({})
     setSubmitError('')
+    if (user) {
+      setFormData({
+        nombres: user.nombres,
+        apellidoPaterno: user.apellidoPaterno,
+        apellidoMaterno: user.apellidoMaterno,
+        email: user.email,
+        password: '',
+        telefono: user.telefono || '',
+        rol: user.rol,
+        tipoRepartidor: user.tipoRepartidor,
+        estado: user.estado,
+        sede: user.sede || ''
+      })
+    }
     onClose()
   }
 
@@ -205,6 +226,18 @@ const EditUserModal = ({ open, onClose, onEditUser, user }: EditUserModalProps) 
                 error={!!errors.email}
                 helperText={errors.email}
                 required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Nueva Contraseña"
+                type="password"
+                value={formData.password}
+                onChange={handleChange('password')}
+                error={!!errors.password}
+                helperText={errors.password || 'Dejar en blanco para mantener la contraseña actual'}
+                inputProps={{ minLength: 6 }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>

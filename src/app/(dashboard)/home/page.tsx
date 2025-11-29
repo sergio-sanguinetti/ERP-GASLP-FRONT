@@ -57,7 +57,7 @@ export default function Page() {
   }, [])
 
   const handlePrevious = () => {
-    setCurrentIndex((prevIndex) => 
+    setCurrentIndex((prevIndex) =>
       prevIndex === 0 ? galleryImages.length - 1 : prevIndex - 1
     )
   }
@@ -79,7 +79,7 @@ export default function Page() {
             Bienvenido Juan
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Sistema de gestión ERP GASLP
+            Sistema de gestión PROMETEO.LP
           </Typography>
         </CardContent>
       </Card>
@@ -222,8 +222,8 @@ export default function Page() {
                       width: currentIndex === index ? 32 : 8,
                       height: 8,
                       borderRadius: 4,
-                      backgroundColor: currentIndex === index 
-                        ? 'rgba(255, 255, 255, 0.9)' 
+                      backgroundColor: currentIndex === index
+                        ? 'rgba(255, 255, 255, 0.9)'
                         : 'rgba(255, 255, 255, 0.5)',
                       cursor: 'pointer',
                       transition: 'all 0.3s ease',

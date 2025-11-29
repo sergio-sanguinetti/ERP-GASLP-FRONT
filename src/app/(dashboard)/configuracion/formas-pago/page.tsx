@@ -55,7 +55,7 @@ import {
 } from '@mui/icons-material'
 
 // Type Imports
-import { formasPagoAPI, sedesAPI, type FormaPago, type Sede } from '@lib/api'
+import { formasPagoAPI, sedesAPI, tiposFormaPagoAPI, type FormaPago, type Sede, type TipoFormaPago } from '@lib/api'
 import { useAuth } from '@contexts/AuthContext'
 
 // Tipos de datos (compatibilidad con estructura del frontend)
@@ -70,13 +70,17 @@ interface FormaPagoFrontend extends FormaPago {
 
 export default function ConfiguracionFormasPagoPage() {
   const { user } = useAuth()
+  const [vistaActual, setVistaActual] = useState<'formas-pago' | 'tipos'>('formas-pago')
   const [formasPagoList, setFormasPagoList] = useState<FormaPagoFrontend[]>([])
+  const [tiposFormaPagoList, setTiposFormaPagoList] = useState<TipoFormaPago[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
   const [tipoDialogo, setTipoDialogo] = useState<'crear' | 'editar' | 'eliminar' | 'ver'>('crear')
   const [formaPagoSeleccionada, setFormaPagoSeleccionada] = useState<FormaPagoFrontend | null>(null)
+  const [tipoFormaPagoSeleccionado, setTipoFormaPagoSeleccionado] = useState<TipoFormaPago | null>(null)
   const [formulario, setFormulario] = useState<Partial<FormaPagoFrontend>>({})
+  const [formularioTipo, setFormularioTipo] = useState<Partial<TipoFormaPago>>({})
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [sedes, setSedes] = useState<Sede[]>([])
@@ -88,16 +92,29 @@ export default function ConfiguracionFormasPagoPage() {
     activa: ''
   })
 
-  // Cargar sedes al montar el componente
+  // Cargar sedes y tipos al montar el componente
   useEffect(() => {
     loadSedes()
+    loadTiposFormaPago()
   }, [])
 
-  // Cargar formas de pago al montar el componente y cuando cambian los filtros
+  // Cargar datos según la vista actual
   useEffect(() => {
-    loadFormasPago()
+    if (vistaActual === 'formas-pago') {
+      loadFormasPago()
+    } else if (vistaActual === 'tipos') {
+      loadTiposFormaPago()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtros.nombre, filtros.tipo, filtros.activa])
+  }, [vistaActual, filtros.nombre, filtros.tipo, filtros.activa])
+
+  // Cargar tipos siempre para que estén disponibles en el selector
+  useEffect(() => {
+    if (tiposFormaPagoList.length === 0) {
+      loadTiposFormaPago()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const loadSedes = async () => {
     try {
@@ -147,7 +164,30 @@ export default function ConfiguracionFormasPagoPage() {
     }
   }
 
+  const loadTiposFormaPago = async () => {
+    try {
+      // No usar setLoading aquí para no bloquear la UI cuando se carga en segundo plano
+      setError('')
+      const data = await tiposFormaPagoAPI.getAll({
+        activo: vistaActual === 'tipos' ? filtros.activa || undefined : undefined,
+        nombre: vistaActual === 'tipos' ? filtros.nombre || undefined : undefined
+      })
+      setTiposFormaPagoList(data)
+      console.log('Tipos cargados:', data.length, data)
+    } catch (err: any) {
+      console.error('Error loading tipos de formas de pago:', err)
+      // No mostrar error si es solo para cargar en segundo plano
+      if (vistaActual === 'tipos') {
+        setError(err.message || 'Error al cargar tipos de formas de pago')
+      }
+    }
+  }
+
   const abrirDialogo = (tipo: 'crear' | 'editar' | 'eliminar' | 'ver', formaPago?: FormaPagoFrontend) => {
+    // Asegurar que los tipos estén cargados antes de abrir el diálogo
+    if (tiposFormaPagoList.length === 0) {
+      loadTiposFormaPago()
+    }
     setTipoDialogo(tipo)
     setFormaPagoSeleccionada(formaPago || null)
     setError('')
@@ -296,6 +336,92 @@ export default function ConfiguracionFormasPagoPage() {
     setFiltros(prev => ({ ...prev, [campo]: valor }))
   }
 
+  // Funciones para gestión de tipos
+  const abrirDialogoTipo = (tipo: 'crear' | 'editar' | 'eliminar' | 'ver', tipoFormaPago?: TipoFormaPago) => {
+    setTipoDialogo(tipo)
+    setTipoFormaPagoSeleccionado(tipoFormaPago || null)
+    setError('')
+
+    if (tipo === 'crear') {
+      setFormularioTipo({
+        activo: true,
+        orden: 0
+      })
+    } else if (tipo === 'editar' && tipoFormaPago) {
+      setFormularioTipo({ ...tipoFormaPago })
+    }
+
+    setDialogoAbierto(true)
+  }
+
+  const cerrarDialogoTipo = () => {
+    setDialogoAbierto(false)
+    setTipoFormaPagoSeleccionado(null)
+    setFormularioTipo({})
+  }
+
+  const guardarTipoFormaPago = async () => {
+    if (!formularioTipo.codigo || !formularioTipo.nombre) {
+      setError('Por favor completa todos los campos requeridos')
+      return
+    }
+
+    setSaving(true)
+    setError('')
+
+    try {
+      if (tipoDialogo === 'crear') {
+        await tiposFormaPagoAPI.create({
+          codigo: formularioTipo.codigo!,
+          nombre: formularioTipo.nombre!,
+          descripcion: formularioTipo.descripcion,
+          activo: formularioTipo.activo !== undefined ? formularioTipo.activo : true,
+          orden: formularioTipo.orden || 0
+        })
+      } else if (tipoDialogo === 'editar' && tipoFormaPagoSeleccionado) {
+        await tiposFormaPagoAPI.update(tipoFormaPagoSeleccionado.id, {
+          codigo: formularioTipo.codigo,
+          nombre: formularioTipo.nombre,
+          descripcion: formularioTipo.descripcion,
+          activo: formularioTipo.activo,
+          orden: formularioTipo.orden
+        })
+      }
+
+      cerrarDialogoTipo()
+      await loadTiposFormaPago()
+      // Recargar formas de pago si estamos en esa vista para actualizar los selectores
+      if (vistaActual === 'formas-pago') {
+        await loadFormasPago()
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error al guardar tipo de forma de pago')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const eliminarTipoFormaPago = async () => {
+    if (!tipoFormaPagoSeleccionado) return
+
+    setDeleting(true)
+    setError('')
+
+    try {
+      await tiposFormaPagoAPI.delete(tipoFormaPagoSeleccionado.id)
+      cerrarDialogoTipo()
+      await loadTiposFormaPago()
+      // Recargar formas de pago si estamos en esa vista para actualizar los selectores
+      if (vistaActual === 'formas-pago') {
+        await loadFormasPago()
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error al eliminar tipo de forma de pago')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const getTipoIcon = (tipo: string) => {
     switch (tipo) {
       case 'efectivo':
@@ -355,8 +481,31 @@ export default function ConfiguracionFormasPagoPage() {
           </Alert>
         )}
 
-        {/* Filtros y Búsqueda */}
-        <Card sx={{ mb: 3 }}>
+        {/* Navegación con Tabs */}
+        <Box sx={{ mb: 3 }}>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Button
+              variant={vistaActual === 'formas-pago' ? 'contained' : 'outlined'}
+              onClick={() => setVistaActual('formas-pago')}
+              startIcon={<PaymentIcon />}
+            >
+              Formas de Pago
+            </Button>
+            <Button
+              variant={vistaActual === 'tipos' ? 'contained' : 'outlined'}
+              onClick={() => setVistaActual('tipos')}
+              startIcon={<CreditCardIcon />}
+            >
+              Tipos
+            </Button>
+          </Box>
+        </Box>
+
+        {/* Vista de Formas de Pago */}
+        {vistaActual === 'formas-pago' && (
+          <>
+            {/* Filtros y Búsqueda */}
+            <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant='h6' gutterBottom>
               Filtros y Búsqueda
@@ -388,11 +537,22 @@ export default function ConfiguracionFormasPagoPage() {
                     label='Tipo'
                   >
                     <MenuItem value=''>Todos los tipos</MenuItem>
-                    {tiposFormaPago.map(tipo => (
-                      <MenuItem key={tipo.value} value={tipo.value}>
-                        {tipo.label}
-                      </MenuItem>
-                    ))}
+                    {tiposFormaPagoList.length > 0 ? (
+                      tiposFormaPagoList
+                        .filter(t => t.activo)
+                        .sort((a, b) => a.orden - b.orden)
+                        .map(tipo => (
+                          <MenuItem key={tipo.id} value={tipo.codigo}>
+                            {tipo.nombre}
+                          </MenuItem>
+                        ))
+                    ) : (
+                      tiposFormaPago.map(tipo => (
+                        <MenuItem key={tipo.value} value={tipo.value}>
+                          {tipo.label}
+                        </MenuItem>
+                      ))
+                    )}
                   </Select>
                 </FormControl>
               </Grid>
@@ -561,7 +721,7 @@ export default function ConfiguracionFormasPagoPage() {
 
         {/* Modal Crear/Editar Forma de Pago */}
         <Dialog
-          open={dialogoAbierto && (tipoDialogo === 'crear' || tipoDialogo === 'editar')}
+          open={dialogoAbierto && (tipoDialogo === 'crear' || tipoDialogo === 'editar') && vistaActual === 'formas-pago'}
           onClose={cerrarDialogo}
           maxWidth='md'
           fullWidth
@@ -599,12 +759,28 @@ export default function ConfiguracionFormasPagoPage() {
                     onChange={e => manejarCambioFormulario('tipo', e.target.value)}
                     label='Tipo'
                   >
-                    {tiposFormaPago.map(tipo => (
-                      <MenuItem key={tipo.value} value={tipo.value}>
-                        {tipo.label}
-                      </MenuItem>
-                    ))}
+                    {tiposFormaPagoList.length > 0 ? (
+                      tiposFormaPagoList
+                        .filter(t => t.activo)
+                        .sort((a, b) => a.orden - b.orden)
+                        .map(tipo => (
+                          <MenuItem key={tipo.id} value={tipo.codigo}>
+                            {tipo.nombre}
+                          </MenuItem>
+                        ))
+                    ) : (
+                      tiposFormaPago.map(tipo => (
+                        <MenuItem key={tipo.value} value={tipo.value}>
+                          {tipo.label}
+                        </MenuItem>
+                      ))
+                    )}
                   </Select>
+                  {tiposFormaPagoList.length === 0 && (
+                    <Typography variant='caption' color='text.secondary' sx={{ mt: 1, display: 'block' }}>
+                      No hay tipos disponibles. Crea tipos en la pestaña "Tipos"
+                    </Typography>
+                  )}
                 </FormControl>
               </Grid>
 
@@ -839,7 +1015,7 @@ export default function ConfiguracionFormasPagoPage() {
         </Dialog>
 
         {/* Modal Ver Detalles */}
-        <Dialog open={dialogoAbierto && tipoDialogo === 'ver'} onClose={cerrarDialogo} maxWidth='md' fullWidth>
+        <Dialog open={dialogoAbierto && tipoDialogo === 'ver' && vistaActual === 'formas-pago'} onClose={cerrarDialogo} maxWidth='md' fullWidth>
           <DialogTitle>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <VisibilityIcon />
@@ -1074,8 +1250,8 @@ export default function ConfiguracionFormasPagoPage() {
           </DialogActions>
         </Dialog>
 
-        {/* Modal Confirmar Eliminación */}
-        <Dialog open={dialogoAbierto && tipoDialogo === 'eliminar'} onClose={cerrarDialogo}>
+        {/* Modal Confirmar Eliminación Forma de Pago */}
+        <Dialog open={dialogoAbierto && tipoDialogo === 'eliminar' && vistaActual === 'formas-pago'} onClose={cerrarDialogo}>
           <DialogTitle>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <WarningIcon color='error' />
@@ -1097,6 +1273,205 @@ export default function ConfiguracionFormasPagoPage() {
             </Button>
           </DialogActions>
         </Dialog>
+          </>
+        )}
+
+        {/* Vista de Tipos */}
+        {vistaActual === 'tipos' && (
+          <>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant='h6'>Tipos de Formas de Pago ({tiposFormaPagoList.length})</Typography>
+                  <Button
+                    variant='contained'
+                    startIcon={<AddIcon />}
+                    onClick={() => abrirDialogoTipo('crear')}
+                  >
+                    Nuevo Tipo
+                  </Button>
+                </Box>
+
+                {loading && tiposFormaPagoList.length === 0 ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                    <CircularProgress />
+                  </Box>
+                ) : tiposFormaPagoList.length === 0 ? (
+                  <Typography variant='body1' color='text.secondary' sx={{ textAlign: 'center', py: 4 }}>
+                    No hay tipos de formas de pago registrados
+                  </Typography>
+                ) : (
+                  <TableContainer component={Paper} variant='outlined'>
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Código</TableCell>
+                          <TableCell>Nombre</TableCell>
+                          <TableCell>Descripción</TableCell>
+                          <TableCell align='center'>Estado</TableCell>
+                          <TableCell align='center'>Orden</TableCell>
+                          <TableCell align='center'>Acciones</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {tiposFormaPagoList.map(tipo => (
+                          <TableRow key={tipo.id} hover>
+                            <TableCell>
+                              <Typography variant='subtitle2' fontWeight='bold'>
+                                {tipo.codigo}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant='body2'>{tipo.nombre}</Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant='body2' color='text.secondary'>
+                                {tipo.descripcion || '-'}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align='center'>
+                              <Chip
+                                label={tipo.activo ? 'Activo' : 'Inactivo'}
+                                color={tipo.activo ? 'success' : 'default'}
+                                size='small'
+                              />
+                            </TableCell>
+                            <TableCell align='center'>
+                              <Typography variant='body2'>{tipo.orden}</Typography>
+                            </TableCell>
+                            <TableCell align='center'>
+                              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                <Tooltip title='Editar'>
+                                  <IconButton size='small' onClick={() => abrirDialogoTipo('editar', tipo)}>
+                                    <EditIcon />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title='Eliminar'>
+                                  <IconButton size='small' onClick={() => abrirDialogoTipo('eliminar', tipo)} color='error'>
+                                    <DeleteIcon />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Modal Crear/Editar Tipo */}
+            <Dialog
+              open={dialogoAbierto && (tipoDialogo === 'crear' || tipoDialogo === 'editar') && vistaActual === 'tipos'}
+              onClose={cerrarDialogoTipo}
+              maxWidth='sm'
+              fullWidth
+            >
+              <DialogTitle>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  {tipoDialogo === 'crear' ? <AddIcon /> : <EditIcon />}
+                  {tipoDialogo === 'crear' ? 'Crear Nuevo Tipo' : 'Editar Tipo'}
+                </Box>
+              </DialogTitle>
+              <DialogContent>
+                <Grid container spacing={2} sx={{ mt: 1 }}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label='Código'
+                      value={formularioTipo.codigo || ''}
+                      onChange={e => setFormularioTipo(prev => ({ ...prev, codigo: e.target.value }))}
+                      required
+                      helperText='Código único del tipo (ej: efectivo, terminal)'
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label='Nombre'
+                      value={formularioTipo.nombre || ''}
+                      onChange={e => setFormularioTipo(prev => ({ ...prev, nombre: e.target.value }))}
+                      required
+                    />
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label='Descripción'
+                      multiline
+                      rows={2}
+                      value={formularioTipo.descripcion || ''}
+                      onChange={e => setFormularioTipo(prev => ({ ...prev, descripcion: e.target.value }))}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label='Orden'
+                      type='number'
+                      value={formularioTipo.orden || 0}
+                      onChange={e => setFormularioTipo(prev => ({ ...prev, orden: Number(e.target.value) }))}
+                      inputProps={{ min: 0 }}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={formularioTipo.activo || false}
+                          onChange={e => setFormularioTipo(prev => ({ ...prev, activo: e.target.checked }))}
+                        />
+                      }
+                      label='Tipo Activo'
+                    />
+                  </Grid>
+                </Grid>
+              </DialogContent>
+              <DialogActions>
+                {error && (
+                  <Alert severity='error' sx={{ flex: 1, mr: 2 }}>
+                    {error}
+                  </Alert>
+                )}
+                <Button onClick={cerrarDialogoTipo} disabled={saving}>
+                  Cancelar
+                </Button>
+                <Button onClick={guardarTipoFormaPago} variant='contained' startIcon={<SaveIcon />} disabled={saving}>
+                  {saving ? 'Guardando...' : tipoDialogo === 'crear' ? 'Crear' : 'Guardar Cambios'}
+                </Button>
+              </DialogActions>
+            </Dialog>
+
+            {/* Modal Confirmar Eliminación Tipo */}
+            <Dialog open={dialogoAbierto && tipoDialogo === 'eliminar' && vistaActual === 'tipos'} onClose={cerrarDialogoTipo}>
+              <DialogTitle>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <WarningIcon color='error' />
+                  Confirmar Eliminación
+                </Box>
+              </DialogTitle>
+              <DialogContent>
+                <DialogContentText>
+                  ¿Estás seguro de que deseas eliminar el tipo &quot;{tipoFormaPagoSeleccionado?.nombre}&quot;? Esta acción no se puede deshacer.
+                </DialogContentText>
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={cerrarDialogoTipo} disabled={deleting}>
+                  Cancelar
+                </Button>
+                <Button onClick={eliminarTipoFormaPago} variant='contained' color='error' startIcon={<DeleteIcon />} disabled={deleting}>
+                  {deleting ? 'Eliminando...' : 'Eliminar'}
+                </Button>
+              </DialogActions>
+            </Dialog>
+          </>
+        )}
       </Box>
     </>
   )

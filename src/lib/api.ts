@@ -51,6 +51,7 @@ export interface UpdateUsuarioRequest {
   apellidoPaterno?: string
   apellidoMaterno?: string
   email?: string
+  password?: string
   telefono?: string
   rol?: string
   tipoRepartidor?: 'cilindros' | 'pipas'
@@ -532,6 +533,123 @@ export const formasPagoAPI = {
   },
 }
 
+// API de Tipos de Formas de Pago
+export interface TipoFormaPago {
+  id: string
+  codigo: string
+  nombre: string
+  descripcion?: string
+  activo: boolean
+  icono?: string
+  color?: string
+  orden: number
+  fechaCreacion: string
+  fechaModificacion: string
+}
+
+export interface CreateTipoFormaPagoRequest {
+  codigo: string
+  nombre: string
+  descripcion?: string
+  activo?: boolean
+  icono?: string
+  color?: string
+  orden?: number
+}
+
+export interface UpdateTipoFormaPagoRequest {
+  codigo?: string
+  nombre?: string
+  descripcion?: string
+  activo?: boolean
+  icono?: string
+  color?: string
+  orden?: number
+}
+
+export interface TiposFormaPagoFilters {
+  activo?: string
+  codigo?: string
+  nombre?: string
+}
+
+export const tiposFormaPagoAPI = {
+  getAll: async (filtros?: TiposFormaPagoFilters): Promise<TipoFormaPago[]> => {
+    const queryParams = new URLSearchParams()
+    if (filtros?.activo) queryParams.append('activo', filtros.activo)
+    if (filtros?.codigo) queryParams.append('codigo', filtros.codigo)
+    if (filtros?.nombre) queryParams.append('nombre', filtros.nombre)
+
+    const queryString = queryParams.toString()
+    const url = `/tipos-forma-pago${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetchWithAuth(url, {
+      method: 'GET',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener tipos de formas de pago')
+    }
+
+    return response.json()
+  },
+
+  getById: async (id: string): Promise<TipoFormaPago> => {
+    const response = await fetchWithAuth(`/tipos-forma-pago/${id}`, {
+      method: 'GET',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener tipo de forma de pago')
+    }
+
+    return response.json()
+  },
+
+  create: async (data: CreateTipoFormaPagoRequest): Promise<TipoFormaPago> => {
+    const response = await fetchWithAuth('/tipos-forma-pago', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al crear tipo de forma de pago')
+    }
+
+    const result = await response.json()
+    return result.tipo
+  },
+
+  update: async (id: string, data: UpdateTipoFormaPagoRequest): Promise<TipoFormaPago> => {
+    const response = await fetchWithAuth(`/tipos-forma-pago/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar tipo de forma de pago')
+    }
+
+    const result = await response.json()
+    return result.tipo
+  },
+
+  delete: async (id: string): Promise<void> => {
+    const response = await fetchWithAuth(`/tipos-forma-pago/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al eliminar tipo de forma de pago')
+    }
+  },
+}
+
 // API de Rutas
 export interface Ruta {
   id: string
@@ -541,6 +659,8 @@ export interface Ruta {
   zona: string
   zonaId?: string
   zonaRelacion?: Zona
+  sedeId?: string
+  sede?: Sede
   activa: boolean
   horarioInicio?: string
   horarioFin?: string
@@ -557,6 +677,7 @@ export interface CreateRutaRequest {
   descripcion?: string
   zona?: string
   zonaId?: string
+  sedeId?: string
   activa?: boolean
   horarioInicio?: string
   horarioFin?: string
@@ -571,6 +692,7 @@ export interface UpdateRutaRequest {
   descripcion?: string
   zona?: string
   zonaId?: string
+  sedeId?: string
   activa?: boolean
   horarioInicio?: string
   horarioFin?: string
@@ -583,6 +705,7 @@ export interface RutasFilters {
   zona?: string
   activa?: string
   repartidor?: string
+  sedeId?: string
 }
 
 export const rutasAPI = {
@@ -592,6 +715,7 @@ export const rutasAPI = {
     if (filtros?.zona) queryParams.append('zona', filtros.zona)
     if (filtros?.activa) queryParams.append('activa', filtros.activa)
     if (filtros?.repartidor) queryParams.append('repartidor', filtros.repartidor)
+    if (filtros?.sedeId) queryParams.append('sedeId', filtros.sedeId)
 
     const queryString = queryParams.toString()
     const url = `${API_URL}/rutas${queryString ? `?${queryString}` : ''}`
@@ -1228,14 +1352,118 @@ export const clientesAPI = {
   },
 }
 
+// API de Categorías de Productos
+export interface CategoriaProducto {
+  id: string
+  nombre: string
+  codigo: string
+  descripcion?: string
+  activa: boolean
+  fechaCreacion?: string
+  fechaModificacion?: string
+  _count?: {
+    productos: number
+  }
+}
+
+export interface CreateCategoriaProductoRequest {
+  nombre: string
+  codigo: string
+  descripcion?: string
+  activa?: boolean
+}
+
+export interface UpdateCategoriaProductoRequest {
+  nombre?: string
+  codigo?: string
+  descripcion?: string
+  activa?: boolean
+}
+
+export const categoriasProductoAPI = {
+  getAll: async (filtros?: { activa?: boolean }): Promise<CategoriaProducto[]> => {
+    const queryParams = new URLSearchParams()
+    if (filtros?.activa !== undefined) queryParams.append('activa', filtros.activa.toString())
+    const queryString = queryParams.toString()
+    const url = `${API_URL}/categorias-producto${queryString ? `?${queryString}` : ''}`
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener categorías')
+    }
+    return response.json()
+  },
+  getById: async (id: string): Promise<CategoriaProducto> => {
+    const response = await fetch(`${API_URL}/categorias-producto/${id}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener categoría')
+    }
+    return response.json()
+  },
+  create: async (data: CreateCategoriaProductoRequest): Promise<CategoriaProducto> => {
+    const response = await fetchWithAuth('/categorias-producto', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+    if (!response.ok) {
+      const error = await response.json()
+      const errorMessages = error.errors?.map((e: any) => e.msg || e.message).join(', ')
+      if (errorMessages) {
+        throw new Error(errorMessages || error.message || 'Error al crear categoría')
+      }
+      throw new Error(error.message || 'Error al crear categoría')
+    }
+    const result = await response.json()
+    return result.categoria || result
+  },
+  update: async (id: string, data: UpdateCategoriaProductoRequest): Promise<CategoriaProducto> => {
+    const response = await fetchWithAuth(`/categorias-producto/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+    if (!response.ok) {
+      const error = await response.json()
+      const errorMessages = error.errors?.map((e: any) => e.msg || e.message).join(', ')
+      if (errorMessages) {
+        throw new Error(errorMessages || error.message || 'Error al actualizar categoría')
+      }
+      throw new Error(error.message || 'Error al actualizar categoría')
+    }
+    const result = await response.json()
+    return result.categoria || result
+  },
+  delete: async (id: string): Promise<void> => {
+    const response = await fetchWithAuth(`/categorias-producto/${id}`, {
+      method: 'DELETE',
+    })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al eliminar categoría')
+    }
+  }
+}
+
 // API de Productos
 export interface Producto {
   id: string
   nombre: string
-  categoria: 'gas_lp' | 'cilindros' | 'tanques_nuevos' | 'gas-lp' | 'tanques-nuevos'
+  categoriaId: string
+  categoria?: CategoriaProducto
   precio: number
   unidad: string
   descripcion: string
+  cantidadKilos?: number
   activo: boolean
   sedeId?: string
   fechaCreacion?: string
@@ -1244,20 +1472,22 @@ export interface Producto {
 
 export interface CreateProductoRequest {
   nombre: string
-  categoria: 'gas_lp' | 'cilindros' | 'tanques_nuevos' | 'gas-lp' | 'tanques-nuevos'
+  categoriaId: string
   precio: number
   unidad: string
   descripcion: string
+  cantidadKilos?: number
   activo?: boolean
   sedeId?: string
 }
 
 export interface UpdateProductoRequest {
   nombre?: string
-  categoria?: 'gas_lp' | 'cilindros' | 'tanques_nuevos' | 'gas-lp' | 'tanques-nuevos'
+  categoriaId?: string
   precio?: number
   unidad?: string
   descripcion?: string
+  cantidadKilos?: number
   activo?: boolean
 }
 
@@ -1368,6 +1598,7 @@ export interface DescuentoRepartidor {
   repartidorId: string
   repartidor?: Usuario
   descuentoAutorizado: number
+  descuentoPorLitro?: number
   activo: boolean
   fechaCreacion?: string
   fechaModificacion?: string
@@ -1376,11 +1607,13 @@ export interface DescuentoRepartidor {
 export interface CreateDescuentoRepartidorRequest {
   repartidorId: string
   descuentoAutorizado: number
+  descuentoPorLitro?: number
   activo?: boolean
 }
 
 export interface UpdateDescuentoRepartidorRequest {
   descuentoAutorizado?: number
+  descuentoPorLitro?: number
   activo?: boolean
 }
 
@@ -1488,6 +1721,19 @@ export interface Pedido {
   ventaTotal: number
   tipoServicio: 'pipas' | 'cilindros'
   repartidorId?: string
+  calculoPipas?: {
+    tipoCalculo: 'ninguno' | 'litros' | 'porcentajes' | 'dinero'
+    cantidadLitros?: number
+    precioPorLitro?: number
+    totalPorLitros?: number
+    capacidadTanque?: number
+    porcentajeInicial?: number
+    porcentajeFinal?: number
+    litrosALlenar?: number
+    totalPorPorcentajes?: number
+    cantidadDinero?: number
+    litrosPorDinero?: number
+  }
   repartidor?: Usuario
   observaciones?: string
   sedeId?: string
@@ -1504,6 +1750,19 @@ export interface CreatePedidoRequest {
   tipoServicio: 'pipas' | 'cilindros'
   repartidorId?: string
   observaciones?: string
+  calculoPipas?: {
+    tipoCalculo: 'ninguno' | 'litros' | 'porcentajes' | 'dinero'
+    cantidadLitros?: number
+    precioPorLitro?: number
+    totalPorLitros?: number
+    capacidadTanque?: number
+    porcentajeInicial?: number
+    porcentajeFinal?: number
+    litrosALlenar?: number
+    totalPorPorcentajes?: number
+    cantidadDinero?: number
+    litrosPorDinero?: number
+  }
   sedeId?: string
   productos?: Array<{ productoId: string; cantidad: number; precio: number }>
 }
@@ -2193,6 +2452,48 @@ export const newsletterAPI = {
     }
 
     return response.json()
+  },
+}
+
+// API de Configuraciones
+export interface Configuracion {
+  id: string
+  precioPorLitroGasLP: number
+  precioPorKG: number
+  fechaCreacion: string
+  fechaModificacion: string
+}
+
+export interface UpdateConfiguracionRequest {
+  precioPorLitroGasLP?: number
+  precioPorKG?: number
+}
+
+export const configuracionesAPI = {
+  get: async (): Promise<Configuracion> => {
+    const response = await fetchWithAuth('/configuraciones')
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener configuración')
+    }
+
+    return response.json()
+  },
+
+  update: async (data: UpdateConfiguracionRequest): Promise<Configuracion> => {
+    const response = await fetchWithAuth('/configuraciones', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar configuración')
+    }
+
+    const result = await response.json()
+    return result.configuracion || result
   },
 }
 

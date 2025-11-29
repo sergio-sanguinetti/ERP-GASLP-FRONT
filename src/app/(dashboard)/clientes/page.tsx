@@ -774,11 +774,11 @@ export default function ClientesPage() {
 
       if (tipoDialogo === 'agregar') {
         const nuevoCliente = await clientesAPI.create({
-          nombre: formularioCliente.nombre!,
-          apellidoPaterno: formularioCliente.apellidoPaterno!,
-          apellidoMaterno: formularioCliente.apellidoMaterno!,
-          email: formularioCliente.email!,
-          telefono: formularioCliente.telefono!,
+          nombre: formularioCliente.nombre || '',
+          apellidoPaterno: formularioCliente.apellidoPaterno || '',
+          apellidoMaterno: formularioCliente.apellidoMaterno || '',
+          email: formularioCliente.email || '',
+          telefono: formularioCliente.telefono || '',
           telefonoSecundario: formularioCliente.telefonoSecundario,
           calle: formularioCliente.calle!,
           numeroExterior: formularioCliente.numeroExterior!,
@@ -787,8 +787,8 @@ export default function ClientesPage() {
           municipio: formularioCliente.municipio!,
           estado: formularioCliente.estado!,
           codigoPostal: formularioCliente.codigoPostal!,
-          rfc: formularioCliente.rfc,
-          curp: formularioCliente.curp,
+          rfc: formularioCliente.rfc || '',
+          curp: formularioCliente.curp || '',
           rutaId: (formularioCliente.ruta as any)?.id || (typeof formularioCliente.ruta === 'object' && formularioCliente.ruta ? (formularioCliente.ruta as any).id : undefined),
           limiteCredito: formularioCliente.limiteCredito || 0,
           saldoActual: formularioCliente.saldoActual || 0,
@@ -799,11 +799,11 @@ export default function ClientesPage() {
         await cargarDatos()
       } else if (tipoDialogo === 'editar' && clienteSeleccionado) {
         await clientesAPI.update(clienteSeleccionado.id, {
-          nombre: formularioCliente.nombre,
-          apellidoPaterno: formularioCliente.apellidoPaterno,
-          apellidoMaterno: formularioCliente.apellidoMaterno,
-          email: formularioCliente.email,
-          telefono: formularioCliente.telefono,
+          nombre: formularioCliente.nombre || '',
+          apellidoPaterno: formularioCliente.apellidoPaterno || '',
+          apellidoMaterno: formularioCliente.apellidoMaterno || '',
+          email: formularioCliente.email || '',
+          telefono: formularioCliente.telefono || '',
           telefonoSecundario: formularioCliente.telefonoSecundario,
           calle: formularioCliente.calle,
           numeroExterior: formularioCliente.numeroExterior,
@@ -812,8 +812,8 @@ export default function ClientesPage() {
           municipio: formularioCliente.municipio,
           estado: formularioCliente.estado,
           codigoPostal: formularioCliente.codigoPostal,
-          rfc: formularioCliente.rfc,
-          curp: formularioCliente.curp,
+          rfc: formularioCliente.rfc || '',
+          curp: formularioCliente.curp || '',
           rutaId: (formularioCliente.ruta as any)?.id || (typeof formularioCliente.ruta === 'object' && formularioCliente.ruta ? (formularioCliente.ruta as any).id : undefined),
           limiteCredito: formularioCliente.limiteCredito,
           saldoActual: formularioCliente.saldoActual,
@@ -1246,7 +1246,7 @@ export default function ClientesPage() {
         </DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2 }}>
-            Selecciona un archivo CSV o Excel con los datos de los clientes. El archivo debe contener las columnas: nombre, apellidoPaterno, apellidoMaterno, email, telefono, calle, numeroExterior, colonia, municipio, estado, codigoPostal, rfc, ruta, limiteCredito.
+            Selecciona un archivo CSV o Excel con los datos de los clientes. El archivo debe contener las columnas: nombre (opcional), apellidoPaterno (opcional), apellidoMaterno (opcional), email, telefono (opcional), calle, numeroExterior, colonia, municipio, estado, codigoPostal, rfc (opcional), curp (opcional), ruta, limiteCredito.
           </Alert>
           
           <Box sx={{ mb: 2 }}>
@@ -1315,7 +1315,6 @@ export default function ClientesPage() {
                 label="Nombre"
                 value={formularioCliente.nombre || ''}
                 onChange={(e) => manejarCambioFormulario('nombre', e.target.value)}
-                required
               />
             </Grid>
             
@@ -1325,7 +1324,6 @@ export default function ClientesPage() {
                 label="Apellido Paterno"
                 value={formularioCliente.apellidoPaterno || ''}
                 onChange={(e) => manejarCambioFormulario('apellidoPaterno', e.target.value)}
-                required
               />
             </Grid>
             
@@ -1354,7 +1352,6 @@ export default function ClientesPage() {
                 label="Teléfono"
                 value={formularioCliente.telefono || ''}
                 onChange={(e) => manejarCambioFormulario('telefono', e.target.value)}
-                required
               />
             </Grid>
 
