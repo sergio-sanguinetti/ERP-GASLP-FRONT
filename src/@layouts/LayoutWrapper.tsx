@@ -1,6 +1,7 @@
 'use client'
 
 // React Imports
+import { useState, useEffect } from 'react'
 import type { ReactElement } from 'react'
 
 // Type Imports
@@ -22,13 +23,23 @@ const LayoutWrapper = (props: LayoutWrapperProps) => {
 
   // Hooks
   const { settings } = useSettings()
+  const [mounted, setMounted] = useState(false)
 
   useLayoutInit(systemMode)
 
+  // Asegurar que el componente esté montado antes de usar settings
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Asegurar valores por defecto consistentes para evitar problemas de hidratación
+  const skin = mounted && settings?.skin ? settings.skin : 'default'
+  const layout = mounted && settings?.layout ? settings.layout : 'vertical'
+
   // Return the layout based on the layout context
   return (
-    <div className='flex flex-col flex-auto' data-skin={settings.skin}>
-      {settings.layout === 'horizontal' ? horizontalLayout : verticalLayout}
+    <div className='flex flex-col flex-auto' data-skin={skin}>
+      {layout === 'horizontal' ? horizontalLayout : verticalLayout}
     </div>
   )
 }

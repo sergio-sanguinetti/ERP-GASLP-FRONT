@@ -374,8 +374,14 @@ export default function VentasPage() {
     try {
       // El catálogo NO se filtra por sede (según requerimiento)
       const data = await productosAPI.getAll({ activo: true })
+      console.log('Productos cargados:', data.length)
+      console.log('Productos con categorías:', data.map(p => ({
+        id: p.id,
+        nombre: p.nombre,
+        categoriaId: p.categoriaId,
+        categoria: p.categoria ? { id: p.categoria.id, nombre: p.categoria.nombre, codigo: p.categoria.codigo } : null
+      })))
       setProductos(data)
-      console.log('Productos cargados:', data.length, data)
     } catch (err: any) {
       console.error('Error loading productos:', err)
     }
@@ -1048,6 +1054,7 @@ export default function VentasPage() {
   const loadCategoriasProducto = async () => {
     try {
       const data = await categoriasProductoAPI.getAll()
+      console.log('Categorías cargadas:', data.length, data.map(c => ({ id: c.id, nombre: c.nombre, codigo: c.codigo })))
       setCategoriasProducto(data)
     } catch (err: any) {
       console.error('Error loading categorias:', err)
@@ -1603,7 +1610,10 @@ export default function VentasPage() {
                           {productos
                             .filter(p => {
                               const categoriaCodigo = p.categoria?.codigo || categoriasProducto.find(c => c.id === p.categoriaId)?.codigo
-                              return (categoriaCodigo === 'gas_lp' || categoriaCodigo === 'gas-lp') && p.id === 'b9d63c0e-22b5-4022-a359-72657bc127a4'
+                              const categoriaNombre = p.categoria?.nombre || categoriasProducto.find(c => c.id === p.categoriaId)?.nombre
+                              // Buscar por código o por nombre (por si el código no coincide)
+                              const esGasLP = (categoriaCodigo === 'gas_lp' || categoriaCodigo === 'gas-lp' || categoriaNombre?.toLowerCase().includes('gas lp')) && p.id === 'b9d63c0e-22b5-4022-a359-72657bc127a4'
+                              return esGasLP
                             })
                             .slice(0, 1) // Solo mostrar el primer producto (el único permitido)
                             .map(producto => (
@@ -1625,6 +1635,20 @@ export default function VentasPage() {
                                 </TableCell>
                               </TableRow>
                             ))}
+                          {productos.filter(p => {
+                            const categoriaCodigo = p.categoria?.codigo || categoriasProducto.find(c => c.id === p.categoriaId)?.codigo
+                            const categoriaNombre = p.categoria?.nombre || categoriasProducto.find(c => c.id === p.categoriaId)?.nombre
+                            const esGasLP = (categoriaCodigo === 'gas_lp' || categoriaCodigo === 'gas-lp' || categoriaNombre?.toLowerCase().includes('gas lp')) && p.id === 'b9d63c0e-22b5-4022-a359-72657bc127a4'
+                            return esGasLP
+                          }).length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={4} align='center'>
+                                <Typography variant='body2' color='text.secondary'>
+                                  No hay productos de GAS LP disponibles
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          )}
                         </TableBody>
                       </Table>
                     </TableContainer>
@@ -1649,7 +1673,9 @@ export default function VentasPage() {
                           {productos
                             .filter(p => {
                               const categoriaCodigo = p.categoria?.codigo || categoriasProducto.find(c => c.id === p.categoriaId)?.codigo
-                              return categoriaCodigo === 'cilindros'
+                              const categoriaNombre = p.categoria?.nombre || categoriasProducto.find(c => c.id === p.categoriaId)?.nombre
+                              // Buscar por código o por nombre (por si el código no coincide)
+                              return categoriaCodigo === 'cilindros' || categoriaNombre?.toLowerCase().includes('cilindro')
                             })
                             .map(producto => (
                               <TableRow key={producto.id}>
@@ -1674,6 +1700,19 @@ export default function VentasPage() {
                                 </TableCell>
                               </TableRow>
                             ))}
+                          {productos.filter(p => {
+                            const categoriaCodigo = p.categoria?.codigo || categoriasProducto.find(c => c.id === p.categoriaId)?.codigo
+                            const categoriaNombre = p.categoria?.nombre || categoriasProducto.find(c => c.id === p.categoriaId)?.nombre
+                            return categoriaCodigo === 'cilindros' || categoriaNombre?.toLowerCase().includes('cilindro')
+                          }).length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={4} align='center'>
+                                <Typography variant='body2' color='text.secondary'>
+                                  No hay productos de CILINDROS disponibles
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          )}
                         </TableBody>
                       </Table>
                     </TableContainer>
@@ -1698,7 +1737,9 @@ export default function VentasPage() {
                           {productos
                             .filter(p => {
                               const categoriaCodigo = p.categoria?.codigo || categoriasProducto.find(c => c.id === p.categoriaId)?.codigo
-                              return categoriaCodigo === 'tanques_nuevos' || categoriaCodigo === 'tanques-nuevos'
+                              const categoriaNombre = p.categoria?.nombre || categoriasProducto.find(c => c.id === p.categoriaId)?.nombre
+                              // Buscar por código o por nombre (por si el código no coincide)
+                              return categoriaCodigo === 'tanques_nuevos' || categoriaCodigo === 'tanques-nuevos' || categoriaNombre?.toLowerCase().includes('tanque nuevo') || categoriaNombre?.toLowerCase().includes('tanques nuevo')
                             })
                             .map(producto => (
                               <TableRow key={producto.id}>
@@ -1723,6 +1764,19 @@ export default function VentasPage() {
                                 </TableCell>
                               </TableRow>
                             ))}
+                          {productos.filter(p => {
+                            const categoriaCodigo = p.categoria?.codigo || categoriasProducto.find(c => c.id === p.categoriaId)?.codigo
+                            const categoriaNombre = p.categoria?.nombre || categoriasProducto.find(c => c.id === p.categoriaId)?.nombre
+                            return categoriaCodigo === 'tanques_nuevos' || categoriaCodigo === 'tanques-nuevos' || categoriaNombre?.toLowerCase().includes('tanque nuevo') || categoriaNombre?.toLowerCase().includes('tanques nuevo')
+                          }).length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={4} align='center'>
+                                <Typography variant='body2' color='text.secondary'>
+                                  No hay productos de TANQUES NUEVOS disponibles
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          )}
                         </TableBody>
                       </Table>
                     </TableContainer>

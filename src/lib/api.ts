@@ -575,24 +575,44 @@ export interface TiposFormaPagoFilters {
 
 export const tiposFormaPagoAPI = {
   getAll: async (filtros?: TiposFormaPagoFilters): Promise<TipoFormaPago[]> => {
-    const queryParams = new URLSearchParams()
-    if (filtros?.activo) queryParams.append('activo', filtros.activo)
-    if (filtros?.codigo) queryParams.append('codigo', filtros.codigo)
-    if (filtros?.nombre) queryParams.append('nombre', filtros.nombre)
+    try {
+      const queryParams = new URLSearchParams()
+      if (filtros?.activo) queryParams.append('activo', filtros.activo)
+      if (filtros?.codigo) queryParams.append('codigo', filtros.codigo)
+      if (filtros?.nombre) queryParams.append('nombre', filtros.nombre)
 
-    const queryString = queryParams.toString()
-    const url = `/tipos-forma-pago${queryString ? `?${queryString}` : ''}`
+      const queryString = queryParams.toString()
+      const url = `/tipos-forma-pago${queryString ? `?${queryString}` : ''}`
 
-    const response = await fetchWithAuth(url, {
-      method: 'GET',
-    })
+      const response = await fetchWithAuth(url, {
+        method: 'GET',
+      })
 
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener tipos de formas de pago')
+      if (!response.ok) {
+        if (response.status === 404) {
+          // Si la ruta no existe, retornar array vacío en lugar de lanzar error
+          console.warn('Endpoint de tipos-forma-pago no encontrado. Retornando array vacío.')
+          return []
+        }
+        let errorMessage = 'Error al obtener tipos de formas de pago'
+        try {
+          const error = await response.json()
+          errorMessage = error.message || errorMessage
+        } catch (e) {
+          errorMessage = `Error ${response.status}: ${response.statusText}`
+        }
+        throw new Error(errorMessage)
+      }
+
+      return response.json()
+    } catch (error: any) {
+      // Si es un error de red o conexión, retornar array vacío
+      if (error.message?.includes('fetch') || error.message?.includes('network')) {
+        console.warn('Error de conexión al obtener tipos de formas de pago. Retornando array vacío.')
+        return []
+      }
+      throw error
     }
-
-    return response.json()
   },
 
   getById: async (id: string): Promise<TipoFormaPago> => {
@@ -1382,21 +1402,37 @@ export interface UpdateCategoriaProductoRequest {
 
 export const categoriasProductoAPI = {
   getAll: async (filtros?: { activa?: boolean }): Promise<CategoriaProducto[]> => {
-    const queryParams = new URLSearchParams()
-    if (filtros?.activa !== undefined) queryParams.append('activa', filtros.activa.toString())
-    const queryString = queryParams.toString()
-    const url = `${API_URL}/categorias-producto${queryString ? `?${queryString}` : ''}`
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener categorías')
+    try {
+      const queryParams = new URLSearchParams()
+      if (filtros?.activa !== undefined) queryParams.append('activa', filtros.activa.toString())
+      const queryString = queryParams.toString()
+      const url = `${API_URL}/categorias-producto${queryString ? `?${queryString}` : ''}`
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      if (!response.ok) {
+        if (response.status === 404) return []
+        let errorMessage = 'Error al obtener categorías'
+        try {
+          const error = await response.json()
+          errorMessage = error.message || errorMessage
+        } catch (e) {
+          errorMessage = `Error ${response.status}: ${response.statusText}`
+        }
+        throw new Error(errorMessage)
+      }
+      return response.json()
+    } catch (error: any) {
+      // Si es un error de red, retornar array vacío
+      if (error.message?.includes('fetch') || error.message?.includes('network')) {
+        console.warn('Error de conexión al obtener categorías. Retornando array vacío.')
+        return []
+      }
+      throw error
     }
-    return response.json()
   },
   getById: async (id: string): Promise<CategoriaProducto> => {
     const response = await fetch(`${API_URL}/categorias-producto/${id}`, {
@@ -1619,20 +1655,35 @@ export interface UpdateDescuentoRepartidorRequest {
 
 export const descuentosRepartidorAPI = {
   getAll: async (): Promise<DescuentoRepartidor[]> => {
-    const response = await fetch(`${API_URL}/descuentos-repartidor`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
+    try {
+      const response = await fetch(`${API_URL}/descuentos-repartidor`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
 
-    if (!response.ok) {
-      if (response.status === 404) return []
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener descuentos')
+      if (!response.ok) {
+        if (response.status === 404) return []
+        let errorMessage = 'Error al obtener descuentos'
+        try {
+          const error = await response.json()
+          errorMessage = error.message || errorMessage
+        } catch (e) {
+          errorMessage = `Error ${response.status}: ${response.statusText}`
+        }
+        throw new Error(errorMessage)
+      }
+
+      return response.json()
+    } catch (error: any) {
+      // Si es un error de red, retornar array vacío
+      if (error.message?.includes('fetch') || error.message?.includes('network')) {
+        console.warn('Error de conexión al obtener descuentos. Retornando array vacío.')
+        return []
+      }
+      throw error
     }
-
-    return response.json()
   },
 
   getByRepartidor: async (repartidorId: string): Promise<DescuentoRepartidor | null> => {
@@ -2471,14 +2522,49 @@ export interface UpdateConfiguracionRequest {
 
 export const configuracionesAPI = {
   get: async (): Promise<Configuracion> => {
-    const response = await fetchWithAuth('/configuraciones')
+    try {
+      const response = await fetchWithAuth('/configuraciones')
 
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener configuración')
+      if (!response.ok) {
+        if (response.status === 404) {
+          // Si no existe configuración, retornar valores por defecto
+          return {
+            id: '',
+            precioPorLitroGasLP: 18.50,
+            precioPorKG: 18.50,
+            fechaCreacion: new Date().toISOString(),
+            fechaModificacion: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }
+        }
+        let errorMessage = 'Error al obtener configuración'
+        try {
+          const error = await response.json()
+          errorMessage = error.message || errorMessage
+        } catch (e) {
+          errorMessage = `Error ${response.status}: ${response.statusText}`
+        }
+        throw new Error(errorMessage)
+      }
+
+      return response.json()
+    } catch (error: any) {
+      // Si es un error de red, retornar valores por defecto
+      if (error.message?.includes('fetch') || error.message?.includes('network')) {
+        console.warn('Error de conexión al obtener configuración. Usando valores por defecto.')
+        return {
+          id: '',
+          precioPorLitroGasLP: 18.50,
+          precioPorKG: 18.50,
+          fechaCreacion: new Date().toISOString(),
+          fechaModificacion: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+      }
+      throw error
     }
-
-    return response.json()
   },
 
   update: async (data: UpdateConfiguracionRequest): Promise<Configuracion> => {
