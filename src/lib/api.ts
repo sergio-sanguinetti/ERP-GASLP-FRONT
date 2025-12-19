@@ -1813,9 +1813,35 @@ export interface CreatePedidoRequest {
     totalPorPorcentajes?: number
     cantidadDinero?: number
     litrosPorDinero?: number
-  }
+    numeroCarga?: number
+    totalCargas?: number
+  } | Array<{
+    tipoCalculo: 'ninguno' | 'litros' | 'porcentajes' | 'dinero'
+    cantidadLitros?: number
+    precioPorLitro?: number
+    totalPorLitros?: number
+    capacidadTanque?: number
+    porcentajeInicial?: number
+    porcentajeFinal?: number
+    litrosALlenar?: number
+    totalPorPorcentajes?: number
+    cantidadDinero?: number
+    litrosPorDinero?: number
+    numeroCarga?: number
+    totalCargas?: number
+  }>
   sedeId?: string
-  productos?: Array<{ productoId: string; cantidad: number; precio: number }>
+  productos?: Array<{ 
+    productoId: string
+    cantidad: number
+    precio: number
+    litros?: number
+    subtotal?: number
+    descripcion?: string
+    indice?: number
+  }>
+  totalLitros?: number
+  totalMonto?: number
 }
 
 export interface PedidosFilters {
@@ -1937,14 +1963,9 @@ export const ventasAPI = {
     if (sedeId) queryParams.append('sedeId', sedeId)
 
     const queryString = queryParams.toString()
-    const url = `${API_URL}/ventas/resumen${queryString ? `?${queryString}` : ''}`
+    const url = `/ventas/resumen${queryString ? `?${queryString}` : ''}`
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
+    const response = await fetchWithAuth(url)
 
     if (!response.ok) {
       // Si no existe el endpoint, retornar datos por defecto
@@ -1970,14 +1991,9 @@ export const ventasAPI = {
     if (sedeId) queryParams.append('sedeId', sedeId)
 
     const queryString = queryParams.toString()
-    const url = `${API_URL}/ventas/corte/pipas${queryString ? `?${queryString}` : ''}`
+    const url = `/ventas/corte/pipas${queryString ? `?${queryString}` : ''}`
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
+    const response = await fetchWithAuth(url)
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -2003,14 +2019,9 @@ export const ventasAPI = {
     if (sedeId) queryParams.append('sedeId', sedeId)
 
     const queryString = queryParams.toString()
-    const url = `${API_URL}/ventas/corte/cilindros${queryString ? `?${queryString}` : ''}`
+    const url = `/ventas/corte/cilindros${queryString ? `?${queryString}` : ''}`
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
+    const response = await fetchWithAuth(url)
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -2026,6 +2037,19 @@ export const ventasAPI = {
       }
       const error = await response.json()
       throw new Error(error.message || 'Error al obtener corte de cilindros')
+    }
+
+    return response.json()
+  },
+
+  getAllCortes: async (): Promise<any[]> => {
+    const url = `/ventas`
+    const response = await fetchWithAuth(url)
+
+    if (!response.ok) {
+      if (response.status === 404) return []
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener todos los cortes')
     }
 
     return response.json()
@@ -2363,6 +2387,24 @@ export const creditosAbonosAPI = {
 
     const result = await response.json()
     return result.cliente || result
+  },
+
+  getPedidosPendientes: async (clienteId?: string): Promise<Pedido[]> => {
+    const queryParams = new URLSearchParams()
+    if (clienteId) queryParams.append('clienteId', clienteId)
+    queryParams.append('estado', 'pendiente')
+
+    const queryString = queryParams.toString()
+    const url = `/pedidos${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetchWithAuth(url)
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener pedidos pendientes')
+    }
+
+    return response.json()
   },
 }
 

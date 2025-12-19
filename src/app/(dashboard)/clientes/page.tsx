@@ -3,20 +3,30 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import QRCode from 'qrcode'
-import { clientesAPI, rutasAPI, authAPI, sedesAPI, type Cliente as ClienteAPI, type Domicilio as DomicilioAPI, type Ruta, type Usuario, type Sede } from '@/lib/api'
+import {
+  clientesAPI,
+  rutasAPI,
+  authAPI,
+  sedesAPI,
+  type Cliente as ClienteAPI,
+  type Domicilio as DomicilioAPI,
+  type Ruta,
+  type Usuario,
+  type Sede
+} from '@/lib/api'
 
-import { 
-  Box, 
-  Typography, 
-  Card, 
-  CardContent, 
-  Button, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow, 
+import {
+  Box,
+  Typography,
+  Card,
+  CardContent,
+  Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Paper,
   Chip,
   IconButton,
@@ -44,9 +54,9 @@ import {
   Avatar,
   CircularProgress
 } from '@mui/material'
-import { 
-  Add as AddIcon, 
-  Upload as UploadIcon, 
+import {
+  Add as AddIcon,
+  Upload as UploadIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   CreditCard as CreditCardIcon,
@@ -117,16 +127,50 @@ interface Cliente {
 
 // Datos específicos de México
 const estadosMexico = [
-  'Aguascalientes', 'Baja California', 'Baja California Sur', 'Campeche', 'Chiapas',
-  'Chihuahua', 'Ciudad de México', 'Coahuila', 'Colima', 'Durango', 'Guanajuato',
-  'Guerrero', 'Hidalgo', 'Jalisco', 'México', 'Michoacán', 'Morelos', 'Nayarit',
-  'Nuevo León', 'Oaxaca', 'Puebla', 'Querétaro', 'Quintana Roo', 'San Luis Potosí',
-  'Sinaloa', 'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala', 'Veracruz', 'Yucatán', 'Zacatecas'
+  'Aguascalientes',
+  'Baja California',
+  'Baja California Sur',
+  'Campeche',
+  'Chiapas',
+  'Chihuahua',
+  'Ciudad de México',
+  'Coahuila',
+  'Colima',
+  'Durango',
+  'Guanajuato',
+  'Guerrero',
+  'Hidalgo',
+  'Jalisco',
+  'México',
+  'Michoacán',
+  'Morelos',
+  'Nayarit',
+  'Nuevo León',
+  'Oaxaca',
+  'Puebla',
+  'Querétaro',
+  'Quintana Roo',
+  'San Luis Potosí',
+  'Sinaloa',
+  'Sonora',
+  'Tabasco',
+  'Tamaulipas',
+  'Tlaxcala',
+  'Veracruz',
+  'Yucatán',
+  'Zacatecas'
 ]
 
 const rutasMexico = [
-  'Ruta Centro', 'Ruta Norte', 'Ruta Sur', 'Ruta Occidente', 'Ruta Oriente',
-  'Ruta Sureste', 'Ruta Noreste', 'Ruta Noroeste', 'Ruta Suroeste'
+  'Ruta Centro',
+  'Ruta Norte',
+  'Ruta Sur',
+  'Ruta Occidente',
+  'Ruta Oriente',
+  'Ruta Sureste',
+  'Ruta Noreste',
+  'Ruta Noroeste',
+  'Ruta Suroeste'
 ]
 
 // Función para generar códigos QR únicos
@@ -574,7 +618,9 @@ export default function ClientesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
-  const [tipoDialogo, setTipoDialogo] = useState<'importar' | 'agregar' | 'editar' | 'credito' | 'historial' | 'detalles'>('agregar')
+  const [tipoDialogo, setTipoDialogo] = useState<
+    'importar' | 'agregar' | 'editar' | 'credito' | 'historial' | 'detalles'
+  >('agregar')
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null)
   const [formularioCliente, setFormularioCliente] = useState<Partial<Cliente>>({})
   const [domiciliosAdicionales, setDomiciliosAdicionales] = useState<Partial<Domicilio>[]>([])
@@ -609,11 +655,11 @@ export default function ClientesPage() {
       // Obtener usuario autenticado
       const user = await authAPI.getProfile()
       setUsuario(user)
-      
+
       // Cargar sedes
       const sedesData = await sedesAPI.getAll()
       setSedes(sedesData)
-      
+
       // Si es super administrador, permitir seleccionar sede
       // Si no, usar la sede del usuario
       if (user.rol === 'superAdministrador') {
@@ -640,10 +686,7 @@ export default function ClientesPage() {
       if (sedeId) {
         filtros.sedeId = sedeId
       }
-      const [clientesData, rutasData] = await Promise.all([
-        clientesAPI.getAll(filtros),
-        rutasAPI.getAll()
-      ])
+      const [clientesData, rutasData] = await Promise.all([clientesAPI.getAll(filtros), rutasAPI.getAll()])
       setClientes(clientesData.map(adaptarCliente))
       setRutas(rutasData)
     } catch (err: any) {
@@ -671,10 +714,13 @@ export default function ClientesPage() {
     }
   }
 
-  const abrirDialogo = (tipo: 'importar' | 'agregar' | 'editar' | 'credito' | 'historial' | 'detalles', cliente?: Cliente) => {
+  const abrirDialogo = (
+    tipo: 'importar' | 'agregar' | 'editar' | 'credito' | 'historial' | 'detalles',
+    cliente?: Cliente
+  ) => {
     setTipoDialogo(tipo)
     setClienteSeleccionado(cliente || null)
-    
+
     if (tipo === 'agregar') {
       setFormularioCliente({
         estadoCliente: 'activo',
@@ -691,7 +737,7 @@ export default function ClientesPage() {
       const domiciliosAdicionalesList = cliente.domicilios?.filter(d => d.tipo !== 'principal') || []
       setDomiciliosAdicionales(domiciliosAdicionalesList)
     }
-    
+
     setDialogoAbierto(true)
   }
 
@@ -710,18 +756,21 @@ export default function ClientesPage() {
   }
 
   const agregarDomicilioAdicional = () => {
-    setDomiciliosAdicionales(prev => [...prev, {
-      tipo: 'otro',
-      calle: '',
-      numeroExterior: '',
-      numeroInterior: '',
-      colonia: '',
-      municipio: '',
-      estado: '',
-      codigoPostal: '',
-      referencia: '',
-      activo: true
-    }])
+    setDomiciliosAdicionales(prev => [
+      ...prev,
+      {
+        tipo: 'otro',
+        calle: '',
+        numeroExterior: '',
+        numeroInterior: '',
+        colonia: '',
+        municipio: '',
+        estado: '',
+        codigoPostal: '',
+        referencia: '',
+        activo: true
+      }
+    ])
   }
 
   const eliminarDomicilioAdicional = (index: number) => {
@@ -729,9 +778,7 @@ export default function ClientesPage() {
   }
 
   const actualizarDomicilioAdicional = (index: number, campo: keyof Domicilio, valor: any) => {
-    setDomiciliosAdicionales(prev => prev.map((dom, i) => 
-      i === index ? { ...dom, [campo]: valor } : dom
-    ))
+    setDomiciliosAdicionales(prev => prev.map((dom, i) => (i === index ? { ...dom, [campo]: valor } : dom)))
   }
 
   const guardarCliente = async () => {
@@ -789,7 +836,11 @@ export default function ClientesPage() {
           codigoPostal: formularioCliente.codigoPostal!,
           rfc: formularioCliente.rfc || '',
           curp: formularioCliente.curp || '',
-          rutaId: (formularioCliente.ruta as any)?.id || (typeof formularioCliente.ruta === 'object' && formularioCliente.ruta ? (formularioCliente.ruta as any).id : undefined),
+          rutaId:
+            (formularioCliente.ruta as any)?.id ||
+            (typeof formularioCliente.ruta === 'object' && formularioCliente.ruta
+              ? (formularioCliente.ruta as any).id
+              : undefined),
           limiteCredito: formularioCliente.limiteCredito || 0,
           saldoActual: formularioCliente.saldoActual || 0,
           pagosEspecialesAutorizados: formularioCliente.pagosEspecialesAutorizados || false,
@@ -814,7 +865,11 @@ export default function ClientesPage() {
           codigoPostal: formularioCliente.codigoPostal,
           rfc: formularioCliente.rfc || '',
           curp: formularioCliente.curp || '',
-          rutaId: (formularioCliente.ruta as any)?.id || (typeof formularioCliente.ruta === 'object' && formularioCliente.ruta ? (formularioCliente.ruta as any).id : undefined),
+          rutaId:
+            (formularioCliente.ruta as any)?.id ||
+            (typeof formularioCliente.ruta === 'object' && formularioCliente.ruta
+              ? (formularioCliente.ruta as any).id
+              : undefined),
           limiteCredito: formularioCliente.limiteCredito,
           saldoActual: formularioCliente.saldoActual,
           pagosEspecialesAutorizados: formularioCliente.pagosEspecialesAutorizados,
@@ -854,7 +909,14 @@ export default function ClientesPage() {
               referencia: domicilio.referencia,
               activo: domicilio.activo
             })
-          } else if (domicilio.calle && domicilio.numeroExterior && domicilio.colonia && domicilio.municipio && domicilio.estado && domicilio.codigoPostal) {
+          } else if (
+            domicilio.calle &&
+            domicilio.numeroExterior &&
+            domicilio.colonia &&
+            domicilio.municipio &&
+            domicilio.estado &&
+            domicilio.codigoPostal
+          ) {
             // Crear nuevo domicilio
             await clientesAPI.createDomicilio(clienteSeleccionado.id, {
               tipo: domicilio.tipo || 'otro',
@@ -891,16 +953,16 @@ export default function ClientesPage() {
 
   const importarCSV = async () => {
     if (!archivoSeleccionado) return
-    
+
     setImportando(true)
     setProgresoImportacion(0)
-    
+
     // Simular proceso de importación
     for (let i = 0; i <= 100; i += 10) {
       await new Promise(resolve => setTimeout(resolve, 200))
       setProgresoImportacion(i)
     }
-    
+
     setImportando(false)
     cerrarDialogo()
   }
@@ -933,17 +995,17 @@ export default function ClientesPage() {
 
   const abrirModalQR = async (domicilio: Domicilio) => {
     if (!clienteSeleccionado) return
-    
+
     try {
       setDomicilioQR(domicilio)
       const contenidoQR = generarContenidoQR(clienteSeleccionado, domicilio)
-      
+
       // Crear un canvas para el QR
       const canvas = document.createElement('canvas')
       const qrSize = 500
       canvas.width = qrSize
       canvas.height = qrSize
-      
+
       // Generar el QR en el canvas
       await QRCode.toCanvas(canvas, contenidoQR, {
         width: qrSize,
@@ -953,11 +1015,11 @@ export default function ClientesPage() {
           light: '#FFFFFF'
         }
       })
-      
+
       // Cargar el logo
       const logo = new Image()
       logo.crossOrigin = 'anonymous'
-      
+
       await new Promise<void>((resolve, reject) => {
         logo.onload = () => {
           const ctx = canvas.getContext('2d')
@@ -965,25 +1027,25 @@ export default function ClientesPage() {
             reject(new Error('No se pudo obtener el contexto del canvas'))
             return
           }
-          
+
           // Tamaño del logo (20% del tamaño del QR)
-          const logoSize = qrSize * 0.4
+          const logoSize = qrSize * 0.2
           const logoX = (qrSize - logoSize) / 2
           const logoY = (qrSize - logoSize) / 2
-          
+
           // Dibujar un fondo blanco para el logo
           ctx.fillStyle = '#FFFFFF'
           ctx.fillRect(logoX - 5, logoY - 5, logoSize + 10, logoSize + 10)
-          
+
           // Dibujar el logo en el centro
           ctx.drawImage(logo, logoX, logoY, logoSize, logoSize)
-          
+
           resolve()
         }
         logo.onerror = () => reject(new Error('Error al cargar el logo'))
         logo.src = '/images/flama.png'
       })
-      
+
       // Convertir el canvas a data URL
       const qrDataURL = canvas.toDataURL('image/png')
       setQrDataURL(qrDataURL)
@@ -1013,10 +1075,14 @@ export default function ClientesPage() {
 
   const getEstadoColor = (estado: string) => {
     switch (estado) {
-      case 'activo': return 'success'
-      case 'suspendido': return 'warning'
-      case 'inactivo': return 'error'
-      default: return 'default'
+      case 'activo':
+        return 'success'
+      case 'suspendido':
+        return 'warning'
+      case 'inactivo':
+        return 'error'
+      default:
+        return 'default'
     }
   }
 
@@ -1031,18 +1097,14 @@ export default function ClientesPage() {
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1">
+        <Typography variant='h4' component='h1'>
           Gestión de Clientes
         </Typography>
         {esSuperAdministrador && (
           <FormControl sx={{ minWidth: 250 }}>
             <InputLabel>Sede</InputLabel>
-            <Select
-              value={sedeSeleccionada || ''}
-              onChange={(e) => handleSedeChange(e.target.value)}
-              label="Sede"
-            >
-              {sedes.map((sede) => (
+            <Select value={sedeSeleccionada || ''} onChange={e => handleSedeChange(e.target.value)} label='Sede'>
+              {sedes.map(sede => (
                 <MenuItem key={sede.id} value={sede.id}>
                   {sede.nombre}
                 </MenuItem>
@@ -1051,16 +1113,16 @@ export default function ClientesPage() {
           </FormControl>
         )}
         {!esSuperAdministrador && sedeId && (
-          <Chip 
+          <Chip
             label={`Sede: ${sedes.find(s => s.id === sedeId)?.nombre || 'N/A'}`}
-            color="primary"
-            variant="outlined"
+            color='primary'
+            variant='outlined'
           />
         )}
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+        <Alert severity='error' sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
@@ -1070,31 +1132,23 @@ export default function ClientesPage() {
           <CircularProgress />
         </Box>
       ) : null}
-      
+
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Lista de Clientes</Typography>
+            <Typography variant='h6'>Lista de Clientes</Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button
-                variant="outlined"
+                variant='outlined'
                 startIcon={<AccountBalanceIcon />}
                 onClick={() => router.push('/creditos-abonos')}
               >
                 Créditos y Abonos
               </Button>
-              <Button
-                variant="outlined"
-                startIcon={<UploadIcon />}
-                onClick={() => abrirDialogo('importar')}
-              >
+              <Button variant='outlined' startIcon={<UploadIcon />} onClick={() => abrirDialogo('importar')}>
                 Importar CSV/Excel
               </Button>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => abrirDialogo('agregar')}
-              >
+              <Button variant='contained' startIcon={<AddIcon />} onClick={() => abrirDialogo('agregar')}>
                 Agregar Cliente
               </Button>
             </Box>
@@ -1108,31 +1162,31 @@ export default function ClientesPage() {
                   <TableCell>Cliente</TableCell>
                   <TableCell>Contacto</TableCell>
                   <TableCell>Ruta</TableCell>
-                  <TableCell align="right">Límite Crédito</TableCell>
-                  <TableCell align="right">Saldo Actual</TableCell>
+                  <TableCell align='right'>Límite Crédito</TableCell>
+                  <TableCell align='right'>Saldo Actual</TableCell>
                   <TableCell>Estado</TableCell>
                   <TableCell>Pagos Especiales</TableCell>
-                  <TableCell align="center">Acciones</TableCell>
+                  <TableCell align='center'>Acciones</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {clientes.map((cliente) => (
-                  <TableRow 
-                    key={cliente.id} 
-                    hover 
+                {clientes.map(cliente => (
+                  <TableRow
+                    key={cliente.id}
+                    hover
                     onClick={() => abrirDialogo('detalles', cliente)}
                     sx={{ cursor: 'pointer' }}
                   >
                     <TableCell>
                       <Box>
-                        <Typography variant="subtitle2" fontWeight="bold">
+                        <Typography variant='subtitle2' fontWeight='bold'>
                           {obtenerNombreCompleto(cliente)}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant='body2' color='text.secondary'>
                           {obtenerDireccionCompleta(cliente)}
                         </Typography>
                         {cliente.email && (
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography variant='body2' color='text.secondary'>
                             {cliente.email}
                           </Typography>
                         )}
@@ -1140,26 +1194,26 @@ export default function ClientesPage() {
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <PhoneIcon fontSize="small" color="action" />
-                        <Typography variant="body2">{cliente.telefono}</Typography>
+                        <PhoneIcon fontSize='small' color='action' />
+                        <Typography variant='body2'>{cliente.telefono}</Typography>
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={(cliente.ruta as any)?.nombre || cliente.ruta || 'Sin ruta'} 
-                        size="small" 
-                        variant="outlined" 
+                      <Chip
+                        label={(cliente.ruta as any)?.nombre || cliente.ruta || 'Sin ruta'}
+                        size='small'
+                        variant='outlined'
                       />
                     </TableCell>
-                    <TableCell align="right">
-                      <Typography variant="body2" fontWeight="bold">
+                    <TableCell align='right'>
+                      <Typography variant='body2' fontWeight='bold'>
                         ${cliente.limiteCredito.toLocaleString()}
                       </Typography>
                     </TableCell>
-                    <TableCell align="right">
-                      <Typography 
-                        variant="body2" 
-                        fontWeight="bold"
+                    <TableCell align='right'>
+                      <Typography
+                        variant='body2'
+                        fontWeight='bold'
                         color={cliente.saldoActual > cliente.limiteCredito * 0.8 ? 'error' : 'text.primary'}
                       >
                         ${cliente.saldoActual.toLocaleString()}
@@ -1169,22 +1223,22 @@ export default function ClientesPage() {
                       <Chip
                         label={cliente.estadoCliente.charAt(0).toUpperCase() + cliente.estadoCliente.slice(1)}
                         color={getEstadoColor(cliente.estadoCliente) as any}
-                        size="small"
+                        size='small'
                       />
                     </TableCell>
                     <TableCell>
                       <Chip
                         label={cliente.pagosEspecialesAutorizados ? 'Autorizado' : 'No Autorizado'}
                         color={cliente.pagosEspecialesAutorizados ? 'success' : 'default'}
-                        size="small"
+                        size='small'
                       />
                     </TableCell>
-                    <TableCell align="center">
+                    <TableCell align='center'>
                       <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        <Tooltip title="Editar">
-                          <IconButton 
-                            size="small" 
-                            onClick={(e) => {
+                        <Tooltip title='Editar'>
+                          <IconButton
+                            size='small'
+                            onClick={e => {
                               e.stopPropagation()
                               abrirDialogo('editar', cliente)
                             }}
@@ -1192,10 +1246,10 @@ export default function ClientesPage() {
                             <EditIcon />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Control de Crédito">
-                          <IconButton 
-                            size="small" 
-                            onClick={(e) => {
+                        <Tooltip title='Control de Crédito'>
+                          <IconButton
+                            size='small'
+                            onClick={e => {
                               e.stopPropagation()
                               abrirDialogo('credito', cliente)
                             }}
@@ -1203,10 +1257,10 @@ export default function ClientesPage() {
                             <CreditCardIcon />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Historial">
-                          <IconButton 
-                            size="small" 
-                            onClick={(e) => {
+                        <Tooltip title='Historial'>
+                          <IconButton
+                            size='small'
+                            onClick={e => {
                               e.stopPropagation()
                               abrirDialogo('historial', cliente)
                             }}
@@ -1214,11 +1268,11 @@ export default function ClientesPage() {
                             <HistoryIcon />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Eliminar">
-                          <IconButton 
-                            size="small" 
-                            color="error"
-                            onClick={(e) => {
+                        <Tooltip title='Eliminar'>
+                          <IconButton
+                            size='small'
+                            color='error'
+                            onClick={e => {
                               e.stopPropagation()
                               abrirDialogoEliminar(cliente)
                             }}
@@ -1237,7 +1291,7 @@ export default function ClientesPage() {
       </Card>
 
       {/* Modal Importar CSV */}
-      <Dialog open={dialogoAbierto && tipoDialogo === 'importar'} onClose={cerrarDialogo} maxWidth="sm" fullWidth>
+      <Dialog open={dialogoAbierto && tipoDialogo === 'importar'} onClose={cerrarDialogo} maxWidth='sm' fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <UploadIcon />
@@ -1245,25 +1299,23 @@ export default function ClientesPage() {
           </Box>
         </DialogTitle>
         <DialogContent>
-          <Alert severity="info" sx={{ mb: 2 }}>
-            Selecciona un archivo CSV o Excel con los datos de los clientes. El archivo debe contener las columnas: nombre (opcional), apellidoPaterno (opcional), apellidoMaterno (opcional), email, telefono (opcional), calle, numeroExterior, colonia, municipio, estado, codigoPostal, rfc (opcional), curp (opcional), ruta, limiteCredito.
+          <Alert severity='info' sx={{ mb: 2 }}>
+            Selecciona un archivo CSV o Excel con los datos de los clientes. El archivo debe contener las columnas:
+            nombre (opcional), apellidoPaterno (opcional), apellidoMaterno (opcional), email, telefono (opcional),
+            calle, numeroExterior, colonia, municipio, estado, codigoPostal, rfc (opcional), curp (opcional), ruta,
+            limiteCredito.
           </Alert>
-          
+
           <Box sx={{ mb: 2 }}>
             <input
-              accept=".csv,.xlsx,.xls"
+              accept='.csv,.xlsx,.xls'
               style={{ display: 'none' }}
-              id="archivo-csv"
-              type="file"
+              id='archivo-csv'
+              type='file'
               onChange={manejarArchivo}
             />
-            <label htmlFor="archivo-csv">
-              <Button
-                variant="outlined"
-                component="span"
-                startIcon={<AttachFileIcon />}
-                fullWidth
-              >
+            <label htmlFor='archivo-csv'>
+              <Button variant='outlined' component='span' startIcon={<AttachFileIcon />} fullWidth>
                 {archivoSeleccionado ? archivoSeleccionado.name : 'Seleccionar archivo'}
               </Button>
             </label>
@@ -1271,10 +1323,10 @@ export default function ClientesPage() {
 
           {importando && (
             <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" gutterBottom>
+              <Typography variant='body2' gutterBottom>
                 Importando clientes... {progresoImportacion}%
               </Typography>
-              <LinearProgress variant="determinate" value={progresoImportacion} />
+              <LinearProgress variant='determinate' value={progresoImportacion} />
             </Box>
           )}
         </DialogContent>
@@ -1282,18 +1334,19 @@ export default function ClientesPage() {
           <Button onClick={cerrarDialogo} disabled={importando}>
             Cancelar
           </Button>
-          <Button 
-            onClick={importarCSV} 
-            variant="contained" 
-            disabled={!archivoSeleccionado || importando}
-          >
+          <Button onClick={importarCSV} variant='contained' disabled={!archivoSeleccionado || importando}>
             Importar
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Modal Agregar/Editar Cliente */}
-      <Dialog open={dialogoAbierto && (tipoDialogo === 'agregar' || tipoDialogo === 'editar')} onClose={cerrarDialogo} maxWidth="md" fullWidth>
+      <Dialog
+        open={dialogoAbierto && (tipoDialogo === 'agregar' || tipoDialogo === 'editar')}
+        onClose={cerrarDialogo}
+        maxWidth='md'
+        fullWidth
+      >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {tipoDialogo === 'agregar' ? <AddIcon /> : <EditIcon />}
@@ -1304,70 +1357,70 @@ export default function ClientesPage() {
           <Grid container spacing={2} sx={{ mt: 1 }}>
             {/* Información Personal */}
             <Grid item xs={12}>
-              <Typography variant="h6" gutterBottom>
+              <Typography variant='h6' gutterBottom>
                 Información Personal
               </Typography>
             </Grid>
-            
+
             <Grid item xs={12} sm={4}>
               <TextField
                 fullWidth
-                label="Nombre"
+                label='Nombre'
                 value={formularioCliente.nombre || ''}
-                onChange={(e) => manejarCambioFormulario('nombre', e.target.value)}
+                onChange={e => manejarCambioFormulario('nombre', e.target.value)}
               />
             </Grid>
-            
+
             <Grid item xs={12} sm={4}>
               <TextField
                 fullWidth
-                label="Apellido Paterno"
+                label='Apellido Paterno'
                 value={formularioCliente.apellidoPaterno || ''}
-                onChange={(e) => manejarCambioFormulario('apellidoPaterno', e.target.value)}
+                onChange={e => manejarCambioFormulario('apellidoPaterno', e.target.value)}
               />
             </Grid>
-            
+
             <Grid item xs={12} sm={4}>
               <TextField
                 fullWidth
-                label="Apellido Materno"
+                label='Apellido Materno'
                 value={formularioCliente.apellidoMaterno || ''}
-                onChange={(e) => manejarCambioFormulario('apellidoMaterno', e.target.value)}
+                onChange={e => manejarCambioFormulario('apellidoMaterno', e.target.value)}
               />
             </Grid>
 
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Email"
-                type="email"
+                label='Email'
+                type='email'
                 value={formularioCliente.email || ''}
-                onChange={(e) => manejarCambioFormulario('email', e.target.value)}
+                onChange={e => manejarCambioFormulario('email', e.target.value)}
               />
             </Grid>
 
             <Grid item xs={12} sm={3}>
               <TextField
                 fullWidth
-                label="Teléfono"
+                label='Teléfono'
                 value={formularioCliente.telefono || ''}
-                onChange={(e) => manejarCambioFormulario('telefono', e.target.value)}
+                onChange={e => manejarCambioFormulario('telefono', e.target.value)}
               />
             </Grid>
 
             <Grid item xs={12} sm={3}>
               <TextField
                 fullWidth
-                label="Teléfono Secundario"
+                label='Teléfono Secundario'
                 value={formularioCliente.telefonoSecundario || ''}
-                onChange={(e) => manejarCambioFormulario('telefonoSecundario', e.target.value)}
+                onChange={e => manejarCambioFormulario('telefonoSecundario', e.target.value)}
               />
             </Grid>
 
             {/* Información Fiscal */}
             <Grid item xs={12}>
               <Divider sx={{ my: 2 }} />
-              <Typography variant="h6" gutterBottom>
+              <Typography variant='h6' gutterBottom>
                 Información Fiscal
               </Typography>
             </Grid>
@@ -1375,27 +1428,27 @@ export default function ClientesPage() {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="RFC"
+                label='RFC'
                 value={formularioCliente.rfc || ''}
-                onChange={(e) => manejarCambioFormulario('rfc', e.target.value)}
-                placeholder="Ej: ABC123456789"
+                onChange={e => manejarCambioFormulario('rfc', e.target.value)}
+                placeholder='Ej: ABC123456789'
               />
             </Grid>
 
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="CURP"
+                label='CURP'
                 value={formularioCliente.curp || ''}
-                onChange={(e) => manejarCambioFormulario('curp', e.target.value)}
-                placeholder="Ej: ABC123456HDFXXX01"
+                onChange={e => manejarCambioFormulario('curp', e.target.value)}
+                placeholder='Ej: ABC123456HDFXXX01'
               />
             </Grid>
 
             {/* Dirección */}
             <Grid item xs={12}>
               <Divider sx={{ my: 2 }} />
-              <Typography variant="h6" gutterBottom>
+              <Typography variant='h6' gutterBottom>
                 Dirección
               </Typography>
             </Grid>
@@ -1403,9 +1456,9 @@ export default function ClientesPage() {
             <Grid item xs={12} sm={8}>
               <TextField
                 fullWidth
-                label="Calle"
+                label='Calle'
                 value={formularioCliente.calle || ''}
-                onChange={(e) => manejarCambioFormulario('calle', e.target.value)}
+                onChange={e => manejarCambioFormulario('calle', e.target.value)}
                 required
               />
             </Grid>
@@ -1413,9 +1466,9 @@ export default function ClientesPage() {
             <Grid item xs={12} sm={2}>
               <TextField
                 fullWidth
-                label="No. Ext."
+                label='No. Ext.'
                 value={formularioCliente.numeroExterior || ''}
-                onChange={(e) => manejarCambioFormulario('numeroExterior', e.target.value)}
+                onChange={e => manejarCambioFormulario('numeroExterior', e.target.value)}
                 required
               />
             </Grid>
@@ -1423,18 +1476,18 @@ export default function ClientesPage() {
             <Grid item xs={12} sm={2}>
               <TextField
                 fullWidth
-                label="No. Int."
+                label='No. Int.'
                 value={formularioCliente.numeroInterior || ''}
-                onChange={(e) => manejarCambioFormulario('numeroInterior', e.target.value)}
+                onChange={e => manejarCambioFormulario('numeroInterior', e.target.value)}
               />
             </Grid>
 
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Colonia"
+                label='Colonia'
                 value={formularioCliente.colonia || ''}
-                onChange={(e) => manejarCambioFormulario('colonia', e.target.value)}
+                onChange={e => manejarCambioFormulario('colonia', e.target.value)}
                 required
               />
             </Grid>
@@ -1442,9 +1495,9 @@ export default function ClientesPage() {
             <Grid item xs={12} sm={3}>
               <TextField
                 fullWidth
-                label="Municipio"
+                label='Municipio'
                 value={formularioCliente.municipio || ''}
-                onChange={(e) => manejarCambioFormulario('municipio', e.target.value)}
+                onChange={e => manejarCambioFormulario('municipio', e.target.value)}
                 required
               />
             </Grid>
@@ -1454,10 +1507,10 @@ export default function ClientesPage() {
                 <InputLabel>Estado</InputLabel>
                 <Select
                   value={formularioCliente.estado || ''}
-                  onChange={(e) => manejarCambioFormulario('estado', e.target.value)}
-                  label="Estado"
+                  onChange={e => manejarCambioFormulario('estado', e.target.value)}
+                  label='Estado'
                 >
-                  {estadosMexico.map((estado) => (
+                  {estadosMexico.map(estado => (
                     <MenuItem key={estado} value={estado}>
                       {estado}
                     </MenuItem>
@@ -1469,9 +1522,9 @@ export default function ClientesPage() {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Código Postal"
+                label='Código Postal'
                 value={formularioCliente.codigoPostal || ''}
-                onChange={(e) => manejarCambioFormulario('codigoPostal', e.target.value)}
+                onChange={e => manejarCambioFormulario('codigoPostal', e.target.value)}
                 required
                 inputProps={{ maxLength: 5 }}
               />
@@ -1480,7 +1533,7 @@ export default function ClientesPage() {
             {/* Información Comercial */}
             <Grid item xs={12}>
               <Divider sx={{ my: 2 }} />
-              <Typography variant="h6" gutterBottom>
+              <Typography variant='h6' gutterBottom>
                 Información Comercial
               </Typography>
             </Grid>
@@ -1489,21 +1542,27 @@ export default function ClientesPage() {
               <FormControl fullWidth required>
                 <InputLabel>Ruta</InputLabel>
                 <Select
-                  value={(formularioCliente.ruta as any)?.id || (typeof formularioCliente.ruta === 'string' ? formularioCliente.ruta : '') || ''}
-                  onChange={(e) => {
+                  value={
+                    (formularioCliente.ruta as any)?.id ||
+                    (typeof formularioCliente.ruta === 'string' ? formularioCliente.ruta : '') ||
+                    ''
+                  }
+                  onChange={e => {
                     const rutaSeleccionada = rutas.find(r => r.id === e.target.value)
                     manejarCambioFormulario('ruta', rutaSeleccionada || e.target.value)
                     if (rutaSeleccionada) {
                       manejarCambioFormulario('ruta', rutaSeleccionada.nombre)
                     }
                   }}
-                  label="Ruta"
+                  label='Ruta'
                 >
-                  {rutas.filter(r => r.activa).map((ruta) => (
-                    <MenuItem key={ruta.id} value={ruta.id}>
-                      {ruta.nombre} - {ruta.codigo}
-                    </MenuItem>
-                  ))}
+                  {rutas
+                    .filter(r => r.activa)
+                    .map(ruta => (
+                      <MenuItem key={ruta.id} value={ruta.id}>
+                        {ruta.nombre} - {ruta.codigo}
+                      </MenuItem>
+                    ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -1511,10 +1570,10 @@ export default function ClientesPage() {
             <Grid item xs={12} sm={3}>
               <TextField
                 fullWidth
-                label="Límite de Crédito"
-                type="number"
+                label='Límite de Crédito'
+                type='number'
                 value={formularioCliente.limiteCredito || 0}
-                onChange={(e) => manejarCambioFormulario('limiteCredito', Number(e.target.value))}
+                onChange={e => manejarCambioFormulario('limiteCredito', Number(e.target.value))}
                 required
               />
             </Grid>
@@ -1522,10 +1581,10 @@ export default function ClientesPage() {
             <Grid item xs={12} sm={3}>
               <TextField
                 fullWidth
-                label="Saldo Actual"
-                type="number"
+                label='Saldo Actual'
+                type='number'
                 value={formularioCliente.saldoActual || 0}
-                onChange={(e) => manejarCambioFormulario('saldoActual', Number(e.target.value))}
+                onChange={e => manejarCambioFormulario('saldoActual', Number(e.target.value))}
                 required
               />
             </Grid>
@@ -1535,10 +1594,10 @@ export default function ClientesPage() {
                 control={
                   <Switch
                     checked={formularioCliente.pagosEspecialesAutorizados || false}
-                    onChange={(e) => manejarCambioFormulario('pagosEspecialesAutorizados', e.target.checked)}
+                    onChange={e => manejarCambioFormulario('pagosEspecialesAutorizados', e.target.checked)}
                   />
                 }
-                label="Pagos Especiales Autorizados"
+                label='Pagos Especiales Autorizados'
               />
             </Grid>
 
@@ -1547,12 +1606,12 @@ export default function ClientesPage() {
                 <InputLabel>Estado del Cliente</InputLabel>
                 <Select
                   value={formularioCliente.estadoCliente || 'activo'}
-                  onChange={(e) => manejarCambioFormulario('estadoCliente', e.target.value)}
-                  label="Estado del Cliente"
+                  onChange={e => manejarCambioFormulario('estadoCliente', e.target.value)}
+                  label='Estado del Cliente'
                 >
-                  <MenuItem value="activo">Activo</MenuItem>
-                  <MenuItem value="suspendido">Suspendido</MenuItem>
-                  <MenuItem value="inactivo">Inactivo</MenuItem>
+                  <MenuItem value='activo'>Activo</MenuItem>
+                  <MenuItem value='suspendido'>Suspendido</MenuItem>
+                  <MenuItem value='inactivo'>Inactivo</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -1561,34 +1620,26 @@ export default function ClientesPage() {
             <Grid item xs={12}>
               <Divider sx={{ my: 2 }} />
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6" gutterBottom>
+                <Typography variant='h6' gutterBottom>
                   Domicilios Adicionales
                 </Typography>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<AddIcon />}
-                  onClick={agregarDomicilioAdicional}
-                >
+                <Button variant='outlined' size='small' startIcon={<AddIcon />} onClick={agregarDomicilioAdicional}>
                   Agregar Domicilio
                 </Button>
               </Box>
-              <Alert severity="info" sx={{ mb: 2 }}>
-                El primer domicilio (principal) se crea automáticamente con los datos de la dirección principal del cliente.
+              <Alert severity='info' sx={{ mb: 2 }}>
+                El primer domicilio (principal) se crea automáticamente con los datos de la dirección principal del
+                cliente.
               </Alert>
-              
+
               {domiciliosAdicionales.map((domicilio, index) => (
-                <Card key={index} variant="outlined" sx={{ mb: 2 }}>
+                <Card key={index} variant='outlined' sx={{ mb: 2 }}>
                   <CardContent>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                      <Typography variant="subtitle1" fontWeight="bold">
+                      <Typography variant='subtitle1' fontWeight='bold'>
                         Domicilio {index + 1}
                       </Typography>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => eliminarDomicilioAdicional(index)}
-                      >
+                      <IconButton size='small' color='error' onClick={() => eliminarDomicilioAdicional(index)}>
                         <DeleteIcon />
                       </IconButton>
                     </Box>
@@ -1598,56 +1649,56 @@ export default function ClientesPage() {
                           <InputLabel>Tipo de Domicilio</InputLabel>
                           <Select
                             value={domicilio.tipo || 'otro'}
-                            onChange={(e) => actualizarDomicilioAdicional(index, 'tipo', e.target.value)}
-                            label="Tipo de Domicilio"
+                            onChange={e => actualizarDomicilioAdicional(index, 'tipo', e.target.value)}
+                            label='Tipo de Domicilio'
                           >
-                            <MenuItem value="facturacion">Facturación</MenuItem>
-                            <MenuItem value="entrega">Entrega</MenuItem>
-                            <MenuItem value="otro">Otro</MenuItem>
+                            <MenuItem value='facturacion'>Facturación</MenuItem>
+                            <MenuItem value='entrega'>Entrega</MenuItem>
+                            <MenuItem value='otro'>Otro</MenuItem>
                           </Select>
                         </FormControl>
                       </Grid>
                       <Grid item xs={12} sm={8}>
                         <TextField
                           fullWidth
-                          label="Calle"
+                          label='Calle'
                           value={domicilio.calle || ''}
-                          onChange={(e) => actualizarDomicilioAdicional(index, 'calle', e.target.value)}
+                          onChange={e => actualizarDomicilioAdicional(index, 'calle', e.target.value)}
                           required
                         />
                       </Grid>
                       <Grid item xs={12} sm={3}>
                         <TextField
                           fullWidth
-                          label="No. Ext."
+                          label='No. Ext.'
                           value={domicilio.numeroExterior || ''}
-                          onChange={(e) => actualizarDomicilioAdicional(index, 'numeroExterior', e.target.value)}
+                          onChange={e => actualizarDomicilioAdicional(index, 'numeroExterior', e.target.value)}
                           required
                         />
                       </Grid>
                       <Grid item xs={12} sm={3}>
                         <TextField
                           fullWidth
-                          label="No. Int."
+                          label='No. Int.'
                           value={domicilio.numeroInterior || ''}
-                          onChange={(e) => actualizarDomicilioAdicional(index, 'numeroInterior', e.target.value)}
+                          onChange={e => actualizarDomicilioAdicional(index, 'numeroInterior', e.target.value)}
                         />
                       </Grid>
                       <Grid item xs={12} sm={6}>
                         <TextField
                           fullWidth
-                          label="Colonia"
+                          label='Colonia'
                           value={domicilio.colonia || ''}
-                          onChange={(e) => actualizarDomicilioAdicional(index, 'colonia', e.target.value)}
+                          onChange={e => actualizarDomicilioAdicional(index, 'colonia', e.target.value)}
                           required
                         />
                       </Grid>
                       <Grid item xs={12} sm={4}>
                         <TextField
                           fullWidth
-                          label="Municipio"
+                          label='Municipio'
                           value={domicilio.municipio || ''}
-                          onChange={(e) => actualizarDomicilioAdicional(index, 'municipio', e.target.value)}
+                          onChange={e => actualizarDomicilioAdicional(index, 'municipio', e.target.value)}
                           required
                         />
                       </Grid>
@@ -1656,10 +1707,10 @@ export default function ClientesPage() {
                           <InputLabel>Estado</InputLabel>
                           <Select
                             value={domicilio.estado || ''}
-                            onChange={(e) => actualizarDomicilioAdicional(index, 'estado', e.target.value)}
-                            label="Estado"
+                            onChange={e => actualizarDomicilioAdicional(index, 'estado', e.target.value)}
+                            label='Estado'
                           >
-                            {estadosMexico.map((estado) => (
+                            {estadosMexico.map(estado => (
                               <MenuItem key={estado} value={estado}>
                                 {estado}
                               </MenuItem>
@@ -1670,9 +1721,9 @@ export default function ClientesPage() {
                       <Grid item xs={12} sm={4}>
                         <TextField
                           fullWidth
-                          label="Código Postal"
+                          label='Código Postal'
                           value={domicilio.codigoPostal || ''}
-                          onChange={(e) => actualizarDomicilioAdicional(index, 'codigoPostal', e.target.value)}
+                          onChange={e => actualizarDomicilioAdicional(index, 'codigoPostal', e.target.value)}
                           required
                           inputProps={{ maxLength: 5 }}
                         />
@@ -1680,9 +1731,9 @@ export default function ClientesPage() {
                       <Grid item xs={12}>
                         <TextField
                           fullWidth
-                          label="Referencia"
+                          label='Referencia'
                           value={domicilio.referencia || ''}
-                          onChange={(e) => actualizarDomicilioAdicional(index, 'referencia', e.target.value)}
+                          onChange={e => actualizarDomicilioAdicional(index, 'referencia', e.target.value)}
                           multiline
                           rows={2}
                         />
@@ -1692,10 +1743,10 @@ export default function ClientesPage() {
                           control={
                             <Switch
                               checked={domicilio.activo !== undefined ? domicilio.activo : true}
-                              onChange={(e) => actualizarDomicilioAdicional(index, 'activo', e.target.checked)}
+                              onChange={e => actualizarDomicilioAdicional(index, 'activo', e.target.checked)}
                             />
                           }
-                          label="Domicilio Activo"
+                          label='Domicilio Activo'
                         />
                       </Grid>
                     </Grid>
@@ -1706,17 +1757,15 @@ export default function ClientesPage() {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={cerrarDialogo}>
-            Cancelar
-          </Button>
-          <Button onClick={guardarCliente} variant="contained" startIcon={<SaveIcon />} disabled={saving}>
+          <Button onClick={cerrarDialogo}>Cancelar</Button>
+          <Button onClick={guardarCliente} variant='contained' startIcon={<SaveIcon />} disabled={saving}>
             {saving ? 'Guardando...' : tipoDialogo === 'agregar' ? 'Agregar' : 'Guardar Cambios'}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Modal Control de Crédito */}
-      <Dialog open={dialogoAbierto && tipoDialogo === 'credito'} onClose={cerrarDialogo} maxWidth="sm" fullWidth>
+      <Dialog open={dialogoAbierto && tipoDialogo === 'credito'} onClose={cerrarDialogo} maxWidth='sm' fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CreditCardIcon />
@@ -1728,36 +1777,40 @@ export default function ClientesPage() {
             <Box>
               <Grid container spacing={2} sx={{ mt: 1 }}>
                 <Grid item xs={12}>
-                  <Card variant="outlined">
+                  <Card variant='outlined'>
                     <CardContent>
-                      <Typography variant="h6" gutterBottom>
+                      <Typography variant='h6' gutterBottom>
                         Información de Crédito
                       </Typography>
                       <Grid container spacing={2}>
                         <Grid item xs={6}>
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography variant='body2' color='text.secondary'>
                             Límite de Crédito
                           </Typography>
-                          <Typography variant="h6" color="primary">
+                          <Typography variant='h6' color='primary'>
                             ${clienteSeleccionado.limiteCredito.toLocaleString()}
                           </Typography>
                         </Grid>
                         <Grid item xs={6}>
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography variant='body2' color='text.secondary'>
                             Saldo Actual
                           </Typography>
-                          <Typography 
-                            variant="h6" 
-                            color={clienteSeleccionado.saldoActual > clienteSeleccionado.limiteCredito * 0.8 ? 'error' : 'success'}
+                          <Typography
+                            variant='h6'
+                            color={
+                              clienteSeleccionado.saldoActual > clienteSeleccionado.limiteCredito * 0.8
+                                ? 'error'
+                                : 'success'
+                            }
                           >
                             ${clienteSeleccionado.saldoActual.toLocaleString()}
                           </Typography>
                         </Grid>
                         <Grid item xs={12}>
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography variant='body2' color='text.secondary'>
                             Crédito Disponible
                           </Typography>
-                          <Typography variant="h6" color="success.main">
+                          <Typography variant='h6' color='success.main'>
                             ${(clienteSeleccionado.limiteCredito - clienteSeleccionado.saldoActual).toLocaleString()}
                           </Typography>
                         </Grid>
@@ -1767,46 +1820,40 @@ export default function ClientesPage() {
                 </Grid>
 
                 <Grid item xs={12}>
-                  <Typography variant="h6" gutterBottom>
+                  <Typography variant='h6' gutterBottom>
                     Historial de Movimientos Recientes
                   </Typography>
                   <List>
                     <ListItem>
                       <ListItemIcon>
-                        <TrendingUpIcon color="success" />
+                        <TrendingUpIcon color='success' />
                       </ListItemIcon>
-                      <ListItemText
-                        primary="Pago recibido"
-                        secondary="15/01/2024 - $5,000.00"
-                      />
+                      <ListItemText primary='Pago recibido' secondary='15/01/2024 - $5,000.00' />
                     </ListItem>
                     <ListItem>
                       <ListItemIcon>
-                        <TrendingDownIcon color="error" />
+                        <TrendingDownIcon color='error' />
                       </ListItemIcon>
-                      <ListItemText
-                        primary="Venta a crédito"
-                        secondary="10/01/2024 - $8,500.00"
-                      />
+                      <ListItemText primary='Venta a crédito' secondary='10/01/2024 - $8,500.00' />
                     </ListItem>
                     <ListItem>
                       <ListItemIcon>
-                        <PaymentIcon color="info" />
+                        <PaymentIcon color='info' />
                       </ListItemIcon>
-                      <ListItemText
-                        primary="Pago especial autorizado"
-                        secondary="05/01/2024 - $2,000.00"
-                      />
+                      <ListItemText primary='Pago especial autorizado' secondary='05/01/2024 - $2,000.00' />
                     </ListItem>
                   </List>
                 </Grid>
 
                 <Grid item xs={12}>
-                  <Alert severity={clienteSeleccionado.saldoActual > clienteSeleccionado.limiteCredito * 0.8 ? 'warning' : 'success'}>
-                    {clienteSeleccionado.saldoActual > clienteSeleccionado.limiteCredito * 0.8 
-                      ? 'El cliente ha alcanzado el 80% de su límite de crédito'
-                      : 'El cliente tiene crédito disponible'
+                  <Alert
+                    severity={
+                      clienteSeleccionado.saldoActual > clienteSeleccionado.limiteCredito * 0.8 ? 'warning' : 'success'
                     }
+                  >
+                    {clienteSeleccionado.saldoActual > clienteSeleccionado.limiteCredito * 0.8
+                      ? 'El cliente ha alcanzado el 80% de su límite de crédito'
+                      : 'El cliente tiene crédito disponible'}
                   </Alert>
                 </Grid>
               </Grid>
@@ -1814,14 +1861,12 @@ export default function ClientesPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={cerrarDialogo}>
-            Cerrar
-          </Button>
+          <Button onClick={cerrarDialogo}>Cerrar</Button>
         </DialogActions>
       </Dialog>
 
       {/* Modal Historial */}
-      <Dialog open={dialogoAbierto && tipoDialogo === 'historial'} onClose={cerrarDialogo} maxWidth="md" fullWidth>
+      <Dialog open={dialogoAbierto && tipoDialogo === 'historial'} onClose={cerrarDialogo} maxWidth='md' fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <HistoryIcon />
@@ -1831,23 +1876,23 @@ export default function ClientesPage() {
         <DialogContent>
           {clienteSeleccionado && (
             <Box>
-              <Typography variant="h6" gutterBottom>
+              <Typography variant='h6' gutterBottom>
                 Información del Cliente
               </Typography>
               <Grid container spacing={2} sx={{ mb: 3 }}>
                 <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant='body2' color='text.secondary'>
                     Fecha de Registro
                   </Typography>
-                  <Typography variant="body1">
+                  <Typography variant='body1'>
                     {new Date(clienteSeleccionado.fechaRegistro).toLocaleDateString('es-MX')}
                   </Typography>
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant='body2' color='text.secondary'>
                     Última Modificación
                   </Typography>
-                  <Typography variant="body1">
+                  <Typography variant='body1'>
                     {new Date(clienteSeleccionado.ultimaModificacion).toLocaleDateString('es-MX')}
                   </Typography>
                 </Grid>
@@ -1855,53 +1900,47 @@ export default function ClientesPage() {
 
               <Divider sx={{ my: 2 }} />
 
-              <Typography variant="h6" gutterBottom>
+              <Typography variant='h6' gutterBottom>
                 Historial Completo
               </Typography>
               <List>
                 <ListItem>
                   <ListItemIcon>
-                    <EditIcon color="primary" />
+                    <EditIcon color='primary' />
                   </ListItemIcon>
                   <ListItemText
-                    primary="Cliente modificado"
-                    secondary="25/01/2024 - Información de contacto actualizada"
+                    primary='Cliente modificado'
+                    secondary='25/01/2024 - Información de contacto actualizada'
                   />
                 </ListItem>
                 <ListItem>
                   <ListItemIcon>
-                    <TrendingUpIcon color="success" />
+                    <TrendingUpIcon color='success' />
+                  </ListItemIcon>
+                  <ListItemText primary='Pago recibido' secondary='20/01/2024 - $5,000.00 - Referencia: PAG-001234' />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon>
+                    <TrendingDownIcon color='error' />
+                  </ListItemIcon>
+                  <ListItemText primary='Venta a crédito' secondary='15/01/2024 - $8,500.00 - Factura: FAC-005678' />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon>
+                    <CreditCardIcon color='info' />
                   </ListItemIcon>
                   <ListItemText
-                    primary="Pago recibido"
-                    secondary="20/01/2024 - $5,000.00 - Referencia: PAG-001234"
+                    primary='Límite de crédito modificado'
+                    secondary='10/01/2024 - Nuevo límite: $50,000.00'
                   />
                 </ListItem>
                 <ListItem>
                   <ListItemIcon>
-                    <TrendingDownIcon color="error" />
+                    <PaymentIcon color='warning' />
                   </ListItemIcon>
                   <ListItemText
-                    primary="Venta a crédito"
-                    secondary="15/01/2024 - $8,500.00 - Factura: FAC-005678"
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon>
-                    <CreditCardIcon color="info" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Límite de crédito modificado"
-                    secondary="10/01/2024 - Nuevo límite: $50,000.00"
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon>
-                    <PaymentIcon color="warning" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Pago especial autorizado"
-                    secondary="05/01/2024 - $2,000.00 - Autorizado por: Gerencia"
+                    primary='Pago especial autorizado'
+                    secondary='05/01/2024 - $2,000.00 - Autorizado por: Gerencia'
                   />
                 </ListItem>
               </List>
@@ -1909,21 +1948,19 @@ export default function ClientesPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={cerrarDialogo}>
-            Cerrar
-          </Button>
+          <Button onClick={cerrarDialogo}>Cerrar</Button>
         </DialogActions>
       </Dialog>
 
       {/* Modal Detalles del Cliente */}
-      <Dialog open={dialogoAbierto && tipoDialogo === 'detalles'} onClose={cerrarDialogo} maxWidth="lg" fullWidth>
+      <Dialog open={dialogoAbierto && tipoDialogo === 'detalles'} onClose={cerrarDialogo} maxWidth='lg' fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <PersonIcon />
               Detalles del Cliente - {clienteSeleccionado ? obtenerNombreCompleto(clienteSeleccionado) : ''}
             </Box>
-            <IconButton onClick={cerrarDialogo} size="small">
+            <IconButton onClick={cerrarDialogo} size='small'>
               <CloseIcon />
             </IconButton>
           </Box>
@@ -1932,95 +1969,88 @@ export default function ClientesPage() {
           {clienteSeleccionado && (
             <Box>
               {/* Información Personal */}
-              <Card variant="outlined" sx={{ mb: 3 }}>
+              <Card variant='outlined' sx={{ mb: 3 }}>
                 <CardContent>
-                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant='h6' gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <PersonIcon />
                     Información Personal
                   </Typography>
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant='body2' color='text.secondary'>
                         Nombre Completo
                       </Typography>
-                      <Typography variant="body1" fontWeight="bold">
+                      <Typography variant='body1' fontWeight='bold'>
                         {obtenerNombreCompleto(clienteSeleccionado)}
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant='body2' color='text.secondary'>
                         Estado del Cliente
                       </Typography>
                       <Chip
-                        label={clienteSeleccionado.estadoCliente.charAt(0).toUpperCase() + clienteSeleccionado.estadoCliente.slice(1)}
+                        label={
+                          clienteSeleccionado.estadoCliente.charAt(0).toUpperCase() +
+                          clienteSeleccionado.estadoCliente.slice(1)
+                        }
                         color={getEstadoColor(clienteSeleccionado.estadoCliente) as any}
-                        size="small"
+                        size='small'
                       />
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant='body2' color='text.secondary'>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <EmailIcon fontSize="small" />
+                          <EmailIcon fontSize='small' />
                           Email
                         </Box>
                       </Typography>
-                      <Typography variant="body1">
-                        {clienteSeleccionado.email || 'No especificado'}
-                      </Typography>
+                      <Typography variant='body1'>{clienteSeleccionado.email || 'No especificado'}</Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant='body2' color='text.secondary'>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <PhoneIcon fontSize="small" />
+                          <PhoneIcon fontSize='small' />
                           Teléfono Principal
                         </Box>
                       </Typography>
-                      <Typography variant="body1">
-                        {clienteSeleccionado.telefono}
-                      </Typography>
+                      <Typography variant='body1'>{clienteSeleccionado.telefono}</Typography>
                     </Grid>
                     {clienteSeleccionado.telefonoSecundario && (
                       <Grid item xs={12} sm={6}>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant='body2' color='text.secondary'>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <PhoneIcon fontSize="small" />
+                            <PhoneIcon fontSize='small' />
                             Teléfono Secundario
                           </Box>
                         </Typography>
-                        <Typography variant="body1">
-                          {clienteSeleccionado.telefonoSecundario}
-                        </Typography>
+                        <Typography variant='body1'>{clienteSeleccionado.telefonoSecundario}</Typography>
                       </Grid>
                     )}
                     <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant='body2' color='text.secondary'>
                         RFC
                       </Typography>
-                      <Typography variant="body1">
-                        {clienteSeleccionado.rfc || 'No especificado'}
-                      </Typography>
+                      <Typography variant='body1'>{clienteSeleccionado.rfc || 'No especificado'}</Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant='body2' color='text.secondary'>
                         CURP
                       </Typography>
-                      <Typography variant="body1">
-                        {clienteSeleccionado.curp || 'No especificado'}
-                      </Typography>
+                      <Typography variant='body1'>{clienteSeleccionado.curp || 'No especificado'}</Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant='body2' color='text.secondary'>
                         Fecha de Registro
                       </Typography>
-                      <Typography variant="body1">
+                      <Typography variant='body1'>
                         {new Date(clienteSeleccionado.fechaRegistro).toLocaleDateString('es-MX')}
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant='body2' color='text.secondary'>
                         Última Modificación
                       </Typography>
-                      <Typography variant="body1">
+                      <Typography variant='body1'>
                         {new Date(clienteSeleccionado.ultimaModificacion).toLocaleDateString('es-MX')}
                       </Typography>
                     </Grid>
@@ -2029,58 +2059,62 @@ export default function ClientesPage() {
               </Card>
 
               {/* Información de Crédito */}
-              <Card variant="outlined" sx={{ mb: 3 }}>
+              <Card variant='outlined' sx={{ mb: 3 }}>
                 <CardContent>
-                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant='h6' gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <CreditCardIcon />
                     Información de Crédito
                   </Typography>
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={4}>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant='body2' color='text.secondary'>
                         Límite de Crédito
                       </Typography>
-                      <Typography variant="h6" color="primary">
+                      <Typography variant='h6' color='primary'>
                         ${clienteSeleccionado.limiteCredito.toLocaleString()}
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={4}>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant='body2' color='text.secondary'>
                         Saldo Actual
                       </Typography>
-                      <Typography 
-                        variant="h6" 
-                        color={clienteSeleccionado.saldoActual > clienteSeleccionado.limiteCredito * 0.8 ? 'error' : 'success'}
+                      <Typography
+                        variant='h6'
+                        color={
+                          clienteSeleccionado.saldoActual > clienteSeleccionado.limiteCredito * 0.8
+                            ? 'error'
+                            : 'success'
+                        }
                       >
                         ${clienteSeleccionado.saldoActual.toLocaleString()}
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={4}>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant='body2' color='text.secondary'>
                         Crédito Disponible
                       </Typography>
-                      <Typography variant="h6" color="success.main">
+                      <Typography variant='h6' color='success.main'>
                         ${(clienteSeleccionado.limiteCredito - clienteSeleccionado.saldoActual).toLocaleString()}
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant='body2' color='text.secondary'>
                         Pagos Especiales
                       </Typography>
                       <Chip
                         label={clienteSeleccionado.pagosEspecialesAutorizados ? 'Autorizado' : 'No Autorizado'}
                         color={clienteSeleccionado.pagosEspecialesAutorizados ? 'success' : 'default'}
-                        size="small"
+                        size='small'
                       />
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant='body2' color='text.secondary'>
                         Ruta Asignada
                       </Typography>
-                      <Chip 
-                        label={(clienteSeleccionado.ruta as any)?.nombre || clienteSeleccionado.ruta || 'Sin ruta'} 
-                        size="small" 
-                        variant="outlined" 
+                      <Chip
+                        label={(clienteSeleccionado.ruta as any)?.nombre || clienteSeleccionado.ruta || 'Sin ruta'}
+                        size='small'
+                        variant='outlined'
                       />
                     </Grid>
                   </Grid>
@@ -2088,25 +2122,27 @@ export default function ClientesPage() {
               </Card>
 
               {/* Domicilios */}
-              <Card variant="outlined">
+              <Card variant='outlined'>
                 <CardContent>
-                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant='h6' gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <LocationIcon />
                     Domicilios Registrados ({clienteSeleccionado.domicilios?.length || 0})
                   </Typography>
                   {clienteSeleccionado.domicilios && clienteSeleccionado.domicilios.length > 0 ? (
                     <Grid container spacing={2}>
-                      {clienteSeleccionado.domicilios.map((domicilio) => (
+                      {clienteSeleccionado.domicilios.map(domicilio => (
                         <Grid item xs={12} md={6} key={domicilio.id}>
-                          <Card variant="outlined" sx={{ height: '100%' }}>
+                          <Card variant='outlined' sx={{ height: '100%' }}>
                             <CardContent>
-                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                              <Box
+                                sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}
+                              >
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  {domicilio.tipo === 'principal' && <HomeIcon color="primary" />}
-                                  {domicilio.tipo === 'facturacion' && <ReceiptIcon color="secondary" />}
-                                  {domicilio.tipo === 'entrega' && <ShippingIcon color="success" />}
-                                  {domicilio.tipo === 'otro' && <BusinessIcon color="action" />}
-                                  <Typography variant="subtitle2" fontWeight="bold">
+                                  {domicilio.tipo === 'principal' && <HomeIcon color='primary' />}
+                                  {domicilio.tipo === 'facturacion' && <ReceiptIcon color='secondary' />}
+                                  {domicilio.tipo === 'entrega' && <ShippingIcon color='success' />}
+                                  {domicilio.tipo === 'otro' && <BusinessIcon color='action' />}
+                                  <Typography variant='subtitle2' fontWeight='bold'>
                                     {domicilio.tipo.charAt(0).toUpperCase() + domicilio.tipo.slice(1)}
                                   </Typography>
                                 </Box>
@@ -2114,15 +2150,15 @@ export default function ClientesPage() {
                                   <Chip
                                     label={domicilio.activo ? 'Activo' : 'Inactivo'}
                                     color={domicilio.activo ? 'success' : 'default'}
-                                    size="small"
+                                    size='small'
                                   />
                                   <Chip
                                     icon={<QrCodeIcon />}
                                     label={domicilio.codigoQR}
-                                    color="primary"
-                                    variant="outlined"
-                                    size="small"
-                                    onClick={(e) => {
+                                    color='primary'
+                                    variant='outlined'
+                                    size='small'
+                                    onClick={e => {
                                       e.stopPropagation()
                                       abrirModalQR(domicilio)
                                     }}
@@ -2130,27 +2166,25 @@ export default function ClientesPage() {
                                   />
                                 </Box>
                               </Box>
-                              <Typography variant="body2" color="text.secondary" gutterBottom>
+                              <Typography variant='body2' color='text.secondary' gutterBottom>
                                 Dirección Completa
                               </Typography>
-                              <Typography variant="body1" sx={{ mb: 1 }}>
+                              <Typography variant='body1' sx={{ mb: 1 }}>
                                 {domicilio.calle} {domicilio.numeroExterior}
                                 {domicilio.numeroInterior && ` Int. ${domicilio.numeroInterior}`}
                               </Typography>
-                              <Typography variant="body2" color="text.secondary">
+                              <Typography variant='body2' color='text.secondary'>
                                 {domicilio.colonia}, {domicilio.municipio}
                               </Typography>
-                              <Typography variant="body2" color="text.secondary">
+                              <Typography variant='body2' color='text.secondary'>
                                 {domicilio.estado}, C.P. {domicilio.codigoPostal}
                               </Typography>
                               {domicilio.referencia && (
                                 <>
-                                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                  <Typography variant='body2' color='text.secondary' sx={{ mt: 1 }}>
                                     Referencia:
                                   </Typography>
-                                  <Typography variant="body2">
-                                    {domicilio.referencia}
-                                  </Typography>
+                                  <Typography variant='body2'>{domicilio.referencia}</Typography>
                                 </>
                               )}
                             </CardContent>
@@ -2159,9 +2193,7 @@ export default function ClientesPage() {
                       ))}
                     </Grid>
                   ) : (
-                    <Alert severity="info">
-                      No hay domicilios registrados para este cliente.
-                    </Alert>
+                    <Alert severity='info'>No hay domicilios registrados para este cliente.</Alert>
                   )}
                 </CardContent>
               </Card>
@@ -2169,9 +2201,7 @@ export default function ClientesPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={cerrarDialogo}>
-            Cerrar
-          </Button>
+          <Button onClick={cerrarDialogo}>Cerrar</Button>
         </DialogActions>
       </Dialog>
 
@@ -2181,43 +2211,29 @@ export default function ClientesPage() {
         <DialogContent>
           <DialogContentText>
             ¿Está seguro de que desea eliminar al cliente{' '}
-            <strong>
-              {clienteAEliminar ? obtenerNombreCompleto(clienteAEliminar) : ''}
-            </strong>
-            ? Esta acción no se puede deshacer y también se eliminarán todos los domicilios asociados.
+            <strong>{clienteAEliminar ? obtenerNombreCompleto(clienteAEliminar) : ''}</strong>? Esta acción no se puede
+            deshacer y también se eliminarán todos los domicilios asociados.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={cerrarDialogoEliminar} disabled={eliminando}>
             Cancelar
           </Button>
-          <Button 
-            onClick={eliminarCliente} 
-            color="error" 
-            variant="contained" 
-            disabled={eliminando}
-          >
+          <Button onClick={eliminarCliente} color='error' variant='contained' disabled={eliminando}>
             {eliminando ? 'Eliminando...' : 'Eliminar'}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Modal de Código QR */}
-      <Dialog 
-        open={modalQR} 
-        onClose={cerrarModalQR}
-        maxWidth="sm"
-        fullWidth
-      >
+      <Dialog open={modalQR} onClose={cerrarModalQR} maxWidth='sm' fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <QrCodeIcon />
-              <Typography variant="h6">
-                Código QR - {domicilioQR?.codigoQR}
-              </Typography>
+              <Typography variant='h6'>Código QR - {domicilioQR?.codigoQR}</Typography>
             </Box>
-            <IconButton onClick={cerrarModalQR} size="small">
+            <IconButton onClick={cerrarModalQR} size='small'>
               <CloseIcon />
             </IconButton>
           </Box>
@@ -2225,17 +2241,18 @@ export default function ClientesPage() {
         <DialogContent>
           {domicilioQR && clienteSeleccionado && (
             <Box sx={{ textAlign: 'center', py: 2 }}>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                {domicilioQR.tipo.charAt(0).toUpperCase() + domicilioQR.tipo.slice(1)} - {obtenerNombreCompleto(clienteSeleccionado)}
+              <Typography variant='body2' color='text.secondary' gutterBottom>
+                {domicilioQR.tipo.charAt(0).toUpperCase() + domicilioQR.tipo.slice(1)} -{' '}
+                {obtenerNombreCompleto(clienteSeleccionado)}
               </Typography>
-              
+
               {qrDataURL && (
                 <Box sx={{ my: 3 }}>
-                  <img 
-                    src={qrDataURL} 
+                  <img
+                    src={qrDataURL}
                     alt={`QR Code ${domicilioQR.codigoQR}`}
                     style={{
-                      width: '100%',
+                      width: '80%',
                       maxWidth: '400px',
                       height: 'auto',
                       border: '2px solid #e0e0e0',
@@ -2247,19 +2264,19 @@ export default function ClientesPage() {
                 </Box>
               )}
 
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2, mb: 1 }}>
+              <Typography variant='body2' color='text.secondary' sx={{ mt: 2, mb: 1 }}>
                 <strong>Dirección:</strong> {domicilioQR.calle} {domicilioQR.numeroExterior}
                 {domicilioQR.numeroInterior && ` Int. ${domicilioQR.numeroInterior}`}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant='body2' color='text.secondary'>
                 {domicilioQR.colonia}, {domicilioQR.municipio}, {domicilioQR.estado}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant='body2' color='text.secondary'>
                 C.P. {domicilioQR.codigoPostal}
               </Typography>
 
               {domicilioQR.referencia && (
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                <Typography variant='body2' color='text.secondary' sx={{ mt: 1 }}>
                   <strong>Referencia:</strong> {domicilioQR.referencia}
                 </Typography>
               )}
@@ -2267,15 +2284,8 @@ export default function ClientesPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={cerrarModalQR}>
-            Cerrar
-          </Button>
-          <Button 
-            onClick={descargarQR} 
-            variant="contained" 
-            startIcon={<DownloadIcon />}
-            disabled={!qrDataURL}
-          >
+          <Button onClick={cerrarModalQR}>Cerrar</Button>
+          <Button onClick={descargarQR} variant='contained' startIcon={<DownloadIcon />} disabled={!qrDataURL}>
             Descargar como Imagen
           </Button>
         </DialogActions>

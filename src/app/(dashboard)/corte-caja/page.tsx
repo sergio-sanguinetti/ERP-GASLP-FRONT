@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 
 import {
   Box,
@@ -95,6 +95,8 @@ import {
   Info as InfoIcon
 } from '@mui/icons-material'
 
+import { ventasAPI, CorteRepartidor } from '@/lib/api'
+
 // Tipos de datos
 interface RepartidorCorte {
   id: string
@@ -180,157 +182,7 @@ interface ResumenCortes {
   efectivoConsolidado: number
 }
 
-// Datos de ejemplo
-const resumenCortes: ResumenCortes = {
-  pipas: {
-    rutasProgramadas: 8,
-    cortesEntregados: 6,
-    cortesValidados: 4,
-    cortesPendientes: 2,
-    totalVentas: 85000,
-    totalAbonos: 12000
-  },
-  cilindros: {
-    rutasProgramadas: 12,
-    cortesEntregados: 10,
-    cortesValidados: 8,
-    cortesPendientes: 2,
-    totalVentas: 40000,
-    totalAbonos: 8000
-  },
-  granTotalOperacion: 125000,
-  efectivoConsolidado: 20000
-}
-
-const repartidoresCorte: RepartidorCorte[] = [
-  {
-    id: '1',
-    nombre: 'José Luis González',
-    ruta: 'Ruta 002',
-    tipo: 'pipas',
-    horaEntrega: '14:30',
-    totalDia: 12500,
-    estado: 'recibido',
-    ventas: {
-      montoTotal: 12500,
-      litrosServicios: 8
-    },
-    abonos: {
-      montoTotal: 2500,
-      cantidad: 3
-    },
-    efectivo: {
-      metodo: 'depositado-cajero',
-      montoDepositado: 8000,
-      billetesRechazados: 0,
-      monedasEntregadas: 0
-    },
-    formasPago: {
-      terminal: {
-        monto: 7250,
-        operaciones: [
-          { id: '1', monto: 3500, folioTerminal: 'TER001', fecha: '2024-01-25' },
-          { id: '2', monto: 3750, folioTerminal: 'TER002', fecha: '2024-01-25' }
-        ]
-      },
-      transferencias: {
-        monto: 3200,
-        operaciones: [
-          { id: '1', monto: 1500, folioBancario: 'TRF001', banco: 'BBVA', fecha: '2024-01-25' },
-          { id: '2', monto: 1700, folioBancario: 'TRF002', banco: 'Santander', fecha: '2024-01-25' }
-        ]
-      },
-      cheques: {
-        monto: 1800,
-        operaciones: [{ id: '1', monto: 1800, numeroCheque: 'CHQ001', banco: 'Banorte', fecha: '2024-01-25' }]
-      }
-    },
-    reporteFisico: {
-      totalServicios: 8,
-      totalLitros: 650,
-      rangoServicios: '001-008'
-    }
-  },
-  {
-    id: '2',
-    nombre: 'María Elena Ruiz',
-    ruta: 'Ruta 005',
-    tipo: 'cilindros',
-    horaEntrega: '15:45',
-    totalDia: 8500,
-    estado: 'validado',
-    ventas: {
-      montoTotal: 8500,
-      litrosServicios: 12
-    },
-    abonos: {
-      montoTotal: 1500,
-      cantidad: 2
-    },
-    efectivo: {
-      metodo: 'entregado-planta',
-      montoDepositado: 0,
-      billetesRechazados: 0,
-      monedasEntregadas: 7000
-    },
-    formasPago: {
-      terminal: {
-        monto: 1500,
-        operaciones: [{ id: '1', monto: 1500, folioTerminal: 'TER003', fecha: '2024-01-25' }]
-      },
-      transferencias: {
-        monto: 0,
-        operaciones: []
-      },
-      cheques: {
-        monto: 0,
-        operaciones: []
-      }
-    }
-  },
-  {
-    id: '3',
-    nombre: 'Carlos Mendoza Silva',
-    ruta: 'Ruta 003',
-    tipo: 'pipas',
-    horaEntrega: '16:20',
-    totalDia: 15200,
-    estado: 'pendiente',
-    ventas: {
-      montoTotal: 15200,
-      litrosServicios: 10
-    },
-    abonos: {
-      montoTotal: 3200,
-      cantidad: 4
-    },
-    efectivo: {
-      metodo: 'depositado-cajero',
-      montoDepositado: 12000,
-      billetesRechazados: 0,
-      monedasEntregadas: 0
-    },
-    formasPago: {
-      terminal: {
-        monto: 3200,
-        operaciones: [{ id: '1', monto: 3200, folioTerminal: 'TER004', fecha: '2024-01-25' }]
-      },
-      transferencias: {
-        monto: 0,
-        operaciones: []
-      },
-      cheques: {
-        monto: 0,
-        operaciones: []
-      }
-    },
-    reporteFisico: {
-      totalServicios: 10,
-      totalLitros: 800,
-      rangoServicios: '009-018'
-    }
-  }
-]
+// Datos de ejemplo eliminados para usar datos reales de la API
 
 // Tipos adicionales para apertura/cierre de caja
 interface AperturaCierreCaja {
@@ -376,50 +228,7 @@ interface DepositoMultiple {
   fechaCreacion: string
 }
 
-// Datos de ejemplo para depósitos bancarios
-const depositosBancarios: DepositoBancario[] = [
-  {
-    id: '1',
-    repartidorId: '1',
-    repartidorNombre: 'José Luis González',
-    folioRepartidor: 'DEP123456789',
-    folioFisico: 'DEP123456789',
-    monto: 8000,
-    fechaDeposito: '2024-01-25',
-    horaDeposito: '14:30',
-    estado: 'validado',
-    comprobanteRecibido: true,
-    validadoPor: 'María González',
-    fechaValidacion: '2024-01-25 15:00'
-  },
-  {
-    id: '2',
-    repartidorId: '3',
-    repartidorNombre: 'Carlos Mendoza Silva',
-    folioRepartidor: 'DEP987654321',
-    folioFisico: 'DEP987654322',
-    monto: 12000,
-    fechaDeposito: '2024-01-25',
-    horaDeposito: '16:20',
-    estado: 'diferencia',
-    comprobanteRecibido: true,
-    observaciones: 'Folio físico diferente al reportado',
-    validadoPor: 'María González',
-    fechaValidacion: '2024-01-25 17:00'
-  },
-  {
-    id: '3',
-    repartidorId: '2',
-    repartidorNombre: 'María Elena Ruiz',
-    folioRepartidor: 'DEP555666777',
-    monto: 7000,
-    fechaDeposito: '2024-01-25',
-    horaDeposito: '15:45',
-    estado: 'pendiente-validacion',
-    comprobanteRecibido: false
-  }
-]
-
+// Datos de ejemplo para depósitos bancarios eliminados
 const depositosMultiples: DepositoMultiple[] = [
   {
     id: '1',
@@ -461,56 +270,102 @@ const depositosMultiples: DepositoMultiple[] = [
   }
 ]
 
-// Datos de ejemplo para historial
-const historialAperturaCierre: AperturaCierreCaja[] = [
-  {
-    id: '1',
-    fecha: '2024-01-25',
-    tipo: 'apertura',
-    usuario: 'María González',
-    hora: '08:00',
-    montoInicial: 5000,
-    observaciones: 'Apertura normal del día',
-    estado: 'activo',
-    efectivoFisico: 5000,
-    diferencias: 0,
-    cortesValidados: 0,
-    cortesPendientes: 0
-  },
-  {
-    id: '2',
-    fecha: '2024-01-24',
-    tipo: 'cierre',
-    usuario: 'María González',
-    hora: '18:30',
-    montoFinal: 25000,
-    observaciones: 'Cierre exitoso del día',
-    estado: 'cerrado',
-    efectivoFisico: 25000,
-    diferencias: 0,
-    cortesValidados: 12,
-    cortesPendientes: 0
-  },
-  {
-    id: '3',
-    fecha: '2024-01-24',
-    tipo: 'apertura',
-    usuario: 'María González',
-    hora: '08:15',
-    montoInicial: 5000,
-    observaciones: 'Apertura con retraso por tráfico',
-    estado: 'cerrado',
-    efectivoFisico: 5000,
-    diferencias: 0,
-    cortesValidados: 0,
-    cortesPendientes: 0
-  }
-]
+// Datos de ejemplo para historial eliminados
 
 export default function CorteCajaPage() {
+  const [resumenCortes, setResumenCortes] = useState<ResumenCortes>({
+    pipas: { rutasProgramadas: 0, cortesEntregados: 0, cortesValidados: 0, cortesPendientes: 0, totalVentas: 0, totalAbonos: 0 },
+    cilindros: { rutasProgramadas: 0, cortesEntregados: 0, cortesValidados: 0, cortesPendientes: 0, totalVentas: 0, totalAbonos: 0 },
+    granTotalOperacion: 0,
+    efectivoConsolidado: 0
+  })
+  const [repartidoresCorte, setRepartidoresCorte] = useState<RepartidorCorte[]>([])
+  const [depositosBancarios, setDepositosBancarios] = useState<DepositoBancario[]>([])
+  const [historialCaja, setHistorialCaja] = useState<AperturaCierreCaja[]>([])
+  const [loading, setLoading] = useState(true)
+
   const [vistaActual, setVistaActual] = useState<
     'dashboard' | 'validacion' | 'admin' | 'apertura-cierre' | 'historial' | 'depositos'
   >('dashboard')
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const [pipas, cilindros, allCortes] = await Promise.all([
+        ventasAPI.getCortePipas(),
+        ventasAPI.getCorteCilindros(),
+        ventasAPI.getAllCortes()
+      ])
+
+      setResumenCortes({
+        pipas,
+        cilindros,
+        granTotalOperacion: pipas.totalVentas + cilindros.totalVentas,
+        efectivoConsolidado: pipas.totalAbonos + cilindros.totalAbonos
+      })
+
+      // Transformar cortes del backend al formato del frontend
+      const transformedCortes: RepartidorCorte[] = allCortes.map((c: any) => ({
+        id: c.id,
+        nombre: `${c.repartidor?.nombres} ${c.repartidor?.apellidoPaterno}`,
+        ruta: 'Ruta 001', // El backend debería devolver la ruta
+        tipo: c.repartidor?.tipoRepartidor || 'pipas',
+        horaEntrega: new Date(c.fecha).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }),
+        totalDia: c.totalVentas + c.totalAbonos,
+        estado: c.estado === 'pendiente' ? 'recibido' : c.estado,
+        ventas: {
+          montoTotal: c.totalVentas,
+          litrosServicios: 0
+        },
+        abonos: {
+          montoTotal: c.totalAbonos,
+          cantidad: 0
+        },
+        efectivo: {
+          metodo: c.depositos?.length > 0 ? 'depositado-cajero' : 'entregado-planta',
+          montoDepositado: c.depositos?.reduce((sum: number, d: any) => sum + d.monto, 0) || 0,
+          billetesRechazados: c.depositos?.reduce((sum: number, d: any) => sum + d.billetesRechazados, 0) || 0,
+          monedasEntregadas: c.depositos?.reduce((sum: number, d: any) => sum + d.monedas, 0) || 0
+        },
+        formasPago: {
+          terminal: { monto: 0, operaciones: [] },
+          transferencias: { monto: 0, operaciones: [] },
+          cheques: { monto: 0, operaciones: [] }
+        }
+      }))
+
+      setRepartidoresCorte(transformedCortes)
+
+      // Transformar depósitos
+      const allDepositos: DepositoBancario[] = []
+      allCortes.forEach((c: any) => {
+        if (c.depositos && c.depositos.length > 0) {
+          c.depositos.forEach((d: any) => {
+            allDepositos.push({
+              id: d.id,
+              repartidorId: c.repartidorId,
+              repartidorNombre: `${c.repartidor?.nombres} ${c.repartidor?.apellidoPaterno}`,
+              folioRepartidor: d.folio,
+              monto: d.monto,
+              fechaDeposito: new Date(d.createdAt).toISOString().split('T')[0],
+              horaDeposito: new Date(d.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }),
+              estado: c.estado === 'validado' ? 'validado' : 'pendiente-validacion',
+              comprobanteRecibido: true
+            })
+          })
+        }
+      })
+      setDepositosBancarios(allDepositos)
+    } catch (error) {
+      console.error('Error fetching data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
   const [repartidorSeleccionado, setRepartidorSeleccionado] = useState<RepartidorCorte | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
   const [tipoDialogo, setTipoDialogo] = useState<
@@ -537,7 +392,6 @@ export default function CorteCajaPage() {
 
   const [observaciones, setObservaciones] = useState('')
   const [estadoFinal, setEstadoFinal] = useState('')
-  const [historialCaja, setHistorialCaja] = useState<AperturaCierreCaja[]>(historialAperturaCierre)
   const [cajaAbierta, setCajaAbierta] = useState(true) // Estado actual de la caja
 
   const [formularioCaja, setFormularioCaja] = useState({
@@ -692,6 +546,8 @@ export default function CorteCajaPage() {
       <Typography variant='h4' component='h1' gutterBottom>
         Corte de Caja
       </Typography>
+
+      {loading && <LinearProgress sx={{ mb: 2 }} />}
 
       {/* Navegación */}
       <Box sx={{ mb: 3 }}>

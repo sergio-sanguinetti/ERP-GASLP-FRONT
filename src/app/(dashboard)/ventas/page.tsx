@@ -181,7 +181,17 @@ export default function VentasPage() {
     prioridad: 'normal' as 'normal' | 'urgente',
     repartidorId: '',
     observaciones: '',
-    productos: [] as Array<{ productoId: string; cantidad: number; precio: number; nombre?: string }>
+    productos: [] as Array<{ 
+      id?: string; // ID único para identificar cada carga
+      productoId: string; 
+      cantidad: number; 
+      precio: number; 
+      nombre?: string;
+      litros?: number;
+      subtotal?: number;
+      descripcion?: string;
+      calculoPipas?: any;
+    }>
   })
 
   const [productoAgregar, setProductoAgregar] = useState({
@@ -836,29 +846,68 @@ export default function VentasPage() {
 
       const ahora = new Date()
       
+      // Calcular totales
+      const totalLitros = formularioPedido.productos.reduce((sum, p) => sum + (p.litros || p.cantidad || 0), 0)
+      const totalMonto = formularioPedido.productos.reduce((sum, p) => sum + (p.subtotal || (p.cantidad * p.precio) || 0), 0)
+      
+      // Preparar productos con todos los datos necesarios
+      const productos = formularioPedido.productos.map((p, index) => ({
+        productoId: p.productoId,
+        cantidad: p.litros || p.cantidad, // Usar litros exactos si están disponibles
+        precio: p.precio,
+        // Incluir información adicional
+        litros: p.litros || p.cantidad,
+        subtotal: p.subtotal || (p.cantidad * p.precio),
+        descripcion: p.descripcion,
+        indice: index + 1,
+      }))
+      
       // Preparar el objeto de cálculo para guardar en JSON
+      // Si hay múltiples productos con cálculos diferentes, crear un array
       let calculoPipasData: any = undefined
       
-      if (formularioPedido.tipoServicio === 'pipas' && calculoPipas.tipoCalculo !== 'ninguno') {
-        calculoPipasData = {
-          tipoCalculo: calculoPipas.tipoCalculo
-        }
+      if (formularioPedido.tipoServicio === 'pipas') {
+        // Obtener todos los cálculos de los productos
+        const calculos = formularioPedido.productos
+          .filter(p => p.calculoPipas)
+          .map(p => p.calculoPipas)
         
-        if (calculoPipas.tipoCalculo === 'litros') {
-          calculoPipasData.cantidadLitros = calculoPipas.cantidadLitros
-          calculoPipasData.precioPorLitro = calculoPipas.precioPorLitro
-          calculoPipasData.totalPorLitros = calculoPipas.totalPorLitros
-        } else if (calculoPipas.tipoCalculo === 'porcentajes') {
-          calculoPipasData.capacidadTanque = calculoPipas.capacidadTanque
-          calculoPipasData.porcentajeInicial = calculoPipas.porcentajeInicial
-          calculoPipasData.porcentajeFinal = calculoPipas.porcentajeFinal
-          calculoPipasData.litrosALlenar = calculoPipas.litrosALlenar
-          calculoPipasData.precioPorLitro = calculoPipas.precioPorLitro
-          calculoPipasData.totalPorPorcentajes = calculoPipas.totalPorPorcentajes
-        } else if (calculoPipas.tipoCalculo === 'dinero') {
-          calculoPipasData.cantidadDinero = calculoPipas.cantidadDinero
-          calculoPipasData.precioPorLitro = calculoPipas.precioPorLitro
-          calculoPipasData.litrosPorDinero = calculoPipas.litrosPorDinero
+        if (calculos.length === 1) {
+          // Si hay un solo cálculo, enviar el objeto con cargaIndex y totalCargas
+          calculoPipasData = {
+            ...calculos[0],
+            cargaIndex: 1,
+            totalCargas: 1
+          }
+        } else if (calculos.length > 1) {
+          // Si hay múltiples cálculos, enviar un array con cargaIndex y totalCargas
+          calculoPipasData = calculos.map((calculo, index) => ({
+            ...calculo,
+            cargaIndex: index + 1,
+            totalCargas: calculos.length,
+          }))
+        } else if (calculoPipas.tipoCalculo !== 'ninguno') {
+          // Fallback: usar el cálculo del estado si no hay en productos
+          calculoPipasData = {
+            tipoCalculo: calculoPipas.tipoCalculo
+          }
+          
+          if (calculoPipas.tipoCalculo === 'litros') {
+            calculoPipasData.cantidadLitros = calculoPipas.cantidadLitros
+            calculoPipasData.precioPorLitro = calculoPipas.precioPorLitro
+            calculoPipasData.totalPorLitros = calculoPipas.totalPorLitros
+          } else if (calculoPipas.tipoCalculo === 'porcentajes') {
+            calculoPipasData.capacidadTanque = calculoPipas.capacidadTanque
+            calculoPipasData.porcentajeInicial = calculoPipas.porcentajeInicial
+            calculoPipasData.porcentajeFinal = calculoPipas.porcentajeFinal
+            calculoPipasData.litrosALlenar = calculoPipas.litrosALlenar
+            calculoPipasData.precioPorLitro = calculoPipas.precioPorLitro
+            calculoPipasData.totalPorPorcentajes = calculoPipas.totalPorPorcentajes
+          } else if (calculoPipas.tipoCalculo === 'dinero') {
+            calculoPipasData.cantidadDinero = calculoPipas.cantidadDinero
+            calculoPipasData.precioPorLitro = calculoPipas.precioPorLitro
+            calculoPipasData.litrosPorDinero = calculoPipas.litrosPorDinero
+          }
         }
       }
       
@@ -871,11 +920,10 @@ export default function VentasPage() {
         observaciones: formularioPedido.observaciones || undefined,
         calculoPipas: calculoPipasData,
         sedeId: sedeId || undefined, // Incluir la sede del usuario
-        productos: formularioPedido.productos.map(p => ({
-          productoId: p.productoId,
-          cantidad: p.cantidad,
-          precio: p.precio // Precio del catálogo (ya viene del catálogo)
-        }))
+        productos: productos,
+        // Incluir totales calculados
+        totalLitros: totalLitros,
+        totalMonto: totalMonto,
       }
 
       await pedidosAPI.create(data)
@@ -2175,6 +2223,23 @@ export default function VentasPage() {
                               </IconButton>
                             </Tooltip>
 
+                            {pedido.estado === 'pendiente' && (
+                              <Tooltip title='Cerrar Venta (Registrar Pago)'>
+                                <IconButton
+                                  size='small'
+                                  color='primary'
+                                  onClick={() => {
+                                    // Redirigir a creditos-abonos con el pedido seleccionado
+                                    // O implementar el diálogo de pago aquí también
+                                    // Por simplicidad y consistencia, vamos a redirigir o abrir el diálogo si lo compartimos
+                                    window.location.href = `/creditos-abonos?pedidoId=${pedido.id}&clienteId=${pedido.clienteId}`
+                                  }}
+                                >
+                                  <CheckCircleIcon />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+
                             <Tooltip title='Eliminar pedido'>
                               <IconButton
                                 size='small'
@@ -3012,11 +3077,15 @@ export default function VentasPage() {
                                     )}
                                   </Box>
                                 </TableCell>
-                                <TableCell align='right'>{item.cantidad}</TableCell>
-                                <TableCell align='right'>${item.precio.toLocaleString()}</TableCell>
+                                <TableCell align='right'>
+                                  {typeof item.cantidad === 'number' ? item.cantidad.toFixed(2) : item.cantidad} {pedidoSeleccionado.tipoServicio === 'pipas' ? 'L' : ''}
+                                </TableCell>
+                                <TableCell align='right'>
+                                  ${typeof item.precio === 'number' ? item.precio.toFixed(2) : item.precio.toLocaleString()}
+                                </TableCell>
                                 <TableCell align='right'>
                                   <Typography variant='body2' fontWeight='bold' color='primary'>
-                                    ${item.subtotal.toLocaleString()}
+                                    ${typeof item.subtotal === 'number' ? item.subtotal.toFixed(2) : item.subtotal.toLocaleString()}
                                   </Typography>
                                 </TableCell>
                               </TableRow>
@@ -3030,7 +3099,7 @@ export default function VentasPage() {
                             </TableCell>
                             <TableCell align='right'>
                               <Typography variant='h6' fontWeight='bold' color='primary'>
-                                ${pedidoSeleccionado.ventaTotal.toLocaleString()}
+                                ${typeof pedidoSeleccionado.ventaTotal === 'number' ? pedidoSeleccionado.ventaTotal.toFixed(2) : pedidoSeleccionado.ventaTotal.toLocaleString()}
                               </Typography>
                             </TableCell>
                           </TableRow>
@@ -3056,56 +3125,193 @@ export default function VentasPage() {
               )}
 
               {/* Información de Cálculo de Pipas */}
-              {pedidoSeleccionado.tipoServicio === 'pipas' && pedidoSeleccionado.calculoPipas && pedidoSeleccionado.calculoPipas.tipoCalculo !== 'ninguno' && (
+              {pedidoSeleccionado.tipoServicio === 'pipas' && (
                 <>
                   <Grid item xs={12}>
                     <Typography variant='subtitle1' fontWeight='bold' sx={{ mt: 2, mb: 1 }}>
-                      Información de Cálculo
+                      Información de Cálculo de Pipas
                     </Typography>
                     <Divider sx={{ mb: 2 }} />
                   </Grid>
                   <Grid item xs={12}>
-                    <Paper variant='outlined' sx={{ p: 2, bgcolor: 'info.light', bgcolor: 'rgba(33, 150, 243, 0.1)' }}>
-                      {pedidoSeleccionado.calculoPipas.tipoCalculo === 'litros' && (
+                    {pedidoSeleccionado.calculoPipas ? (
+                      Array.isArray(pedidoSeleccionado.calculoPipas) ? (
+                        // Múltiples cargas
                         <Box>
-                          <Typography variant='body2' fontWeight='bold' gutterBottom>
-                            Método: Por Cantidad de Litros
+                          <Typography variant='body1' fontWeight='bold' gutterBottom sx={{ mb: 2 }}>
+                            Múltiples Cargas ({pedidoSeleccionado.calculoPipas.length})
                           </Typography>
-                          <Typography variant='body2'>Cantidad de Litros: {pedidoSeleccionado.calculoPipas.cantidadLitros?.toFixed(2) || 0}</Typography>
-                          <Typography variant='body2'>Precio por Litro: ${pedidoSeleccionado.calculoPipas.precioPorLitro?.toFixed(2) || 0}</Typography>
-                          <Typography variant='body2' fontWeight='bold' color='success.main'>
-                            Total: ${pedidoSeleccionado.calculoPipas.totalPorLitros?.toFixed(2) || 0}
-                          </Typography>
+                          {pedidoSeleccionado.calculoPipas.map((calculo: any, index: number) => (
+                            <Paper 
+                              key={index} 
+                              variant='outlined' 
+                              sx={{ p: 2, mb: 2, bgcolor: 'rgba(33, 150, 243, 0.1)', borderLeft: '4px solid', borderLeftColor: 'primary.main' }}
+                            >
+                              <Typography variant='body1' fontWeight='bold' gutterBottom sx={{ mb: 1 }}>
+                                Carga {index + 1} - {calculo.tipoCalculo === 'litros' ? 'Por Cantidad de Litros' :
+                                  calculo.tipoCalculo === 'porcentajes' ? 'Por Porcentajes de Llenado' :
+                                  calculo.tipoCalculo === 'dinero' ? 'Por Cantidad de Dinero' : 'No especificado'}
+                              </Typography>
+                              {calculo.tipoCalculo === 'litros' && (
+                                <Box sx={{ mt: 1 }}>
+                                  <Grid container spacing={1}>
+                                    <Grid item xs={12} sm={6}>
+                                      <Typography variant='body2'><strong>Cantidad de Litros:</strong> {calculo.cantidadLitros?.toFixed(2) || '0.00'} L</Typography>
+                                    </Grid>
+                                    <Grid item xs={12} sm={6}>
+                                      <Typography variant='body2'><strong>Precio por Litro:</strong> ${calculo.precioPorLitro?.toFixed(2) || '0.00'}</Typography>
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                      <Divider sx={{ my: 1 }} />
+                                      <Typography variant='body1' fontWeight='bold' color='success.main'>
+                                        Total: ${calculo.totalPorLitros?.toFixed(2) || '0.00'}
+                                      </Typography>
+                                    </Grid>
+                                  </Grid>
+                                </Box>
+                              )}
+                              {calculo.tipoCalculo === 'porcentajes' && (
+                                <Box sx={{ mt: 1 }}>
+                                  <Grid container spacing={1}>
+                                    <Grid item xs={12} sm={6}>
+                                      <Typography variant='body2'><strong>Capacidad del Tanque:</strong> {calculo.capacidadTanque?.toFixed(2) || '0.00'} litros</Typography>
+                                    </Grid>
+                                    <Grid item xs={12} sm={6}>
+                                      <Typography variant='body2'><strong>Precio por Litro:</strong> ${calculo.precioPorLitro?.toFixed(2) || '0.00'}</Typography>
+                                    </Grid>
+                                    <Grid item xs={12} sm={6}>
+                                      <Typography variant='body2'><strong>Porcentaje Inicial:</strong> {calculo.porcentajeInicial?.toFixed(2) || '0.00'}%</Typography>
+                                    </Grid>
+                                    <Grid item xs={12} sm={6}>
+                                      <Typography variant='body2'><strong>Porcentaje Final:</strong> {calculo.porcentajeFinal?.toFixed(2) || '0.00'}%</Typography>
+                                    </Grid>
+                                    <Grid item xs={12} sm={6}>
+                                      <Typography variant='body2'><strong>Litros a Llenar:</strong> {calculo.litrosALlenar?.toFixed(2) || '0.00'} L</Typography>
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                      <Divider sx={{ my: 1 }} />
+                                      <Typography variant='body1' fontWeight='bold' color='success.main'>
+                                        Total: ${calculo.totalPorPorcentajes?.toFixed(2) || '0.00'}
+                                      </Typography>
+                                    </Grid>
+                                  </Grid>
+                                </Box>
+                              )}
+                              {calculo.tipoCalculo === 'dinero' && (
+                                <Box sx={{ mt: 1 }}>
+                                  <Grid container spacing={1}>
+                                    <Grid item xs={12} sm={6}>
+                                      <Typography variant='body2'><strong>Cantidad de Dinero:</strong> ${calculo.cantidadDinero?.toFixed(2) || '0.00'}</Typography>
+                                    </Grid>
+                                    <Grid item xs={12} sm={6}>
+                                      <Typography variant='body2'><strong>Precio por Litro:</strong> ${calculo.precioPorLitro?.toFixed(2) || '0.00'}</Typography>
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                      <Divider sx={{ my: 1 }} />
+                                      <Typography variant='body1' fontWeight='bold' color='info.main'>
+                                        Litros Calculados: {calculo.litrosPorDinero?.toFixed(2) || '0.00'} L
+                                      </Typography>
+                                      <Typography variant='body1' fontWeight='bold' color='success.main' sx={{ mt: 1 }}>
+                                        Total: ${calculo.cantidadDinero?.toFixed(2) || '0.00'}
+                                      </Typography>
+                                    </Grid>
+                                  </Grid>
+                                </Box>
+                              )}
+                            </Paper>
+                          ))}
                         </Box>
-                      )}
-                      {pedidoSeleccionado.calculoPipas.tipoCalculo === 'porcentajes' && (
-                        <Box>
-                          <Typography variant='body2' fontWeight='bold' gutterBottom>
-                            Método: Por Porcentajes de Llenado
+                      ) : pedidoSeleccionado.calculoPipas.tipoCalculo && pedidoSeleccionado.calculoPipas.tipoCalculo !== 'ninguno' ? (
+                        // Una sola carga
+                        <Paper variant='outlined' sx={{ p: 2, bgcolor: 'rgba(33, 150, 243, 0.1)', borderLeft: '4px solid', borderLeftColor: 'primary.main' }}>
+                          <Typography variant='body1' fontWeight='bold' gutterBottom sx={{ mb: 2 }}>
+                            Método de Cálculo: {
+                              pedidoSeleccionado.calculoPipas.tipoCalculo === 'litros' ? 'Por Cantidad de Litros' :
+                              pedidoSeleccionado.calculoPipas.tipoCalculo === 'porcentajes' ? 'Por Porcentajes de Llenado' :
+                              pedidoSeleccionado.calculoPipas.tipoCalculo === 'dinero' ? 'Por Cantidad de Dinero' : 'No especificado'
+                            }
                           </Typography>
-                          <Typography variant='body2'>Capacidad del Tanque: {pedidoSeleccionado.calculoPipas.capacidadTanque?.toFixed(2) || 0} litros</Typography>
-                          <Typography variant='body2'>Porcentaje Inicial: {pedidoSeleccionado.calculoPipas.porcentajeInicial?.toFixed(2) || 0}%</Typography>
-                          <Typography variant='body2'>Porcentaje Final: {pedidoSeleccionado.calculoPipas.porcentajeFinal?.toFixed(2) || 0}%</Typography>
-                          <Typography variant='body2'>Litros a Llenar: {pedidoSeleccionado.calculoPipas.litrosALlenar?.toFixed(2) || 0}</Typography>
-                          <Typography variant='body2'>Precio por Litro: ${pedidoSeleccionado.calculoPipas.precioPorLitro?.toFixed(2) || 0}</Typography>
-                          <Typography variant='body2' fontWeight='bold' color='success.main'>
-                            Total: ${pedidoSeleccionado.calculoPipas.totalPorPorcentajes?.toFixed(2) || 0}
+                          {pedidoSeleccionado.calculoPipas.tipoCalculo === 'litros' && (
+                            <Box>
+                              <Grid container spacing={2}>
+                                <Grid item xs={12} sm={6}>
+                                  <Typography variant='body2'><strong>Cantidad de Litros:</strong> {pedidoSeleccionado.calculoPipas.cantidadLitros?.toFixed(2) || '0.00'} L</Typography>
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                  <Typography variant='body2'><strong>Precio por Litro:</strong> ${pedidoSeleccionado.calculoPipas.precioPorLitro?.toFixed(2) || '0.00'}</Typography>
+                                </Grid>
+                                <Grid item xs={12}>
+                                  <Divider sx={{ my: 1 }} />
+                                  <Typography variant='body1' fontWeight='bold' color='success.main'>
+                                    Total: ${pedidoSeleccionado.calculoPipas.totalPorLitros?.toFixed(2) || '0.00'}
+                                  </Typography>
+                                </Grid>
+                              </Grid>
+                            </Box>
+                          )}
+                          {pedidoSeleccionado.calculoPipas.tipoCalculo === 'porcentajes' && (
+                            <Box>
+                              <Grid container spacing={2}>
+                                <Grid item xs={12} sm={6}>
+                                  <Typography variant='body2'><strong>Capacidad del Tanque:</strong> {pedidoSeleccionado.calculoPipas.capacidadTanque?.toFixed(2) || '0.00'} litros</Typography>
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                  <Typography variant='body2'><strong>Precio por Litro:</strong> ${pedidoSeleccionado.calculoPipas.precioPorLitro?.toFixed(2) || '0.00'}</Typography>
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                  <Typography variant='body2'><strong>Porcentaje Inicial:</strong> {pedidoSeleccionado.calculoPipas.porcentajeInicial?.toFixed(2) || '0.00'}%</Typography>
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                  <Typography variant='body2'><strong>Porcentaje Final:</strong> {pedidoSeleccionado.calculoPipas.porcentajeFinal?.toFixed(2) || '0.00'}%</Typography>
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                  <Typography variant='body2'><strong>Litros a Llenar:</strong> {pedidoSeleccionado.calculoPipas.litrosALlenar?.toFixed(2) || '0.00'} L</Typography>
+                                </Grid>
+                                <Grid item xs={12}>
+                                  <Divider sx={{ my: 1 }} />
+                                  <Typography variant='body1' fontWeight='bold' color='success.main'>
+                                    Total: ${pedidoSeleccionado.calculoPipas.totalPorPorcentajes?.toFixed(2) || '0.00'}
+                                  </Typography>
+                                </Grid>
+                              </Grid>
+                            </Box>
+                          )}
+                          {pedidoSeleccionado.calculoPipas.tipoCalculo === 'dinero' && (
+                            <Box>
+                              <Grid container spacing={2}>
+                                <Grid item xs={12} sm={6}>
+                                  <Typography variant='body2'><strong>Cantidad de Dinero:</strong> ${pedidoSeleccionado.calculoPipas.cantidadDinero?.toFixed(2) || '0.00'}</Typography>
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                  <Typography variant='body2'><strong>Precio por Litro:</strong> ${pedidoSeleccionado.calculoPipas.precioPorLitro?.toFixed(2) || '0.00'}</Typography>
+                                </Grid>
+                                <Grid item xs={12}>
+                                  <Divider sx={{ my: 1 }} />
+                                  <Typography variant='body1' fontWeight='bold' color='info.main'>
+                                    Litros Calculados: {pedidoSeleccionado.calculoPipas.litrosPorDinero?.toFixed(2) || '0.00'} L
+                                  </Typography>
+                                  <Typography variant='body1' fontWeight='bold' color='success.main' sx={{ mt: 1 }}>
+                                    Total: ${pedidoSeleccionado.calculoPipas.cantidadDinero?.toFixed(2) || '0.00'}
+                                  </Typography>
+                                </Grid>
+                              </Grid>
+                            </Box>
+                          )}
+                        </Paper>
+                      ) : (
+                        <Alert severity='info'>
+                          <Typography variant='body2'>
+                            No se especificó un método de cálculo para este pedido.
                           </Typography>
-                        </Box>
-                      )}
-                      {pedidoSeleccionado.calculoPipas.tipoCalculo === 'dinero' && (
-                        <Box>
-                          <Typography variant='body2' fontWeight='bold' gutterBottom>
-                            Método: Por Cantidad de Dinero
-                          </Typography>
-                          <Typography variant='body2'>Cantidad: ${pedidoSeleccionado.calculoPipas.cantidadDinero?.toFixed(2) || 0}</Typography>
-                          <Typography variant='body2'>Precio por Litro: ${pedidoSeleccionado.calculoPipas.precioPorLitro?.toFixed(2) || 0}</Typography>
-                          <Typography variant='body2' fontWeight='bold' color='info.main'>
-                            Litros Calculados: {pedidoSeleccionado.calculoPipas.litrosPorDinero?.toFixed(2) || 0}
-                          </Typography>
-                        </Box>
-                      )}
-                    </Paper>
+                        </Alert>
+                      )
+                    ) : (
+                      <Alert severity='warning'>
+                        <Typography variant='body2'>
+                          No hay información de cálculo disponible para este pedido.
+                        </Typography>
+                      </Alert>
+                    )}
                   </Grid>
                 </>
               )}
@@ -3369,19 +3575,53 @@ export default function VentasPage() {
                           )
 
                           if (productoGasLP && calculoPipas.cantidadLitros > 0) {
+                            const litrosExactos = calculoPipas.cantidadLitros
+                            const subtotal = litrosExactos * calculoPipas.precioPorLitro
+                            const descripcion = `${litrosExactos.toFixed(2)} litros - Por Cantidad de Litros`
+                            
+                            // Preparar datos del cálculo
+                            const calculoPipasData = {
+                              tipoCalculo: calculoPipas.tipoCalculo,
+                              cantidadLitros: calculoPipas.cantidadLitros,
+                              precioPorLitro: calculoPipas.precioPorLitro,
+                              totalPorLitros: calculoPipas.totalPorLitros
+                            }
+                            
+                            // Agregar como nueva carga con ID único
+                            const nuevaCargaId = `carga-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                             setFormularioPedido(prev => ({
                               ...prev,
                               productos: [
-                                ...prev.productos.filter(p => p.productoId !== productoGasLP.id),
+                                ...prev.productos,
                                 {
+                                  id: nuevaCargaId, // ID único para esta carga
                                   productoId: productoGasLP.id,
-                                  cantidad: Math.ceil(calculoPipas.cantidadLitros),
+                                  cantidad: litrosExactos, // Usar valor exacto, no redondeado
                                   precio: calculoPipas.precioPorLitro,
-                                  nombre: productoGasLP.nombre
+                                  nombre: productoGasLP.nombre,
+                                  litros: litrosExactos,
+                                  subtotal: subtotal,
+                                  descripcion: descripcion,
+                                  calculoPipas: calculoPipasData
                                 }
                               ]
                             }))
-                            alert(`Producto agregado: ${Math.ceil(calculoPipas.cantidadLitros)} litros a $${calculoPipas.precioPorLitro.toFixed(2)} por litro`)
+                            
+                            // Resetear el formulario de cálculo para permitir agregar otra carga
+                            setCalculoPipas({
+                              tipoCalculo: 'ninguno',
+                              cantidadLitros: 0,
+                              totalPorLitros: 0,
+                              capacidadTanque: 0,
+                              porcentajeInicial: 0,
+                              porcentajeFinal: 100,
+                              litrosALlenar: 0,
+                              totalPorPorcentajes: 0,
+                              cantidadDinero: 0,
+                              litrosPorDinero: 0,
+                              precioPorLitro: calculoPipas.precioPorLitro // Mantener el precio por litro
+                            })
+                            alert(`Carga agregada: ${litrosExactos.toFixed(2)} litros a $${calculoPipas.precioPorLitro.toFixed(2)} por litro`)
                           } else {
                             alert('No se encontró el producto de Gas LP o la cantidad de litros es 0')
                           }
@@ -3531,19 +3771,56 @@ export default function VentasPage() {
                           )
 
                           if (productoGasLP && calculoPipas.litrosALlenar > 0) {
+                            const litrosExactos = calculoPipas.litrosALlenar
+                            const subtotal = litrosExactos * calculoPipas.precioPorLitro
+                            const descripcion = `${litrosExactos.toFixed(2)} litros - Por Porcentajes (${calculoPipas.porcentajeInicial}% → ${calculoPipas.porcentajeFinal}%)`
+                            
+                            // Preparar datos del cálculo
+                            const calculoPipasData = {
+                              tipoCalculo: calculoPipas.tipoCalculo,
+                              capacidadTanque: calculoPipas.capacidadTanque,
+                              porcentajeInicial: calculoPipas.porcentajeInicial,
+                              porcentajeFinal: calculoPipas.porcentajeFinal,
+                              litrosALlenar: calculoPipas.litrosALlenar,
+                              precioPorLitro: calculoPipas.precioPorLitro,
+                              totalPorPorcentajes: calculoPipas.totalPorPorcentajes
+                            }
+                            
+                            // Agregar como nueva carga con ID único
+                            const nuevaCargaId = `carga-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                             setFormularioPedido(prev => ({
                               ...prev,
                               productos: [
-                                ...prev.productos.filter(p => p.productoId !== productoGasLP.id),
+                                ...prev.productos,
                                 {
+                                  id: nuevaCargaId, // ID único para esta carga
                                   productoId: productoGasLP.id,
-                                  cantidad: Math.ceil(calculoPipas.litrosALlenar),
+                                  cantidad: litrosExactos, // Usar valor exacto, no redondeado
                                   precio: calculoPipas.precioPorLitro,
-                                  nombre: productoGasLP.nombre
+                                  nombre: productoGasLP.nombre,
+                                  litros: litrosExactos,
+                                  subtotal: subtotal,
+                                  descripcion: descripcion,
+                                  calculoPipas: calculoPipasData
                                 }
                               ]
                             }))
-                            alert(`Producto agregado: ${Math.ceil(calculoPipas.litrosALlenar)} litros a $${calculoPipas.precioPorLitro.toFixed(2)} por litro`)
+                            
+                            // Resetear el formulario de cálculo para permitir agregar otra carga
+                            setCalculoPipas({
+                              tipoCalculo: 'ninguno',
+                              cantidadLitros: 0,
+                              totalPorLitros: 0,
+                              capacidadTanque: 0,
+                              porcentajeInicial: 0,
+                              porcentajeFinal: 100,
+                              litrosALlenar: 0,
+                              totalPorPorcentajes: 0,
+                              cantidadDinero: 0,
+                              litrosPorDinero: 0,
+                              precioPorLitro: calculoPipas.precioPorLitro // Mantener el precio por litro
+                            })
+                            alert(`Carga agregada: ${litrosExactos.toFixed(2)} litros a $${calculoPipas.precioPorLitro.toFixed(2)} por litro`)
                           } else {
                             alert('No se encontró el producto de Gas LP o los litros a llenar son 0')
                           }
@@ -3632,19 +3909,53 @@ export default function VentasPage() {
                           )
 
                           if (productoGasLP && calculoPipas.litrosPorDinero > 0) {
+                            const litrosExactos = calculoPipas.litrosPorDinero
+                            const subtotal = calculoPipas.cantidadDinero
+                            const descripcion = `${litrosExactos.toFixed(2)} litros - Por Cantidad de Dinero ($${calculoPipas.cantidadDinero.toFixed(2)})`
+                            
+                            // Preparar datos del cálculo
+                            const calculoPipasData = {
+                              tipoCalculo: calculoPipas.tipoCalculo,
+                              cantidadDinero: calculoPipas.cantidadDinero,
+                              precioPorLitro: calculoPipas.precioPorLitro,
+                              litrosPorDinero: calculoPipas.litrosPorDinero
+                            }
+                            
+                            // Agregar como nueva carga con ID único
+                            const nuevaCargaId = `carga-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                             setFormularioPedido(prev => ({
                               ...prev,
                               productos: [
-                                ...prev.productos.filter(p => p.productoId !== productoGasLP.id),
+                                ...prev.productos,
                                 {
+                                  id: nuevaCargaId, // ID único para esta carga
                                   productoId: productoGasLP.id,
-                                  cantidad: Math.ceil(calculoPipas.litrosPorDinero),
+                                  cantidad: litrosExactos, // Usar valor exacto, no redondeado
                                   precio: calculoPipas.precioPorLitro,
-                                  nombre: productoGasLP.nombre
+                                  nombre: productoGasLP.nombre,
+                                  litros: litrosExactos,
+                                  subtotal: subtotal,
+                                  descripcion: descripcion,
+                                  calculoPipas: calculoPipasData
                                 }
                               ]
                             }))
-                            alert(`Producto agregado: ${Math.ceil(calculoPipas.litrosPorDinero)} litros a $${calculoPipas.precioPorLitro.toFixed(2)} por litro (Total: $${calculoPipas.cantidadDinero.toFixed(2)})`)
+                            
+                            // Resetear el formulario de cálculo para permitir agregar otra carga
+                            setCalculoPipas({
+                              tipoCalculo: 'ninguno',
+                              cantidadLitros: 0,
+                              totalPorLitros: 0,
+                              capacidadTanque: 0,
+                              porcentajeInicial: 0,
+                              porcentajeFinal: 100,
+                              litrosALlenar: 0,
+                              totalPorPorcentajes: 0,
+                              cantidadDinero: 0,
+                              litrosPorDinero: 0,
+                              precioPorLitro: calculoPipas.precioPorLitro // Mantener el precio por litro
+                            })
+                            alert(`Carga agregada: ${litrosExactos.toFixed(2)} litros a $${calculoPipas.precioPorLitro.toFixed(2)} por litro (Total: $${calculoPipas.cantidadDinero.toFixed(2)})`)
                           } else {
                             alert('No se encontró el producto de Gas LP o la cantidad de dinero es 0')
                           }
@@ -3855,22 +4166,39 @@ export default function VentasPage() {
                       <TableBody>
                         {formularioPedido.productos.map((item, index) => {
                           const producto = productos.find(p => p.id === item.productoId)
-                          const subtotal = item.precio * item.cantidad
+                          const subtotal = item.subtotal || (item.precio * item.cantidad)
+                          const cantidad = item.litros || item.cantidad
+                          const metodoCalculo = item.calculoPipas?.tipoCalculo
+                            ? (item.calculoPipas.tipoCalculo === 'litros' ? 'Por Litros' :
+                               item.calculoPipas.tipoCalculo === 'porcentajes' ? 'Por Porcentajes' :
+                               item.calculoPipas.tipoCalculo === 'dinero' ? 'Por Dinero' : '')
+                            : ''
                           return (
-                            <TableRow key={index}>
+                            <TableRow key={item.id || index}>
                               <TableCell>
                                 <Typography variant='body2' fontWeight='bold'>
                                   {item.nombre || producto?.nombre || 'N/A'}
                                 </Typography>
-                                <Typography variant='caption' color='text.secondary'>
-                                  {producto?.unidad || ''}
-                                </Typography>
+                                {item.descripcion && (
+                                  <Typography variant='caption' color='text.secondary' display='block'>
+                                    {item.descripcion}
+                                  </Typography>
+                                )}
+                                {metodoCalculo && (
+                                  <Typography variant='caption' color='primary' display='block' sx={{ mt: 0.5 }}>
+                                    Método: {metodoCalculo}
+                                  </Typography>
+                                )}
                               </TableCell>
-                              <TableCell align='right'>{item.cantidad}</TableCell>
-                              <TableCell align='right'>${item.precio.toLocaleString()}</TableCell>
+                              <TableCell align='right'>
+                                {typeof cantidad === 'number' ? cantidad.toFixed(2) : cantidad} {formularioPedido.tipoServicio === 'pipas' ? 'L' : producto?.unidad || ''}
+                              </TableCell>
+                              <TableCell align='right'>
+                                ${item.precio ? (typeof item.precio === 'number' ? item.precio.toFixed(2) : String(item.precio)) : '0.00'}
+                              </TableCell>
                               <TableCell align='right'>
                                 <Typography variant='body2' fontWeight='bold' color='primary'>
-                                  ${subtotal.toLocaleString()}
+                                  ${subtotal ? (typeof subtotal === 'number' ? subtotal.toFixed(2) : String(subtotal)) : '0.00'}
                                 </Typography>
                               </TableCell>
                               <TableCell align='center'>
@@ -3880,7 +4208,7 @@ export default function VentasPage() {
                                   onClick={() => {
                                     setFormularioPedido(prev => ({
                                       ...prev,
-                                      productos: prev.productos.filter((_, i) => i !== index)
+                                      productos: prev.productos.filter(p => (p.id || '') !== (item.id || ''))
                                     }))
                                   }}
                                 >
@@ -3900,8 +4228,8 @@ export default function VentasPage() {
                             <Typography variant='h6' fontWeight='bold' color='primary'>
                               $
                               {formularioPedido.productos
-                                .reduce((sum, item) => sum + item.precio * item.cantidad, 0)
-                                .toLocaleString()}
+                                .reduce((sum, item) => sum + (item.subtotal || (item.precio * item.cantidad)), 0)
+                                .toFixed(2)}
                             </Typography>
                           </TableCell>
                           <TableCell></TableCell>

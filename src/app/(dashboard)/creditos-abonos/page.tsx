@@ -162,11 +162,15 @@ interface PagoPendienteAutorizacion {
 export default function CreditosAbonosPage() {
   const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'alertas' | 'reportes' | 'pagos-pendientes' | 'historial-pagos'>('dashboard')
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteCredito | null>(null)
+  const [pedidosPendientes, setPedidosPendientes] = useState<any[]>([])
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
-  const [tipoDialogo, setTipoDialogo] = useState<'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono'>('modificar-limite')
+  const [tipoDialogo, setTipoDialogo] = useState<'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono' | 'cerrar-venta'>('modificar-limite')
+  const [pedidoSeleccionado, setPedidoSeleccionado] = useState<any>(null)
   const [notaSeleccionada, setNotaSeleccionada] = useState<NotaCredito | null>(null)
-  const [formasPago, setFormasPago] = useState<Array<{ id: string; formaPagoId: string; metodo: string; monto: number; referencia?: string; banco?: string }>>([])
+  const [formasPago, setFormasPago] = useState<Array<{ id: string; formaPagoId: string; metodo: string; monto: number; referencia?: string; banco?: string; tipo?: 'metodo_pago' | 'credito' }>>([])
   const [montoTotalPago, setMontoTotalPago] = useState(0)
+  const [creditoUsado, setCreditoUsado] = useState(0)
+  const [usarCredito, setUsarCredito] = useState(false)
   const [filtros, setFiltros] = useState({
     nombre: '',
     ruta: '',
@@ -215,7 +219,38 @@ export default function CreditosAbonosPage() {
   // Cargar datos iniciales
   useEffect(() => {
     loadInitialData()
+    
+    // Verificar si hay un pedidoId en la URL para abrir el diálogo de cerrar venta
+    const params = new URLSearchParams(window.location.search)
+    const pedidoIdParam = params.get('pedidoId')
+    const clienteIdParam = params.get('clienteId')
+    
+    if (pedidoIdParam && clienteIdParam) {
+      handlePedidoDesdeURL(pedidoIdParam, clienteIdParam)
+    }
   }, [])
+
+  const handlePedidoDesdeURL = async (pedidoId: string, clienteId: string) => {
+    try {
+      // Cargar datos del cliente y del pedido
+      const [cliente, pedido] = await Promise.all([
+        clientesAPI.getById(clienteId),
+        pedidosAPI.getById(pedidoId)
+      ])
+      
+      if (cliente && pedido) {
+        // Convertir cliente al formato ClienteCredito si es necesario
+        const clienteCredito: any = {
+          ...cliente,
+          creditoDisponible: cliente.limiteCredito - cliente.saldoActual,
+          notasPendientes: [] // Se cargarán si es necesario
+        }
+        abrirDialogo('cerrar-venta', clienteCredito, pedido)
+      }
+    } catch (err) {
+      console.error('Error al cargar datos desde URL:', err)
+    }
+  }
 
   useEffect(() => {
     if (sedeId !== null) {
@@ -274,15 +309,17 @@ export default function CreditosAbonosPage() {
         filtrosAPI.estadoCliente = filtros.estado
       }
 
-      const [resumen, clientes, pagos, historial] = await Promise.all([
+      const [resumen, clientes, pagos, historial, pedidos] = await Promise.all([
         creditosAbonosAPI.getResumenCartera(),
         creditosAbonosAPI.getClientesCredito(filtrosAPI),
         creditosAbonosAPI.getAllPagos({ estado: 'pendiente' }),
-        creditosAbonosAPI.getAllPagos()
+        creditosAbonosAPI.getAllPagos(),
+        creditosAbonosAPI.getPedidosPendientes ? creditosAbonosAPI.getPedidosPendientes() : Promise.resolve([])
       ])
 
       setResumenCredito(resumen)
       setClientesCredito(clientes)
+      setPedidosPendientes(pedidos)
       
       // Convertir pagos pendientes al formato esperado
       // Obtener nombres de usuarios únicos
@@ -407,10 +444,16 @@ export default function CreditosAbonosPage() {
     }
   }
 
-  const abrirDialogo = (tipo: 'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono', cliente?: ClienteCredito, nota?: NotaCredito) => {
+  const abrirDialogo = (tipo: 'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono' | 'cerrar-venta', cliente?: ClienteCredito, item?: any) => {
     setTipoDialogo(tipo)
     setClienteSeleccionado(cliente || null)
-    setNotaSeleccionada(nota || null)
+    
+    if (tipo === 'registrar-pago') {
+      setNotaSeleccionada(item || null)
+    } else if (tipo === 'cerrar-venta') {
+      setPedidoSeleccionado(item || null)
+    }
+    
     setFormasPago([])
     setMontoTotalPago(0)
     setNuevoLimite(cliente?.limiteCredito || 0)
@@ -541,7 +584,7 @@ export default function CreditosAbonosPage() {
   }
 
   const registrarPago = async () => {
-    if (!clienteSeleccionado || formasPago.length === 0 || montoTotalPago <= 0) return
+    if (!clienteSeleccionado || (formasPago.length === 0 && !usarCredito) || montoTotalPago <= 0) return
 
     try {
       setSaving(true)
@@ -551,20 +594,34 @@ export default function CreditosAbonosPage() {
         formaPagoId: fp.formaPagoId,
         monto: fp.monto,
         referencia: fp.referencia,
-        banco: fp.banco
+        banco: fp.banco,
+        tipo: 'metodo_pago'
       }))
+
+      if (usarCredito && creditoUsado > 0) {
+        formasPagoData.push({
+          formaPagoId: '',
+          monto: creditoUsado,
+          referencia: undefined,
+          banco: undefined,
+          tipo: 'credito'
+        } as any)
+      }
 
       await creditosAbonosAPI.createPago({
         clienteId: clienteSeleccionado.id,
+        pedidoId: pedidoSeleccionado?.id,
         notaCreditoId: notaSeleccionada?.id,
         montoTotal: montoTotalPago,
         tipo: notaSeleccionada ? 'nota_especifica' : 'abono_general',
         observaciones: observacionesPago,
-        formasPago: formasPagoData
+        formasPago: formasPagoData,
+        estado: 'autorizado' // En la web se autoriza directamente si tiene permisos
       })
 
       await cargarDatos()
       cerrarDialogo()
+      setSuccessMessage('Venta cerrada y pago registrado correctamente')
     } catch (err: any) {
       setError(err.message || 'Error al registrar pago')
     } finally {
@@ -600,8 +657,10 @@ export default function CreditosAbonosPage() {
 
   // Calcular total del pago usando useMemo para evitar re-renders infinitos
   const totalPago = useMemo(() => {
-    return formasPago.reduce((sum, fp) => sum + fp.monto, 0)
-  }, [formasPago])
+    const totalMetodos = formasPago.reduce((sum, fp) => sum + fp.monto, 0)
+    const totalCredito = usarCredito ? creditoUsado : 0
+    return totalMetodos + totalCredito
+  }, [formasPago, usarCredito, creditoUsado])
 
   // Actualizar montoTotalPago cuando cambie el total
   useEffect(() => {
@@ -614,6 +673,7 @@ export default function CreditosAbonosPage() {
       case 'transferencia': return 'primary'
       case 'tarjeta': return 'secondary'
       case 'cheque': return 'warning'
+      case 'credito': return 'info'
       default: return 'default'
     }
   }
@@ -621,6 +681,7 @@ export default function CreditosAbonosPage() {
   const cerrarDialogo = () => {
     setDialogoAbierto(false)
     setClienteSeleccionado(null)
+    setPedidoSeleccionado(null)
     setNotaSeleccionada(null)
     setFormasPago([])
     setMontoTotalPago(0)
@@ -648,6 +709,7 @@ export default function CreditosAbonosPage() {
       case 'vigente': return 'success'
       case 'por-vencer': return 'warning'
       case 'vencida': return 'error'
+      case 'pagada': return 'info'
       default: return 'default'
     }
   }
@@ -1042,9 +1104,25 @@ export default function CreditosAbonosPage() {
                                 <EditIcon />
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title='Enviar recordatorio'>
-                              <IconButton size='small' onClick={() => abrirDialogo('recordatorio', cliente)}>
-                                <SendIcon />
+                            <Tooltip title='Cerrar Venta'>
+                              <IconButton 
+                                size='small' 
+                                color='primary'
+                                onClick={async () => {
+                                  // Intentar obtener pedidos pendientes para este cliente
+                                  try {
+                                    const pedidos = await creditosAbonosAPI.getPedidosPendientes(cliente.id)
+                                    if (pedidos && pedidos.length > 0) {
+                                      abrirDialogo('cerrar-venta', cliente, pedidos[0])
+                                    } else {
+                                      alert('El cliente no tiene pedidos pendientes para cerrar.')
+                                    }
+                                  } catch (err) {
+                                    console.error('Error al obtener pedidos:', err)
+                                  }
+                                }}
+                              >
+                                <CheckCircleIcon />
                               </IconButton>
                             </Tooltip>
                             <Tooltip title='Registrar pago'>
@@ -1149,9 +1227,8 @@ export default function CreditosAbonosPage() {
                   </Grid>
                 </Grid>
 
-                {/* Tabla de Notas Pendientes */}
                 <Typography variant='h6' gutterBottom>
-                  Notas Pendientes
+                  Notas del Cliente
                 </Typography>
                 
                 {clienteSeleccionado.notasPendientes.length > 0 ? (
@@ -1162,7 +1239,8 @@ export default function CreditosAbonosPage() {
                           <TableCell>Número de Nota</TableCell>
                           <TableCell>Fecha Venta</TableCell>
                           <TableCell>Fecha Vencimiento</TableCell>
-                          <TableCell align='right'>Importe</TableCell>
+                          <TableCell align='right'>Importe Original</TableCell>
+                          <TableCell align='right'>Saldo Pendiente</TableCell>
                           <TableCell align='right'>Días Vencimiento</TableCell>
                           <TableCell align='center'>Estado</TableCell>
                         </TableRow>
@@ -1182,8 +1260,11 @@ export default function CreditosAbonosPage() {
                               {formatearFecha(nota.fechaVencimiento)}
                             </TableCell>
                             <TableCell align='right'>
-                              <Typography variant='h6' color='primary'>
-                                ${nota.importe.toLocaleString()}
+                              ${nota.importe.toLocaleString()}
+                            </TableCell>
+                            <TableCell align='right'>
+                              <Typography variant='subtitle1' color={nota.saldoPendiente > 0 ? 'primary' : 'text.disabled'} fontWeight='bold'>
+                                ${nota.saldoPendiente.toLocaleString()}
                               </Typography>
                             </TableCell>
                             <TableCell align='right'>
@@ -1201,14 +1282,16 @@ export default function CreditosAbonosPage() {
                                 color={getNotaEstadoColor(nota.estado) as any}
                                 size='small'
                               />
-                              <Tooltip title='Pagar esta nota'>
-                                <IconButton 
-                                  size='small' 
-                                  onClick={() => abrirDialogo('registrar-pago', clienteSeleccionado, nota)}
-                                >
-                                  <PaymentIcon />
-                                </IconButton>
-                              </Tooltip>
+                              {nota.estado !== 'pagada' && (
+                                <Tooltip title='Pagar esta nota'>
+                                  <IconButton 
+                                    size='small' 
+                                    onClick={() => abrirDialogo('registrar-pago', clienteSeleccionado, nota)}
+                                  >
+                                    <PaymentIcon />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
                             </Box>
                           </TableCell>
                           </TableRow>
@@ -1232,11 +1315,23 @@ export default function CreditosAbonosPage() {
                     Modificar Límite
                   </Button>
                   <Button
-                    variant='outlined'
-                    startIcon={<SendIcon />}
-                    onClick={() => abrirDialogo('recordatorio', clienteSeleccionado)}
+                    variant='contained'
+                    color='primary'
+                    startIcon={<CheckCircleIcon />}
+                    onClick={async () => {
+                      try {
+                        const pedidos = await creditosAbonosAPI.getPedidosPendientes(clienteSeleccionado.id)
+                        if (pedidos && pedidos.length > 0) {
+                          abrirDialogo('cerrar-venta', clienteSeleccionado, pedidos[0])
+                        } else {
+                          alert('El cliente no tiene pedidos pendientes para cerrar.')
+                        }
+                      } catch (err) {
+                        console.error('Error al obtener pedidos:', err)
+                      }
+                    }}
                   >
-                    Enviar Recordatorio
+                    Cerrar Venta
                   </Button>
                   <Button
                     variant='contained'
@@ -1874,6 +1969,7 @@ export default function CreditosAbonosPage() {
           {tipoDialogo === 'estado-cuenta' && 'Generar Estado de Cuenta'}
           {tipoDialogo === 'registrar-pago' && 'Registrar Pago'}
           {tipoDialogo === 'registrar-abono' && 'Registrar Abono General'}
+          {tipoDialogo === 'cerrar-venta' && 'Cerrar Venta - Registrar Pago'}
         </DialogTitle>
         <DialogContent>
           {clienteSeleccionado && (
@@ -1949,7 +2045,7 @@ export default function CreditosAbonosPage() {
                 </Box>
               )}
 
-              {(tipoDialogo === 'registrar-pago' || tipoDialogo === 'registrar-abono') && (
+              {(tipoDialogo === 'registrar-pago' || tipoDialogo === 'registrar-abono' || tipoDialogo === 'cerrar-venta') && (
                 <Box>
                   {notaSeleccionada && (
                     <Box sx={{ mb: 3, p: 2, bgcolor: 'primary.light', borderRadius: 1 }}>
@@ -1959,11 +2055,177 @@ export default function CreditosAbonosPage() {
                       <Typography variant='body2' color='text.secondary'>
                         Importe de la nota: ${notaSeleccionada.importe.toLocaleString()}
                       </Typography>
+
+                      <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                        <Button 
+                          size="small" 
+                          variant="contained" 
+                          color="info"
+                          startIcon={<CreditCardIcon />}
+                          disabled={clienteSeleccionado.creditoDisponible <= 0}
+                          onClick={() => {
+                            const pending = notaSeleccionada.importe - totalPago
+                            if (pending > 0) {
+                              const amountToUse = Math.min(pending, clienteSeleccionado.creditoDisponible)
+                              setUsarCredito(true)
+                              setCreditoUsado(prev => prev + amountToUse)
+                            }
+                          }}
+                        >
+                          Usar Crédito
+                        </Button>
+                        <Button 
+                          size="small" 
+                          variant="contained" 
+                          color="success"
+                          startIcon={<AttachMoneyIcon />}
+                          onClick={() => {
+                            const cashMethod = formasPagoDisponibles.find(fp => 
+                              fp.tipo === 'efectivo' || 
+                              fp.nombre.toLowerCase().includes('efectivo')
+                            )
+                            if (cashMethod) {
+                              const pending = notaSeleccionada.importe - totalPago
+                              if (pending > 0) {
+                                const formaExistente = formasPago.find(fp => fp.formaPagoId === cashMethod.id)
+                                if (formaExistente) {
+                                  actualizarFormaPago(formaExistente.id, 'monto', formaExistente.monto + pending)
+                                } else {
+                                  const nuevaForma = {
+                                    id: `fp-${contadorId}`,
+                                    formaPagoId: cashMethod.id,
+                                    metodo: 'efectivo',
+                                    monto: pending,
+                                    tipo: 'metodo_pago' as const
+                                  }
+                                  setFormasPago(prev => [...prev, nuevaForma])
+                                  setContadorId(prev => prev + 1)
+                                }
+                              }
+                            }
+                          }}
+                        >
+                          Saldo en Efectivo
+                        </Button>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {pedidoSeleccionado && (
+                    <Box sx={{ mb: 3, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+                      <Typography variant='h6' gutterBottom>
+                        Pedido a Cerrar: {pedidoSeleccionado.numeroPedido}
+                      </Typography>
+                      <Typography variant='body2' color='text.secondary'>
+                        Total Venta: ${pedidoSeleccionado.ventaTotal.toLocaleString()}
+                      </Typography>
+                      <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
+                        Crédito Disponible: ${clienteSeleccionado.creditoDisponible.toLocaleString()}
+                      </Typography>
+
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button 
+                          size="small" 
+                          variant="contained" 
+                          color="info"
+                          startIcon={<CreditCardIcon />}
+                          disabled={clienteSeleccionado.creditoDisponible <= 0}
+                          onClick={() => {
+                            const pending = pedidoSeleccionado.ventaTotal - totalPago
+                            if (pending > 0) {
+                              const amountToUse = Math.min(pending, clienteSeleccionado.creditoDisponible)
+                              setUsarCredito(true)
+                              setCreditoUsado(prev => prev + amountToUse)
+                            }
+                          }}
+                        >
+                          Usar Crédito
+                        </Button>
+                        <Button 
+                          size="small" 
+                          variant="contained" 
+                          color="success"
+                          startIcon={<AttachMoneyIcon />}
+                          onClick={() => {
+                            const cashMethod = formasPagoDisponibles.find(fp => 
+                              fp.tipo === 'efectivo' || 
+                              fp.nombre.toLowerCase().includes('efectivo')
+                            )
+                            if (cashMethod) {
+                              const pending = pedidoSeleccionado.ventaTotal - totalPago
+                              if (pending > 0) {
+                                const formaExistente = formasPago.find(fp => fp.formaPagoId === cashMethod.id)
+                                if (formaExistente) {
+                                  actualizarFormaPago(formaExistente.id, 'monto', formaExistente.monto + pending)
+                                } else {
+                                  const nuevaForma = {
+                                    id: `fp-${contadorId}`,
+                                    formaPagoId: cashMethod.id,
+                                    metodo: 'efectivo',
+                                    monto: pending,
+                                    tipo: 'metodo_pago' as const
+                                  }
+                                  setFormasPago(prev => [...prev, nuevaForma])
+                                  setContadorId(prev => prev + 1)
+                                }
+                              }
+                            }
+                          }}
+                        >
+                          Saldo en Efectivo
+                        </Button>
+                        <Button 
+                          size="small" 
+                          variant="outlined" 
+                          onClick={() => {
+                            setFormasPago([])
+                            setUsarCredito(false)
+                            setCreditoUsado(0)
+                          }}
+                        >
+                          Limpiar
+                        </Button>
+                      </Box>
                     </Box>
                   )}
 
                   <Typography variant='h6' gutterBottom>
-                    Formas de Pago
+                    Pago con Crédito Disponible
+                  </Typography>
+                  <Card variant="outlined" sx={{ mb: 3, p: 2, bgcolor: usarCredito ? 'info.light' : 'transparent' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <FormControlLabel
+                        control={
+                          <Switch 
+                            checked={usarCredito} 
+                            onChange={(e) => setUsarCredito(e.target.checked)}
+                            disabled={clienteSeleccionado.creditoDisponible <= 0}
+                          />
+                        }
+                        label="Usar Crédito del Cliente"
+                      />
+                      <Typography variant="body2" fontWeight="bold">
+                        Disponible: ${clienteSeleccionado.creditoDisponible.toLocaleString()}
+                      </Typography>
+                    </Box>
+                    {usarCredito && (
+                      <TextField
+                        fullWidth
+                        label="Monto a cargar al crédito"
+                        type="number"
+                        size="small"
+                        value={creditoUsado}
+                        onChange={(e) => setCreditoUsado(Number(e.target.value))}
+                        sx={{ mt: 2 }}
+                        InputProps={{
+                          startAdornment: <InputAdornment position="start">$</InputAdornment>
+                        }}
+                      />
+                    )}
+                  </Card>
+
+                  <Typography variant='h6' gutterBottom>
+                    Otras Formas de Pago
                   </Typography>
 
                   {formasPago.map((forma, index) => (
@@ -1998,11 +2260,11 @@ export default function CreditosAbonosPage() {
                               }}
                             />
                           </Grid>
-                          {(forma.metodo === 'transferencia' || forma.metodo === 'cheque') && (
+                          {(forma.metodo === 'transferencia' || forma.metodo === 'cheque' || forma.metodo === 'tarjeta' || forma.metodo === 'terminal') && (
                             <Grid item xs={12} sm={3}>
                               <TextField
                                 fullWidth
-                                label='Referencia'
+                                label='Referencia / Folio'
                                 value={forma.referencia || ''}
                                 onChange={(e) => actualizarFormaPago(forma.id, 'referencia', e.target.value)}
                               />
@@ -2053,6 +2315,11 @@ export default function CreditosAbonosPage() {
                           Faltante: ${(notaSeleccionada.importe - totalPago).toLocaleString()}
                         </Typography>
                       )}
+                      {pedidoSeleccionado && (
+                        <Typography variant='body2' color='text.secondary'>
+                          Diferencia: ${(pedidoSeleccionado.ventaTotal - totalPago).toLocaleString()}
+                        </Typography>
+                      )}
                     </CardContent>
                   </Card>
 
@@ -2081,7 +2348,7 @@ export default function CreditosAbonosPage() {
             onClick={() => {
               if (tipoDialogo === 'modificar-limite') {
                 guardarLimiteCredito()
-              } else if (tipoDialogo === 'registrar-pago' || tipoDialogo === 'registrar-abono') {
+              } else if (tipoDialogo === 'registrar-pago' || tipoDialogo === 'registrar-abono' || tipoDialogo === 'cerrar-venta') {
                 registrarPago()
               }
             }}
@@ -2095,6 +2362,7 @@ export default function CreditosAbonosPage() {
                 {tipoDialogo === 'estado-cuenta' && 'Generar Estado'}
                 {tipoDialogo === 'registrar-pago' && 'Registrar Pago'}
                 {tipoDialogo === 'registrar-abono' && 'Registrar Abono'}
+                {tipoDialogo === 'cerrar-venta' && 'Finalizar Venta'}
               </>
             )}
           </Button>
