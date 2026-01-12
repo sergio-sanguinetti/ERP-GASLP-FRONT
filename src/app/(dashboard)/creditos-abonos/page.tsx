@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useMemo, useEffect } from 'react'
+import * as XLSX from 'xlsx'
 import { 
   creditosAbonosAPI, 
   clientesAPI, 
@@ -9,6 +10,7 @@ import {
   authAPI,
   sedesAPI,
   usuariosAPI,
+  reportesFinancierosAPI,
   type ClienteCredito as ClienteCreditoAPI,
   type NotaCredito as NotaCreditoAPI,
   type Pago as PagoAPI,
@@ -51,6 +53,7 @@ import {
   Switch,
   FormControlLabel,
   LinearProgress,
+  CircularProgress,
   Avatar,
   List,
   ListItem,
@@ -215,6 +218,7 @@ export default function CreditosAbonosPage() {
   const [pagoSeleccionadoDetalle, setPagoSeleccionadoDetalle] = useState<PagoAPI | null>(null)
   const [usuarioRegistroNombre, setUsuarioRegistroNombre] = useState<string>('')
   const [usuarioAutorizacionNombre, setUsuarioAutorizacionNombre] = useState<string>('')
+  const [generandoReporte, setGenerandoReporte] = useState<string | null>(null)
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -754,6 +758,186 @@ export default function CreditosAbonosPage() {
       cargarDatos()
     }
   }, [filtros.nombre, filtros.ruta, filtros.estado])
+
+  // Función para descargar datos como Excel
+  const descargarExcel = (datos: any[] | any, nombreArchivo: string, hojas?: Array<{ nombre: string; datos: any[] }>) => {
+    try {
+      const workbook = XLSX.utils.book_new()
+      const fecha = new Date().toISOString().split('T')[0]
+      let hojasAgregadas = 0
+
+      if (hojas && Array.isArray(hojas)) {
+        // Múltiples hojas
+        hojas.forEach(hoja => {
+          if (hoja.datos && Array.isArray(hoja.datos) && hoja.datos.length > 0) {
+            const worksheet = XLSX.utils.json_to_sheet(hoja.datos)
+            XLSX.utils.book_append_sheet(workbook, worksheet, hoja.nombre)
+            hojasAgregadas++
+          } else if (hoja.datos && Array.isArray(hoja.datos) && hoja.datos.length === 0) {
+            // Crear hoja vacía con encabezados si no hay datos
+            const worksheet = XLSX.utils.aoa_to_sheet([['No hay datos disponibles']])
+            XLSX.utils.book_append_sheet(workbook, worksheet, hoja.nombre)
+            hojasAgregadas++
+          }
+        })
+      } else if (Array.isArray(datos)) {
+        // Una sola hoja con array de datos
+        if (datos.length === 0) {
+          // Crear hoja vacía con mensaje
+          const worksheet = XLSX.utils.aoa_to_sheet([['No hay datos disponibles']])
+          XLSX.utils.book_append_sheet(workbook, worksheet, 'Datos')
+          hojasAgregadas++
+        } else {
+          const worksheet = XLSX.utils.json_to_sheet(datos)
+          XLSX.utils.book_append_sheet(workbook, worksheet, 'Datos')
+          hojasAgregadas++
+        }
+      } else if (datos && typeof datos === 'object') {
+        // Objeto único - crear hojas separadas si es necesario
+        const keys = Object.keys(datos)
+        let tieneArrays = false
+        
+        keys.forEach(key => {
+          if (Array.isArray(datos[key])) {
+            tieneArrays = true
+            if (datos[key].length > 0) {
+              const worksheet = XLSX.utils.json_to_sheet(datos[key])
+              XLSX.utils.book_append_sheet(workbook, worksheet, key)
+              hojasAgregadas++
+            } else {
+              // Hoja vacía con mensaje
+              const worksheet = XLSX.utils.aoa_to_sheet([['No hay datos disponibles']])
+              XLSX.utils.book_append_sheet(workbook, worksheet, key)
+              hojasAgregadas++
+            }
+          }
+        })
+
+        if (!tieneArrays) {
+          // Si no tiene arrays, crear una hoja con el objeto
+          const worksheet = XLSX.utils.json_to_sheet([datos])
+          XLSX.utils.book_append_sheet(workbook, worksheet, 'Datos')
+          hojasAgregadas++
+        }
+      } else {
+        setError('Formato de datos no válido')
+        return
+      }
+
+      // Verificar que se agregó al menos una hoja
+      if (hojasAgregadas === 0) {
+        // Crear una hoja por defecto con mensaje
+        const worksheet = XLSX.utils.aoa_to_sheet([['No hay datos disponibles para este reporte']])
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Datos')
+      }
+
+      // Generar el archivo Excel
+      XLSX.writeFile(workbook, `${nombreArchivo}_${fecha}.xlsx`)
+    } catch (error: any) {
+      console.error('Error al generar Excel:', error)
+      setError('Error al generar el archivo Excel: ' + (error.message || 'Error desconocido'))
+    }
+  }
+
+  // Funciones para generar reportes
+  const generarReporte = async (tipo: string) => {
+    try {
+      setGenerandoReporte(tipo)
+      setError(null)
+
+      switch (tipo) {
+        case 'antiguedad-cartera': {
+          const data = await reportesFinancierosAPI.getAntiguedadCartera()
+          descargarExcel(null, 'Antiguedad_Cartera', [
+            { nombre: 'Menos de 30 días', datos: data.menos30 },
+            { nombre: '30 a 60 días', datos: data.entre30y60 },
+            { nombre: '60 a 90 días', datos: data.entre60y90 },
+            { nombre: 'Más de 90 días', datos: data.mas90 }
+          ])
+          break
+        }
+        case 'top-mejores-pagadores': {
+          const data = await reportesFinancierosAPI.getTopMejoresPagadores(10)
+          descargarExcel(data, 'Top_10_Mejores_Pagadores')
+          break
+        }
+        case 'top-peores-pagadores': {
+          const data = await reportesFinancierosAPI.getTopPeoresPagadores(10)
+          descargarExcel(data, 'Top_10_Peores_Pagadores')
+          break
+        }
+        case 'analisis-riesgo': {
+          const data = await reportesFinancierosAPI.getAnalisisRiesgo()
+          descargarExcel(null, 'Analisis_Riesgo', [
+            { nombre: 'Crítico', datos: data.critico.map(c => ({ ...c, nivel: 'CRÍTICO' })) },
+            { nombre: 'Alto', datos: data.alto.map(c => ({ ...c, nivel: 'ALTO' })) },
+            { nombre: 'Medio', datos: data.medio.map(c => ({ ...c, nivel: 'MEDIO' })) },
+            { nombre: 'Bajo', datos: data.bajo.map(c => ({ ...c, nivel: 'BAJO' })) }
+          ])
+          break
+        }
+        case 'clientes-visita-cobranza': {
+          const data = await reportesFinancierosAPI.getClientesVisitaCobranza()
+          descargarExcel(data, 'Clientes_Visita_Cobranza')
+          break
+        }
+        case 'recordatorios-por-enviar': {
+          const data = await reportesFinancierosAPI.getRecordatoriosPorEnviar()
+          descargarExcel(data, 'Recordatorios_Por_Enviar')
+          break
+        }
+        case 'transferencias-pendientes': {
+          const data = await reportesFinancierosAPI.getTransferenciasPendientes()
+          descargarExcel(data, 'Transferencias_Pendientes')
+          break
+        }
+        case 'clientes-limite-excedido': {
+          const data = await reportesFinancierosAPI.getClientesLimiteExcedido()
+          descargarExcel(data, 'Clientes_Limite_Excedido')
+          break
+        }
+        case 'comparativo-cartera-ventas': {
+          const data = await reportesFinancierosAPI.getComparativoCarteraVentas()
+          // Convertir objeto a formato de hoja Excel
+          const datosFormateados = [
+            { 'Métrica': 'Ventas Total', 'Valor': `$${data.ventas.total.toLocaleString()}` },
+            { 'Métrica': 'Ventas Pagado', 'Valor': `$${data.ventas.pagado.toLocaleString()}` },
+            { 'Métrica': 'Ventas Pendiente', 'Valor': `$${data.ventas.pendiente.toLocaleString()}` },
+            { 'Métrica': 'Cartera Total', 'Valor': `$${data.cartera.total.toLocaleString()}` },
+            { 'Métrica': 'Cartera Vigente', 'Valor': `$${data.cartera.vigente.toLocaleString()}` },
+            { 'Métrica': 'Porcentaje sobre Ventas', 'Valor': `${data.cartera.porcentajeSobreVentas}%` },
+            { 'Métrica': 'Ratio de Cobranza', 'Valor': `${data.indicadores.ratioCobranza}%` }
+          ]
+          descargarExcel(datosFormateados, 'Comparativo_Cartera_Ventas')
+          break
+        }
+        case 'eficiencia-cobranza-repartidor': {
+          const data = await reportesFinancierosAPI.getEficienciaCobranzaRepartidor()
+          descargarExcel(data, 'Eficiencia_Cobranza_Repartidor')
+          break
+        }
+        case 'tendencias-pago': {
+          const data = await reportesFinancierosAPI.getTendenciasPago(12)
+          descargarExcel(data, 'Tendencias_Pago')
+          break
+        }
+        case 'proyeccion-flujo-caja': {
+          const data = await reportesFinancierosAPI.getProyeccionFlujoCaja(6)
+          descargarExcel(data, 'Proyeccion_Flujo_Caja')
+          break
+        }
+        default:
+          setError('Tipo de reporte no reconocido')
+      }
+      
+      setSuccessMessage('Reporte generado y descargado exitosamente')
+    } catch (err: any) {
+      setError(err.message || 'Error al generar el reporte')
+      console.error('Error generando reporte:', err)
+    } finally {
+      setGenerandoReporte(null)
+    }
+  }
 
   return (
     <Box sx={{ p: 3 }}>
@@ -1660,21 +1844,37 @@ export default function CreditosAbonosPage() {
                   </Box>
                   
                   <List>
-                    <ListItem button>
+                    <ListItem 
+                      button 
+                      onClick={() => generarReporte('antiguedad-cartera')}
+                      disabled={generandoReporte === 'antiguedad-cartera'}
+                    >
                       <ListItemText primary='Antigüedad de Cartera (30, 60, 90+ días)' />
-                      <DownloadIcon />
+                      {generandoReporte === 'antiguedad-cartera' ? <CircularProgress size={20} /> : <DownloadIcon />}
                     </ListItem>
-                    <ListItem button>
+                    <ListItem 
+                      button 
+                      onClick={() => generarReporte('top-mejores-pagadores')}
+                      disabled={generandoReporte === 'top-mejores-pagadores'}
+                    >
                       <ListItemText primary='Top 10 Mejores Pagadores' />
-                      <DownloadIcon />
+                      {generandoReporte === 'top-mejores-pagadores' ? <CircularProgress size={20} /> : <DownloadIcon />}
                     </ListItem>
-                    <ListItem button>
+                    <ListItem 
+                      button 
+                      onClick={() => generarReporte('top-peores-pagadores')}
+                      disabled={generandoReporte === 'top-peores-pagadores'}
+                    >
                       <ListItemText primary='Top 10 Peores Pagadores' />
-                      <DownloadIcon />
+                      {generandoReporte === 'top-peores-pagadores' ? <CircularProgress size={20} /> : <DownloadIcon />}
                     </ListItem>
-                    <ListItem button>
+                    <ListItem 
+                      button 
+                      onClick={() => generarReporte('analisis-riesgo')}
+                      disabled={generandoReporte === 'analisis-riesgo'}
+                    >
                       <ListItemText primary='Análisis de Riesgo' />
-                      <DownloadIcon />
+                      {generandoReporte === 'analisis-riesgo' ? <CircularProgress size={20} /> : <DownloadIcon />}
                     </ListItem>
                   </List>
                 </CardContent>
@@ -1693,21 +1893,37 @@ export default function CreditosAbonosPage() {
                   </Box>
                   
                   <List>
-                    <ListItem button>
+                    <ListItem 
+                      button 
+                      onClick={() => generarReporte('clientes-visita-cobranza')}
+                      disabled={generandoReporte === 'clientes-visita-cobranza'}
+                    >
                       <ListItemText primary='Clientes para Visita de Cobranza (por Ruta)' />
-                      <DownloadIcon />
+                      {generandoReporte === 'clientes-visita-cobranza' ? <CircularProgress size={20} /> : <DownloadIcon />}
                     </ListItem>
-                    <ListItem button>
+                    <ListItem 
+                      button 
+                      onClick={() => generarReporte('recordatorios-por-enviar')}
+                      disabled={generandoReporte === 'recordatorios-por-enviar'}
+                    >
                       <ListItemText primary='Recordatorios por Enviar' />
-                      <DownloadIcon />
+                      {generandoReporte === 'recordatorios-por-enviar' ? <CircularProgress size={20} /> : <DownloadIcon />}
                     </ListItem>
-                    <ListItem button>
+                    <ListItem 
+                      button 
+                      onClick={() => generarReporte('transferencias-pendientes')}
+                      disabled={generandoReporte === 'transferencias-pendientes'}
+                    >
                       <ListItemText primary='Transferencias Pendientes Confirmación' />
-                      <DownloadIcon />
+                      {generandoReporte === 'transferencias-pendientes' ? <CircularProgress size={20} /> : <DownloadIcon />}
                     </ListItem>
-                    <ListItem button>
+                    <ListItem 
+                      button 
+                      onClick={() => generarReporte('clientes-limite-excedido')}
+                      disabled={generandoReporte === 'clientes-limite-excedido'}
+                    >
                       <ListItemText primary='Clientes con Límite Excedido' />
-                      <DownloadIcon />
+                      {generandoReporte === 'clientes-limite-excedido' ? <CircularProgress size={20} /> : <DownloadIcon />}
                     </ListItem>
                   </List>
                 </CardContent>
@@ -1726,21 +1942,37 @@ export default function CreditosAbonosPage() {
                   </Box>
                   
                   <List>
-                    <ListItem button>
+                    <ListItem 
+                      button 
+                      onClick={() => generarReporte('comparativo-cartera-ventas')}
+                      disabled={generandoReporte === 'comparativo-cartera-ventas'}
+                    >
                       <ListItemText primary='Comparativo Cartera vs Ventas' />
-                      <DownloadIcon />
+                      {generandoReporte === 'comparativo-cartera-ventas' ? <CircularProgress size={20} /> : <DownloadIcon />}
                     </ListItem>
-                    <ListItem button>
+                    <ListItem 
+                      button 
+                      onClick={() => generarReporte('eficiencia-cobranza-repartidor')}
+                      disabled={generandoReporte === 'eficiencia-cobranza-repartidor'}
+                    >
                       <ListItemText primary='Eficiencia de Cobranza por Repartidor' />
-                      <DownloadIcon />
+                      {generandoReporte === 'eficiencia-cobranza-repartidor' ? <CircularProgress size={20} /> : <DownloadIcon />}
                     </ListItem>
-                    <ListItem button>
+                    <ListItem 
+                      button 
+                      onClick={() => generarReporte('tendencias-pago')}
+                      disabled={generandoReporte === 'tendencias-pago'}
+                    >
                       <ListItemText primary='Análisis de Tendencias de Pago' />
-                      <DownloadIcon />
+                      {generandoReporte === 'tendencias-pago' ? <CircularProgress size={20} /> : <DownloadIcon />}
                     </ListItem>
-                    <ListItem button>
+                    <ListItem 
+                      button 
+                      onClick={() => generarReporte('proyeccion-flujo-caja')}
+                      disabled={generandoReporte === 'proyeccion-flujo-caja'}
+                    >
                       <ListItemText primary='Proyección de Flujo de Caja' />
-                      <DownloadIcon />
+                      {generandoReporte === 'proyeccion-flujo-caja' ? <CircularProgress size={20} /> : <DownloadIcon />}
                     </ListItem>
                   </List>
                 </CardContent>

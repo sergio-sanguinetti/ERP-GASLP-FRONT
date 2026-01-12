@@ -1855,7 +1855,62 @@ export default function CorteCajaPage() {
                       <Button onClick={() => setPasoActual(repartidorSeleccionado.tipo === 'pipas' ? 3 : 2)}>
                         Anterior
                       </Button>
-                      <Button variant='contained' color='success' startIcon={<CheckIcon />}>
+                      <Button 
+                        variant='contained' 
+                        color='success' 
+                        startIcon={<CheckIcon />}
+                        onClick={async () => {
+                          if (!repartidorSeleccionado) return
+                          
+                          try {
+                            // Determinar el estado final basado en la selección
+                            let estadoFinalCorte = 'validado'
+                            if (estadoFinal === 'rechazado') {
+                              estadoFinalCorte = 'pendiente'
+                            } else if (estadoFinal === 'aprobado-con-observaciones' || estadoFinal === 'aprobado-sin-observaciones') {
+                              estadoFinalCorte = 'validado'
+                            }
+                            
+                            // Validar que se haya seleccionado un estado
+                            if (!estadoFinal) {
+                              alert('Por favor selecciona un estado final para el corte')
+                              return
+                            }
+
+                            // Validar el corte en el backend
+                            await ventasAPI.validarCorte(repartidorSeleccionado.id, {
+                              estado: estadoFinalCorte,
+                              observaciones: observaciones,
+                              validaciones: {
+                                efectivo: validaciones.efectivo,
+                                deposito: validaciones.deposito,
+                                terminal: validaciones.terminal,
+                                transferencias: validaciones.transferencias,
+                                cheques: validaciones.cheques,
+                                reporteFisico: validaciones.reporteFisico,
+                                foliosArchivosValidacion: foliosArchivosValidacion
+                              }
+                            })
+
+                            // Actualizar el estado local
+                            setRepartidoresCorte(prev => 
+                              prev.map(r => 
+                                r.id === repartidorSeleccionado.id 
+                                  ? { ...r, estado: estadoFinalCorte as 'recibido' | 'validado' | 'pendiente' }
+                                  : r
+                              )
+                            )
+
+                            // Cerrar el diálogo y recargar datos
+                            cerrarDialogo()
+                            await fetchData()
+                          } catch (error: any) {
+                            console.error('Error validando corte:', error)
+                            alert(error.message || 'Error al validar el corte')
+                          }
+                        }}
+                        disabled={!estadoFinal}
+                      >
                         APROBAR Y NOTIFICAR REPARTIDOR
                       </Button>
                     </Box>

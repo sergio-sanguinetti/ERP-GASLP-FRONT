@@ -261,6 +261,12 @@ export default function ConfiguracionFormasPagoPage() {
       return
     }
 
+    // Validar que se seleccione al menos una sede al crear
+    if (tipoDialogo === 'crear' && sedesSeleccionadas.length === 0) {
+      setError('Debes seleccionar al menos una sede para crear la forma de pago')
+      return
+    }
+
     setSaving(true)
     setError('')
 
@@ -877,8 +883,8 @@ export default function ConfiguracionFormasPagoPage() {
               </Grid>
 
               <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Sedes</InputLabel>
+                <FormControl fullWidth required error={tipoDialogo === 'crear' && sedesSeleccionadas.length === 0}>
+                  <InputLabel>Sedes *</InputLabel>
                   <Select
                     multiple
                     value={sedesSeleccionadas}
@@ -897,8 +903,13 @@ export default function ConfiguracionFormasPagoPage() {
                       } else {
                         setSedesSeleccionadas(filteredValue)
                       }
+                      
+                      // Limpiar error si se selecciona al menos una sede
+                      if (filteredValue.length > 0 && error.includes('sede')) {
+                        setError('')
+                      }
                     }}
-                    label='Sedes'
+                    label='Sedes *'
                     renderValue={(selected) => {
                       if (selected.length === 0) return 'Sin sedes'
                       if (selected.length === sedes.length && sedes.length > 0) return 'Todas las sedes'
@@ -929,6 +940,11 @@ export default function ConfiguracionFormasPagoPage() {
                       </MenuItem>
                     ))}
                   </Select>
+                  {tipoDialogo === 'crear' && sedesSeleccionadas.length === 0 && (
+                    <Typography variant='caption' color='error' sx={{ mt: 0.5, ml: 1.75 }}>
+                      Debes seleccionar al menos una sede
+                    </Typography>
+                  )}
                 </FormControl>
               </Grid>
 
@@ -1008,7 +1024,12 @@ export default function ConfiguracionFormasPagoPage() {
             <Button onClick={cerrarDialogo} disabled={saving}>
               Cancelar
             </Button>
-            <Button onClick={guardarFormaPago} variant='contained' startIcon={<SaveIcon />} disabled={saving}>
+            <Button 
+              onClick={guardarFormaPago} 
+              variant='contained' 
+              startIcon={<SaveIcon />} 
+              disabled={saving || (tipoDialogo === 'crear' && sedesSeleccionadas.length === 0)}
+            >
               {saving ? 'Guardando...' : tipoDialogo === 'crear' ? 'Crear' : 'Guardar Cambios'}
             </Button>
           </DialogActions>
@@ -1378,14 +1399,31 @@ export default function ConfiguracionFormasPagoPage() {
               <DialogContent>
                 <Grid container spacing={2} sx={{ mt: 1 }}>
                   <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label='Código'
-                      value={formularioTipo.codigo || ''}
-                      onChange={e => setFormularioTipo(prev => ({ ...prev, codigo: e.target.value }))}
-                      required
-                      helperText='Código único del tipo (ej: efectivo, terminal)'
-                    />
+                    <FormControl fullWidth required disabled={tipoDialogo === 'editar'}>
+                      <InputLabel>Código</InputLabel>
+                      <Select
+                        value={formularioTipo.codigo || ''}
+                        onChange={e => setFormularioTipo(prev => ({ ...prev, codigo: e.target.value }))}
+                        label='Código'
+                      >
+                        <MenuItem value='efectivo'>Efectivo</MenuItem>
+                        <MenuItem value='terminal'>Terminal</MenuItem>
+                        <MenuItem value='transferencia'>Transferencia</MenuItem>
+                        <MenuItem value='cheque'>Cheque</MenuItem>
+                        <MenuItem value='deposito'>Depósito</MenuItem>
+                        <MenuItem value='credito'>Crédito</MenuItem>
+                      </Select>
+                      {tipoDialogo === 'crear' && (
+                        <Typography variant='caption' color='text.secondary' sx={{ mt: 0.5, ml: 1.75 }}>
+                          Selecciona el código del tipo de forma de pago
+                        </Typography>
+                      )}
+                      {tipoDialogo === 'editar' && (
+                        <Typography variant='caption' color='text.secondary' sx={{ mt: 0.5, ml: 1.75 }}>
+                          El código no se puede modificar después de crear el tipo
+                        </Typography>
+                      )}
+                    </FormControl>
                   </Grid>
 
                   <Grid item xs={12} sm={6}>

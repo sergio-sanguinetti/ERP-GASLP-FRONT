@@ -8,11 +8,15 @@ import {
   rutasAPI,
   authAPI,
   sedesAPI,
+  zonasAPI,
   type Cliente as ClienteAPI,
   type Domicilio as DomicilioAPI,
   type Ruta,
   type Usuario,
-  type Sede
+  type Sede,
+  type Zona,
+  type Municipio,
+  type Ciudad
 } from '@/lib/api'
 
 import {
@@ -52,7 +56,9 @@ import {
   ListItemText,
   ListItemIcon,
   Avatar,
-  CircularProgress
+  CircularProgress,
+  Pagination,
+  Stack
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -80,6 +86,7 @@ import {
   Download as DownloadIcon,
   AccountBalance as AccountBalanceIcon
 } from '@mui/icons-material'
+import MapLocationPicker from '@/components/MapLocationPicker'
 
 // Tipos de datos
 interface Domicilio {
@@ -93,6 +100,8 @@ interface Domicilio {
   estado: string
   codigoPostal: string
   referencia?: string
+  latitud?: number | null
+  longitud?: number | null
   activo: boolean
   codigoQR: string
   fechaCreacionQR: string
@@ -116,6 +125,7 @@ interface Cliente {
   rfc?: string
   curp?: string
   ruta: string
+  zona?: string | Zona
   limiteCredito: number
   saldoActual: number
   pagosEspecialesAutorizados: boolean
@@ -160,6 +170,42 @@ const estadosMexico = [
   'Yucatán',
   'Zacatecas'
 ]
+
+// Coordenadas de los estados de México (centro aproximado de cada estado)
+const coordenadasEstados: Record<string, [number, number]> = {
+  'Aguascalientes': [21.8853, -102.2916],
+  'Baja California': [30.8406, -115.2838],
+  'Baja California Sur': [24.1426, -110.3128],
+  'Campeche': [19.8301, -90.5349],
+  'Chiapas': [16.7569, -93.1292],
+  'Chihuahua': [28.6353, -106.0889],
+  'Ciudad de México': [19.4326, -99.1332],
+  'Coahuila': [27.0586, -101.7068],
+  'Colima': [19.2452, -103.7241],
+  'Durango': [24.0277, -104.6538],
+  'Guanajuato': [21.0160, -101.2574],
+  'Guerrero': [17.4392, -99.5451],
+  'Hidalgo': [20.0911, -98.7624],
+  'Jalisco': [20.6597, -103.3496],
+  'México': [19.4969, -99.7233],
+  'Michoacán': [19.4326, -101.7068],
+  'Morelos': [18.6813, -99.1013],
+  'Nayarit': [21.7514, -104.8455],
+  'Nuevo León': [25.6866, -100.3161],
+  'Oaxaca': [17.0732, -96.7266],
+  'Puebla': [19.0414, -98.2063],
+  'Querétaro': [20.5888, -100.3899],
+  'Quintana Roo': [19.1817, -88.4791],
+  'San Luis Potosí': [22.1565, -100.9855],
+  'Sinaloa': [24.8047, -107.3949],
+  'Sonora': [29.0892, -110.9613],
+  'Tabasco': [18.0000, -92.9000],
+  'Tamaulipas': [23.7364, -99.1418],
+  'Tlaxcala': [19.3186, -98.2378],
+  'Veracruz': [19.1738, -96.1342],
+  'Yucatán': [20.6843, -89.0943],
+  'Zacatecas': [22.7709, -102.5832]
+}
 
 const rutasMexico = [
   'Ruta Centro',
@@ -611,10 +657,15 @@ export default function ClientesPage() {
   const router = useRouter()
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [rutas, setRutas] = useState<Ruta[]>([])
+  const [rutasFiltradas, setRutasFiltradas] = useState<Ruta[]>([])
   const [sedes, setSedes] = useState<Sede[]>([])
   const [usuario, setUsuario] = useState<Usuario | null>(null)
   const [sedeSeleccionada, setSedeSeleccionada] = useState<string | null>(null)
   const [sedeId, setSedeId] = useState<string | null>(null)
+  const [zonas, setZonas] = useState<Zona[]>([])
+  const [zonasFiltradas, setZonasFiltradas] = useState<Zona[]>([])
+  const [municipios, setMunicipios] = useState<Municipio[]>([])
+  const [ciudades, setCiudades] = useState<Ciudad[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
@@ -624,6 +675,9 @@ export default function ClientesPage() {
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null)
   const [formularioCliente, setFormularioCliente] = useState<Partial<Cliente>>({})
   const [domiciliosAdicionales, setDomiciliosAdicionales] = useState<Partial<Domicilio>[]>([])
+  const [latitudPrincipal, setLatitudPrincipal] = useState<number | null>(null)
+  const [longitudPrincipal, setLongitudPrincipal] = useState<number | null>(null)
+  const [centroMapa, setCentroMapa] = useState<[number, number] | null>(null)
   const [archivoSeleccionado, setArchivoSeleccionado] = useState<File | null>(null)
   const [progresoImportacion, setProgresoImportacion] = useState(0)
   const [importando, setImportando] = useState(false)
@@ -634,6 +688,10 @@ export default function ClientesPage() {
   const [modalQR, setModalQR] = useState(false)
   const [qrDataURL, setQrDataURL] = useState<string>('')
   const [domicilioQR, setDomicilioQR] = useState<Domicilio | null>(null)
+  
+  // Estados de paginación
+  const [page, setPage] = useState(1)
+  const [rowsPerPage] = useState(10)
 
   const esSuperAdministrador = usuario?.rol === 'superAdministrador'
 
@@ -648,6 +706,14 @@ export default function ClientesPage() {
       cargarDatos()
     }
   }, [sedeId])
+
+  // Ajustar la página si está fuera de rango
+  useEffect(() => {
+    const totalPages = Math.ceil(clientes.length / rowsPerPage)
+    if (page > totalPages && totalPages > 0) {
+      setPage(totalPages)
+    }
+  }, [clientes.length, rowsPerPage, page])
 
   const loadInitialData = async () => {
     try {
@@ -686,15 +752,72 @@ export default function ClientesPage() {
       if (sedeId) {
         filtros.sedeId = sedeId
       }
-      const [clientesData, rutasData] = await Promise.all([clientesAPI.getAll(filtros), rutasAPI.getAll()])
+      const [clientesData, rutasData, zonasData, ciudadesData] = await Promise.all([
+        clientesAPI.getAll(filtros),
+        rutasAPI.getAll(),
+        zonasAPI.getAll(),
+        zonasAPI.ciudades.getAll()
+      ])
       setClientes(clientesData.map(adaptarCliente))
       setRutas(rutasData)
+      setRutasFiltradas(rutasData)
+      setZonas(zonasData)
+      setZonasFiltradas(zonasData)
+      setCiudades(ciudadesData)
+      // Resetear a la página 1 después de cargar
+      setPage(1)
     } catch (err: any) {
       setError(err.message || 'Error al cargar datos')
       console.error('Error cargando datos:', err)
     } finally {
       setLoading(false)
     }
+  }
+  
+  // Cargar zonas cuando cambia el estado seleccionado
+  const cargarMunicipiosPorEstado = async (estado: string) => {
+    if (!estado) {
+      setMunicipios([])
+      setZonasFiltradas([])
+      return
+    }
+    
+    try {
+      // Buscar las ciudades por estado
+      const ciudadesDelEstado = ciudades.filter(c => c.estado === estado && c.activa)
+      
+      if (ciudadesDelEstado.length > 0) {
+        // Cargar municipios de todas las ciudades del estado
+        const municipiosPromises = ciudadesDelEstado.map(ciudad => zonasAPI.municipios.getAll(ciudad.id))
+        const municipiosArrays = await Promise.all(municipiosPromises)
+        const todosLosMunicipios = municipiosArrays.flat().filter(m => m.activo)
+        setMunicipios(todosLosMunicipios)
+        
+        // Cargar zonas de todos los municipios
+        const zonasPromises = todosLosMunicipios.map(municipio => zonasAPI.getAll(municipio.id))
+        const zonasArrays = await Promise.all(zonasPromises)
+        const todasLasZonas = zonasArrays.flat()
+        setZonasFiltradas(todasLasZonas.filter(z => z.activa))
+      } else {
+        setMunicipios([])
+        setZonasFiltradas([])
+      }
+    } catch (err: any) {
+      console.error('Error cargando municipios y zonas:', err)
+      setMunicipios([])
+      setZonasFiltradas([])
+    }
+  }
+  
+  // Filtrar rutas cuando cambia la zona seleccionada
+  const filtrarRutasPorZona = (zonaId: string | null) => {
+    if (!zonaId) {
+      setRutasFiltradas(rutas.filter(r => r.activa))
+      return
+    }
+    
+    const rutasFiltradas = rutas.filter(r => r.zonaId === zonaId && r.activa)
+    setRutasFiltradas(rutasFiltradas)
   }
 
   const handleSedeChange = (nuevaSedeId: string) => {
@@ -706,7 +829,10 @@ export default function ClientesPage() {
   const adaptarCliente = (cliente: ClienteAPI): Cliente => {
     return {
       ...cliente,
-      ruta: typeof cliente.ruta === 'string' ? cliente.ruta : cliente.ruta?.nombre || '',
+      // Mantener el objeto completo de la ruta si existe, o el nombre como string para compatibilidad
+      ruta: cliente.ruta && typeof cliente.ruta === 'object' ? cliente.ruta : (cliente.ruta?.nombre || cliente.ruta || ''),
+      // Mantener el objeto completo de la zona si existe, o el nombre como string para compatibilidad
+      zona: cliente.zona && typeof cliente.zona === 'object' ? cliente.zona : (cliente.zona?.nombre || cliente.zona || ''),
       domicilios: cliente.domicilios?.map(d => ({
         ...d,
         fechaCreacionQR: d.fechaCreacionQR || new Date().toISOString()
@@ -714,7 +840,7 @@ export default function ClientesPage() {
     }
   }
 
-  const abrirDialogo = (
+  const abrirDialogo = async (
     tipo: 'importar' | 'agregar' | 'editar' | 'credito' | 'historial' | 'detalles',
     cliente?: Cliente
   ) => {
@@ -731,11 +857,52 @@ export default function ClientesPage() {
         ultimaModificacion: new Date().toISOString().split('T')[0]
       })
       setDomiciliosAdicionales([])
+      setLatitudPrincipal(null)
+      setLongitudPrincipal(null)
+      setCentroMapa(null)
+      setRutasFiltradas(rutas.filter(r => r.activa))
+      setZonasFiltradas(zonas.filter(z => z.activa))
     } else if (tipo === 'editar' && cliente) {
-      setFormularioCliente({ ...cliente })
+      // Si la ruta viene como string, buscar el objeto completo en la lista de rutas
+      let rutaCompleta = cliente.ruta
+      if (typeof cliente.ruta === 'string' && cliente.ruta) {
+        // Buscar la ruta por nombre en la lista de rutas
+        rutaCompleta = rutas.find(r => r.nombre === cliente.ruta) || cliente.ruta
+      } else if (cliente.ruta && typeof cliente.ruta === 'object' && !(cliente.ruta as any).id) {
+        // Si es un objeto pero no tiene ID, buscar por nombre
+        const rutaEncontrada = rutas.find(r => r.nombre === (cliente.ruta as any).nombre)
+        rutaCompleta = rutaEncontrada || cliente.ruta
+      }
+      
+      // Si la zona viene como string, buscar el objeto completo
+      let zonaCompleta = cliente.zona
+      if (typeof cliente.zona === 'string' && cliente.zona) {
+        zonaCompleta = zonas.find(z => z.id === cliente.zona || z.nombre === cliente.zona) || cliente.zona
+      }
+      
+      setFormularioCliente({ ...cliente, ruta: rutaCompleta, zona: zonaCompleta })
+      
+      // Centrar el mapa en el estado del cliente
+      if (cliente.estado) {
+        const coordenadas = coordenadasEstados[cliente.estado]
+        if (coordenadas) {
+          setCentroMapa(coordenadas)
+        }
+        // Cargar municipios y zonas si hay estado
+        await cargarMunicipiosPorEstado(cliente.estado)
+      }
+      
+      // Filtrar rutas si hay zona
+      if (zonaCompleta && typeof zonaCompleta === 'object' && (zonaCompleta as any).id) {
+        filtrarRutasPorZona((zonaCompleta as any).id)
+      }
       // Separar el domicilio principal de los adicionales
       const domiciliosAdicionalesList = cliente.domicilios?.filter(d => d.tipo !== 'principal') || []
       setDomiciliosAdicionales(domiciliosAdicionalesList)
+      // Cargar latitud y longitud del domicilio principal
+      const domicilioPrincipal = cliente.domicilios?.find(d => d.tipo === 'principal')
+      setLatitudPrincipal(domicilioPrincipal?.latitud || null)
+      setLongitudPrincipal(domicilioPrincipal?.longitud || null)
     }
 
     setDialogoAbierto(true)
@@ -749,6 +916,10 @@ export default function ClientesPage() {
     setArchivoSeleccionado(null)
     setProgresoImportacion(0)
     setImportando(false)
+    setRutasFiltradas(rutas.filter(r => r.activa))
+    setZonasFiltradas(zonas.filter(z => z.activa))
+    setMunicipios([])
+    setCentroMapa(null)
   }
 
   const manejarCambioFormulario = (campo: keyof Cliente, valor: any) => {
@@ -768,6 +939,8 @@ export default function ClientesPage() {
         estado: '',
         codigoPostal: '',
         referencia: '',
+        latitud: null,
+        longitud: null,
         activo: true
       }
     ])
@@ -797,6 +970,8 @@ export default function ClientesPage() {
         estado: formularioCliente.estado!,
         codigoPostal: formularioCliente.codigoPostal!,
         referencia: 'Dirección principal del cliente',
+        latitud: latitudPrincipal,
+        longitud: longitudPrincipal,
         activo: true
       }
 
@@ -815,6 +990,8 @@ export default function ClientesPage() {
             estado: d.estado!,
             codigoPostal: d.codigoPostal!,
             referencia: d.referencia || '',
+            latitud: d.latitud || null,
+            longitud: d.longitud || null,
             activo: d.activo ?? true
           }))
       ]
@@ -840,7 +1017,12 @@ export default function ClientesPage() {
             (formularioCliente.ruta as any)?.id ||
             (typeof formularioCliente.ruta === 'object' && formularioCliente.ruta
               ? (formularioCliente.ruta as any).id
-              : undefined),
+              : null),
+          zonaId:
+            (formularioCliente.zona as any)?.id ||
+            (typeof formularioCliente.zona === 'object' && formularioCliente.zona
+              ? (formularioCliente.zona as any).id
+              : null),
           limiteCredito: formularioCliente.limiteCredito || 0,
           saldoActual: formularioCliente.saldoActual || 0,
           pagosEspecialesAutorizados: formularioCliente.pagosEspecialesAutorizados || false,
@@ -869,7 +1051,12 @@ export default function ClientesPage() {
             (formularioCliente.ruta as any)?.id ||
             (typeof formularioCliente.ruta === 'object' && formularioCliente.ruta
               ? (formularioCliente.ruta as any).id
-              : undefined),
+              : null),
+          zonaId:
+            (formularioCliente.zona as any)?.id ||
+            (typeof formularioCliente.zona === 'object' && formularioCliente.zona
+              ? (formularioCliente.zona as any).id
+              : null),
           limiteCredito: formularioCliente.limiteCredito,
           saldoActual: formularioCliente.saldoActual,
           pagosEspecialesAutorizados: formularioCliente.pagosEspecialesAutorizados,
@@ -886,7 +1073,9 @@ export default function ClientesPage() {
             colonia: formularioCliente.colonia!,
             municipio: formularioCliente.municipio!,
             estado: formularioCliente.estado!,
-            codigoPostal: formularioCliente.codigoPostal!
+            codigoPostal: formularioCliente.codigoPostal!,
+            latitud: latitudPrincipal,
+            longitud: longitudPrincipal
           })
         } else {
           // Crear domicilio principal si no existe
@@ -907,6 +1096,8 @@ export default function ClientesPage() {
               estado: domicilio.estado!,
               codigoPostal: domicilio.codigoPostal!,
               referencia: domicilio.referencia,
+              latitud: domicilio.latitud || null,
+              longitud: domicilio.longitud || null,
               activo: domicilio.activo
             })
           } else if (
@@ -928,6 +1119,8 @@ export default function ClientesPage() {
               estado: domicilio.estado,
               codigoPostal: domicilio.codigoPostal,
               referencia: domicilio.referencia,
+              latitud: domicilio.latitud || null,
+              longitud: domicilio.longitud || null,
               activo: domicilio.activo !== undefined ? domicilio.activo : true
             })
           }
@@ -1094,6 +1287,16 @@ export default function ClientesPage() {
     return `${cliente.nombre} ${cliente.apellidoPaterno} ${cliente.apellidoMaterno}`
   }
 
+  // Calcular clientes paginados
+  const totalPages = Math.ceil(clientes.length / rowsPerPage)
+  const startIndex = (page - 1) * rowsPerPage
+  const endIndex = startIndex + rowsPerPage
+  const paginatedClientes = clientes.slice(startIndex, endIndex)
+
+  const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
+    setPage(value)
+  }
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -1170,7 +1373,16 @@ export default function ClientesPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {clientes.map(cliente => (
+                {paginatedClientes.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} align='center' sx={{ py: 4 }}>
+                      <Typography variant='body2' color='text.secondary'>
+                        No hay clientes disponibles
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedClientes.map(cliente => (
                   <TableRow
                     key={cliente.id}
                     hover
@@ -1283,10 +1495,29 @@ export default function ClientesPage() {
                       </Box>
                     </TableCell>
                   </TableRow>
-                ))}
+                  ))
+                )}
               </TableBody>
             </Table>
           </TableContainer>
+          
+          {/* Paginación */}
+          {clientes.length > 0 && (
+            <Stack spacing={2} sx={{ mt: 2, alignItems: 'center' }}>
+              <Pagination
+                count={totalPages}
+                page={page}
+                onChange={handlePageChange}
+                color='primary'
+                size='large'
+                showFirstButton
+                showLastButton
+              />
+              <Typography variant='body2' color='text.secondary'>
+                Mostrando {startIndex + 1} - {Math.min(endIndex, clientes.length)} de {clientes.length} clientes
+              </Typography>
+            </Stack>
+          )}
         </CardContent>
       </Card>
 
@@ -1507,7 +1738,19 @@ export default function ClientesPage() {
                 <InputLabel>Estado</InputLabel>
                 <Select
                   value={formularioCliente.estado || ''}
-                  onChange={e => manejarCambioFormulario('estado', e.target.value)}
+                  onChange={e => {
+                    manejarCambioFormulario('estado', e.target.value)
+                    // Limpiar zona y ruta cuando cambia el estado
+                    manejarCambioFormulario('zona', null)
+                    manejarCambioFormulario('ruta', null)
+                    // Centrar el mapa en el estado seleccionado
+                    const coordenadas = coordenadasEstados[e.target.value]
+                    if (coordenadas) {
+                      setCentroMapa(coordenadas)
+                    }
+                    // Cargar municipios y zonas del nuevo estado
+                    cargarMunicipiosPorEstado(e.target.value)
+                  }}
                   label='Estado'
                 >
                   {estadosMexico.map(estado => (
@@ -1530,6 +1773,22 @@ export default function ClientesPage() {
               />
             </Grid>
 
+            {/* Mapa para seleccionar ubicación */}
+            <Grid item xs={12}>
+              <MapLocationPicker
+                latitud={latitudPrincipal}
+                longitud={longitudPrincipal}
+                onLocationSelect={(lat, lng) => {
+                  setLatitudPrincipal(lat)
+                  setLongitudPrincipal(lng)
+                }}
+                height='350px'
+                editable={true}
+                center={centroMapa}
+                zoom={centroMapa ? 8 : undefined}
+              />
+            </Grid>
+
             {/* Información Comercial */}
             <Grid item xs={12}>
               <Divider sx={{ my: 2 }} />
@@ -1539,30 +1798,93 @@ export default function ClientesPage() {
             </Grid>
 
             <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Zona</InputLabel>
+                <Select
+                  value={
+                    (() => {
+                      if (formularioCliente.zona && typeof formularioCliente.zona === 'object' && (formularioCliente.zona as any).id) {
+                        return (formularioCliente.zona as any).id
+                      }
+                      if (typeof formularioCliente.zona === 'string' && formularioCliente.zona) {
+                        const zonaEncontrada = zonasFiltradas.find(z => z.id === formularioCliente.zona || z.nombre === formularioCliente.zona)
+                        return zonaEncontrada?.id || ''
+                      }
+                      return ''
+                    })()
+                  }
+                  onChange={e => {
+                    const zonaSeleccionada = zonasFiltradas.find(z => z.id === e.target.value)
+                    if (zonaSeleccionada) {
+                      manejarCambioFormulario('zona', zonaSeleccionada)
+                      // Filtrar rutas por la zona seleccionada
+                      filtrarRutasPorZona(zonaSeleccionada.id)
+                      // Limpiar ruta cuando cambia la zona
+                      manejarCambioFormulario('ruta', null)
+                    } else {
+                      manejarCambioFormulario('zona', null)
+                      setRutasFiltradas(rutas.filter(r => r.activa))
+                    }
+                  }}
+                  label='Zona'
+                  disabled={!formularioCliente.estado || zonasFiltradas.length === 0}
+                >
+                  {zonasFiltradas.length === 0 ? (
+                    <MenuItem disabled>
+                      {!formularioCliente.estado ? 'Selecciona un estado primero' : 'No hay zonas disponibles para este estado'}
+                    </MenuItem>
+                  ) : (
+                    zonasFiltradas.map(zona => (
+                      <MenuItem key={zona.id} value={zona.id}>
+                        {zona.nombre} {zona.codigo ? `- ${zona.codigo}` : ''}
+                      </MenuItem>
+                    ))
+                  )}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
               <FormControl fullWidth required>
                 <InputLabel>Ruta</InputLabel>
                 <Select
                   value={
-                    (formularioCliente.ruta as any)?.id ||
-                    (typeof formularioCliente.ruta === 'string' ? formularioCliente.ruta : '') ||
-                    ''
+                    (() => {
+                      // Si la ruta es un objeto con ID, usar el ID
+                      if (formularioCliente.ruta && typeof formularioCliente.ruta === 'object' && (formularioCliente.ruta as any).id) {
+                        return (formularioCliente.ruta as any).id
+                      }
+                      // Si la ruta es un string (nombre), buscar el ID correspondiente
+                      if (typeof formularioCliente.ruta === 'string' && formularioCliente.ruta) {
+                        const rutaEncontrada = rutasFiltradas.find(r => r.nombre === formularioCliente.ruta)
+                        return rutaEncontrada?.id || ''
+                      }
+                      return ''
+                    })()
                   }
                   onChange={e => {
-                    const rutaSeleccionada = rutas.find(r => r.id === e.target.value)
-                    manejarCambioFormulario('ruta', rutaSeleccionada || e.target.value)
+                    const rutaSeleccionada = rutasFiltradas.find(r => r.id === e.target.value)
                     if (rutaSeleccionada) {
-                      manejarCambioFormulario('ruta', rutaSeleccionada.nombre)
+                      // Guardar el objeto completo de la ruta para mantener el ID
+                      manejarCambioFormulario('ruta', rutaSeleccionada)
+                    } else {
+                      manejarCambioFormulario('ruta', null)
                     }
                   }}
                   label='Ruta'
+                  disabled={rutasFiltradas.length === 0}
                 >
-                  {rutas
-                    .filter(r => r.activa)
-                    .map(ruta => (
+                  {rutasFiltradas.length === 0 ? (
+                    <MenuItem disabled>
+                      {!formularioCliente.zona ? 'Selecciona una zona primero' : 'No hay rutas disponibles para esta zona'}
+                    </MenuItem>
+                  ) : (
+                    rutasFiltradas.map(ruta => (
                       <MenuItem key={ruta.id} value={ruta.id}>
                         {ruta.nombre} - {ruta.codigo}
                       </MenuItem>
-                    ))}
+                    ))
+                  )}
                 </Select>
               </FormControl>
             </Grid>
@@ -1736,6 +2058,18 @@ export default function ClientesPage() {
                           onChange={e => actualizarDomicilioAdicional(index, 'referencia', e.target.value)}
                           multiline
                           rows={2}
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <MapLocationPicker
+                          latitud={domicilio.latitud || null}
+                          longitud={domicilio.longitud || null}
+                          onLocationSelect={(lat, lng) => {
+                            actualizarDomicilioAdicional(index, 'latitud', lat)
+                            actualizarDomicilioAdicional(index, 'longitud', lng)
+                          }}
+                          height='300px'
+                          editable={true}
                         />
                       </Grid>
                       <Grid item xs={12}>

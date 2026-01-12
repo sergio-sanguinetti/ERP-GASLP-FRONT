@@ -27,7 +27,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  DialogContentText
+  DialogContentText,
+  Pagination,
+  Stack
 } from '@mui/material'
 
 // Component Imports
@@ -48,11 +50,23 @@ const UsuariosPage = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [userToDelete, setUserToDelete] = useState<User | null>(null)
   const [deleting, setDeleting] = useState(false)
+  
+  // Estados de paginación
+  const [page, setPage] = useState(1)
+  const [rowsPerPage] = useState(10)
 
   // Cargar usuarios al montar el componente
   useEffect(() => {
     loadUsers()
   }, [])
+
+  // Ajustar la página si está fuera de rango
+  useEffect(() => {
+    const totalPages = Math.ceil(users.length / rowsPerPage)
+    if (page > totalPages && totalPages > 0) {
+      setPage(totalPages)
+    }
+  }, [users.length, rowsPerPage, page])
 
   const loadUsers = async () => {
     try {
@@ -60,6 +74,8 @@ const UsuariosPage = () => {
       setError('')
       const data = await usuariosAPI.getAll()
       setUsers(data)
+      // Resetear a la página 1 después de cargar
+      setPage(1)
     } catch (err: any) {
       setError(err.message || 'Error al cargar usuarios')
       console.error('Error loading users:', err)
@@ -175,6 +191,16 @@ const UsuariosPage = () => {
     }
   }
 
+  // Calcular usuarios paginados
+  const totalPages = Math.ceil(users.length / rowsPerPage)
+  const startIndex = (page - 1) * rowsPerPage
+  const endIndex = startIndex + rowsPerPage
+  const paginatedUsers = users.slice(startIndex, endIndex)
+
+  const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
+    setPage(value)
+  }
+
   if (loading && users.length === 0) {
     return (
       <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
@@ -210,73 +236,92 @@ const UsuariosPage = () => {
               No hay usuarios registrados
             </Typography>
           ) : (
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Nombres</TableCell>
-                    <TableCell>Apellido Paterno</TableCell>
-                    <TableCell>Apellido Materno</TableCell>
-                    <TableCell>Rol</TableCell>
-                    <TableCell>Correo</TableCell>
-                    <TableCell>Sede</TableCell>
-                    <TableCell>Estado</TableCell>
-                    <TableCell>Fecha Registro</TableCell>
-                    <TableCell align="center">Acciones</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>{user.nombres}</TableCell>
-                      <TableCell>{user.apellidoPaterno}</TableCell>
-                      <TableCell>{user.apellidoMaterno}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={user.rol}
-                          color={getRoleColor(user.rol)}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>
-                        {user.sede || (
-                          <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                            Sin sede asignada
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={user.estado}
-                          color={getStatusColor(user.estado)}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>{formatDate(user.fechaRegistro)}</TableCell>
-                      <TableCell align="center">
-                        <IconButton
-                          size="small"
-                          onClick={() => {
-                            setSelectedUser(user)
-                            setIsEditModalOpen(true)
-                          }}
-                        >
-                          <i className="tabler-edit" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => handleDeleteClick(user)}
-                        >
-                          <i className="tabler-trash" />
-                        </IconButton>
-                      </TableCell>
+            <>
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Nombres</TableCell>
+                      <TableCell>Apellido Paterno</TableCell>
+                      <TableCell>Apellido Materno</TableCell>
+                      <TableCell>Rol</TableCell>
+                      <TableCell>Correo</TableCell>
+                      <TableCell>Sede</TableCell>
+                      <TableCell>Estado</TableCell>
+                      <TableCell>Fecha Registro</TableCell>
+                      <TableCell align="center">Acciones</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {paginatedUsers.map((user) => (
+                      <TableRow key={user.id}>
+                        <TableCell>{user.nombres}</TableCell>
+                        <TableCell>{user.apellidoPaterno}</TableCell>
+                        <TableCell>{user.apellidoMaterno}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={user.rol}
+                            color={getRoleColor(user.rol)}
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>
+                          {user.sede || (
+                            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                              Sin sede asignada
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={user.estado}
+                            color={getStatusColor(user.estado)}
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>{formatDate(user.fechaRegistro)}</TableCell>
+                        <TableCell align="center">
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setSelectedUser(user)
+                              setIsEditModalOpen(true)
+                            }}
+                          >
+                            <i className="tabler-edit" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => handleDeleteClick(user)}
+                          >
+                            <i className="tabler-trash" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              
+              {/* Paginación */}
+              {users.length > 0 && (
+                <Stack spacing={2} sx={{ mt: 3, alignItems: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Mostrando {startIndex + 1} - {Math.min(endIndex, users.length)} de {users.length} usuarios
+                  </Typography>
+                  <Pagination
+                    count={totalPages}
+                    page={page}
+                    onChange={handlePageChange}
+                    color="primary"
+                    showFirstButton
+                    showLastButton
+                  />
+                </Stack>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
