@@ -2583,3 +2583,305 @@ export const configuracionesAPI = {
   },
 }
 
+// API de Reportes
+export const reportesAPI = {
+  getVentasPorMes: async (fechaDesde?: string, fechaHasta?: string, sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (fechaDesde) queryParams.append('fechaDesde', fechaDesde);
+    if (fechaHasta) queryParams.append('fechaHasta', fechaHasta);
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes/ventas-por-mes${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener ventas por mes');
+    }
+    return response.json();
+  },
+
+  getCortesPorMes: async (fechaDesde?: string, fechaHasta?: string, sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (fechaDesde) queryParams.append('fechaDesde', fechaDesde);
+    if (fechaHasta) queryParams.append('fechaHasta', fechaHasta);
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes/cortes-por-mes${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener cortes por mes');
+    }
+    return response.json();
+  },
+
+  getDineroEntregadoPorCortes: async (fechaDesde?: string, fechaHasta?: string, sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (fechaDesde) queryParams.append('fechaDesde', fechaDesde);
+    if (fechaHasta) queryParams.append('fechaHasta', fechaHasta);
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes/dinero-entregado-por-cortes${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener dinero entregado por cortes');
+    }
+    return response.json();
+  },
+
+  getClientesPorZona: async (sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes/clientes-por-zona${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener clientes por zona');
+    }
+    return response.json();
+  },
+
+  getEstadisticasCreditos: async (sedeId?: string): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes/estadisticas-creditos${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener estadísticas de créditos');
+    }
+    return response.json();
+  },
+
+  getCreditosPorMes: async (fechaDesde?: string, fechaHasta?: string, sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (fechaDesde) queryParams.append('fechaDesde', fechaDesde);
+    if (fechaHasta) queryParams.append('fechaHasta', fechaHasta);
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes/creditos-por-mes${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener créditos por mes');
+    }
+    return response.json();
+  },
+
+  getVentasPorTipoServicio: async (fechaDesde?: string, fechaHasta?: string, sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (fechaDesde) queryParams.append('fechaDesde', fechaDesde);
+    if (fechaHasta) queryParams.append('fechaHasta', fechaHasta);
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes/ventas-por-tipo-servicio${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener ventas por tipo de servicio');
+    }
+    return response.json();
+  },
+
+  getVentasPorFormaPago: async (fechaDesde?: string, fechaHasta?: string, sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (fechaDesde) queryParams.append('fechaDesde', fechaDesde);
+    if (fechaHasta) queryParams.append('fechaHasta', fechaHasta);
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes/ventas-por-forma-pago${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener ventas por forma de pago');
+    }
+    return response.json();
+  },
+
+  getResumenGeneral: async (fechaDesde?: string, fechaHasta?: string, sedeId?: string): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (fechaDesde) queryParams.append('fechaDesde', fechaDesde);
+    if (fechaHasta) queryParams.append('fechaHasta', fechaHasta);
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes/resumen-general${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener resumen general');
+    }
+    return response.json();
+  },
+}
+
+// API de Reportes Financieros
+export const reportesFinancierosAPI = {
+  getAntiguedadCartera: async (sedeId?: string): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes-financieros/antiguedad-cartera${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener antigüedad de cartera');
+    }
+    return response.json();
+  },
+
+  getTopMejoresPagadores: async (limite?: number, sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (limite) queryParams.append('limite', limite.toString());
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes-financieros/top-mejores-pagadores${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener top mejores pagadores');
+    }
+    return response.json();
+  },
+
+  getTopPeoresPagadores: async (limite?: number, sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (limite) queryParams.append('limite', limite.toString());
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes-financieros/top-peores-pagadores${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener top peores pagadores');
+    }
+    return response.json();
+  },
+
+  getAnalisisRiesgo: async (sedeId?: string): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes-financieros/analisis-riesgo${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener análisis de riesgo');
+    }
+    return response.json();
+  },
+
+  getClientesParaVisitaCobranza: async (rutaId?: string, sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (rutaId) queryParams.append('rutaId', rutaId);
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes-financieros/clientes-visita-cobranza${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener clientes para visita de cobranza');
+    }
+    return response.json();
+  },
+
+  getRecordatoriosPorEnviar: async (sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes-financieros/recordatorios-por-enviar${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener recordatorios por enviar');
+    }
+    return response.json();
+  },
+
+  getTransferenciasPendientesConfirmacion: async (sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes-financieros/transferencias-pendientes${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener transferencias pendientes');
+    }
+    return response.json();
+  },
+
+  getClientesConLimiteExcedido: async (sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes-financieros/clientes-limite-excedido${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener clientes con límite excedido');
+    }
+    return response.json();
+  },
+
+  getComparativoCarteraVentas: async (fechaDesde?: string, fechaHasta?: string, sedeId?: string): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (fechaDesde) queryParams.append('fechaDesde', fechaDesde);
+    if (fechaHasta) queryParams.append('fechaHasta', fechaHasta);
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes-financieros/comparativo-cartera-ventas${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener comparativo cartera vs ventas');
+    }
+    return response.json();
+  },
+
+  getEficienciaCobranzaPorRepartidor: async (fechaDesde?: string, fechaHasta?: string, sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (fechaDesde) queryParams.append('fechaDesde', fechaDesde);
+    if (fechaHasta) queryParams.append('fechaHasta', fechaHasta);
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes-financieros/eficiencia-cobranza-repartidor${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener eficiencia de cobranza');
+    }
+    return response.json();
+  },
+
+  getAnalisisTendenciasPago: async (fechaDesde?: string, fechaHasta?: string, sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (fechaDesde) queryParams.append('fechaDesde', fechaDesde);
+    if (fechaHasta) queryParams.append('fechaHasta', fechaHasta);
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes-financieros/analisis-tendencias-pago${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener análisis de tendencias de pago');
+    }
+    return response.json();
+  },
+
+  getProyeccionFlujoCaja: async (sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (sedeId) queryParams.append('sedeId', sedeId);
+    const queryString = queryParams.toString();
+    const url = `/reportes-financieros/proyeccion-flujo-caja${queryString ? `?${queryString}` : ''}`;
+    const response = await fetchWithAuth(url);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al obtener proyección de flujo de caja');
+    }
+    return response.json();
+  },
+}
+
