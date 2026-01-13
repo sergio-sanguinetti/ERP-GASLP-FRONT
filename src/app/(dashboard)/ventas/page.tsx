@@ -103,7 +103,6 @@ interface FiltrosPedidos {
   tipoCliente: string
   zona: string
   estado: string
-  tipoServicio: string
   mostrarTodos: boolean
 }
 
@@ -152,7 +151,6 @@ export default function VentasPage() {
     rutaId: ''
   })
   const [loading, setLoading] = useState(true)
-  const [loadingAnalisisClientes, setLoadingAnalisisClientes] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
@@ -172,7 +170,6 @@ export default function VentasPage() {
     tipoCliente: '',
     zona: '',
     estado: '',
-    tipoServicio: '',
     mostrarTodos: false
   })
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteAnalisis | null>(null)
@@ -549,7 +546,6 @@ export default function VentasPage() {
       if (filtrosPedidos.fechaDesde) filtros.fechaDesde = filtrosPedidos.fechaDesde
       if (filtrosPedidos.fechaHasta) filtros.fechaHasta = filtrosPedidos.fechaHasta
       if (filtrosPedidos.estado) filtros.estado = filtrosPedidos.estado
-      if (filtrosPedidos.tipoServicio) filtros.tipoServicio = filtrosPedidos.tipoServicio
 
       console.log('Filtros enviados:', filtros)
 
@@ -569,7 +565,6 @@ export default function VentasPage() {
   }
 
   const loadClientesAnalisis = async () => {
-    setLoadingAnalisisClientes(true)
     try {
       const data = await clientesAPI.getAll()
       // Calcular estadísticas para cada cliente
@@ -612,8 +607,6 @@ export default function VentasPage() {
       setClientesAnalisis(clientesConAnalisis)
     } catch (err: any) {
       console.error('Error loading clientes analisis:', err)
-    } finally {
-      setLoadingAnalisisClientes(false)
     }
   }
 
@@ -1213,10 +1206,9 @@ export default function VentasPage() {
       !filtrosPedidos.cliente || nombreCliente.toLowerCase().includes(filtrosPedidos.cliente.toLowerCase())
     const cumpleZona = !filtrosPedidos.zona || pedido.zona === filtrosPedidos.zona
     const cumpleEstado = !filtrosPedidos.estado || pedido.estado === filtrosPedidos.estado
-    const cumpleTipoServicio = !filtrosPedidos.tipoServicio || pedido.tipoServicio === filtrosPedidos.tipoServicio
     const cumpleMostrarTodos = filtrosPedidos.mostrarTodos || pedido.estado !== 'cancelado'
 
-    return cumpleFechaDesde && cumpleFechaHasta && cumpleCliente && cumpleZona && cumpleEstado && cumpleTipoServicio && cumpleMostrarTodos
+    return cumpleFechaDesde && cumpleFechaHasta && cumpleCliente && cumpleZona && cumpleEstado && cumpleMostrarTodos
   })
 
   const zonasUnicas = [...new Set(pedidos.map(p => p.zona).filter(Boolean))]
@@ -2114,21 +2106,6 @@ export default function VentasPage() {
                 </Grid>
 
                 <Grid item xs={12} sm={6} md={3}>
-                  <FormControl fullWidth>
-                    <InputLabel>Tipo</InputLabel>
-                    <Select
-                      value={filtrosPedidos.tipoServicio}
-                      onChange={e => manejarCambioFiltros('tipoServicio', e.target.value)}
-                      label='Tipo'
-                    >
-                      <MenuItem value=''>Todos los tipos</MenuItem>
-                      <MenuItem value='pipas'>PIPAS</MenuItem>
-                      <MenuItem value='cilindros'>CILINDROS</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={3}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -2155,7 +2132,6 @@ export default function VentasPage() {
                           tipoCliente: '',
                           zona: '',
                           estado: '',
-                          tipoServicio: '',
                           mostrarTodos: false
                         })
                         loadPedidos()
@@ -2184,7 +2160,6 @@ export default function VentasPage() {
                   <TableHead>
                     <TableRow>
                       <TableCell>ID del Pedido</TableCell>
-                      <TableCell>Tipo</TableCell>
                       <TableCell>Ruta</TableCell>
                       <TableCell>Cliente</TableCell>
                       <TableCell>Fecha y Hora</TableCell>
@@ -2200,14 +2175,6 @@ export default function VentasPage() {
                           <Typography variant='subtitle2' fontWeight='bold'>
                             {pedido.numeroPedido}
                           </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={pedido.tipoServicio === 'pipas' ? 'PIPAS' : 'CILINDROS'}
-                            color={pedido.tipoServicio === 'pipas' ? 'primary' : 'secondary'}
-                            size='small'
-                            variant='outlined'
-                          />
                         </TableCell>
                         <TableCell>
                           <Typography variant='body2'>{pedido.ruta?.nombre || 'N/A'}</Typography>
@@ -2304,19 +2271,8 @@ export default function VentasPage() {
             Análisis de Clientes y Ventas
           </Typography>
 
-          {/* Loader */}
-          {loadingAnalisisClientes && (
-            <Box sx={{ mb: 3 }}>
-              <LinearProgress />
-              <Typography variant='body2' color='text.secondary' sx={{ mt: 1, textAlign: 'center' }}>
-                Cargando análisis de clientes...
-              </Typography>
-            </Box>
-          )}
-
           {/* Panel Superior con Métricas */}
-          {!loadingAnalisisClientes && (
-            <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid container spacing={3} sx={{ mb: 4 }}>
             <Grid item xs={12} md={6}>
               <Card>
                 <CardContent>
@@ -2420,10 +2376,8 @@ export default function VentasPage() {
               </Card>
             </Grid>
           </Grid>
-          )}
 
           {/* Lista de Clientes */}
-          {!loadingAnalisisClientes && (
           <Card>
             <CardContent>
               <Typography variant='h6' gutterBottom>
@@ -2495,10 +2449,9 @@ export default function VentasPage() {
               </TableContainer>
             </CardContent>
           </Card>
-          )}
 
           {/* Vista Detallada del Cliente */}
-          {!loadingAnalisisClientes && clienteSeleccionado && (
+          {clienteSeleccionado && (
             <Card sx={{ mt: 3 }}>
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>

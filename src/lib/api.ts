@@ -1165,8 +1165,6 @@ export interface Cliente {
   curp?: string
   rutaId?: string
   ruta?: Ruta
-  zonaId?: string
-  zona?: Zona
   limiteCredito: number
   saldoActual: number
   pagosEspecialesAutorizados: boolean
@@ -1193,7 +1191,6 @@ export interface CreateClienteRequest {
   rfc?: string
   curp?: string
   rutaId?: string
-  zonaId?: string
   limiteCredito?: number
   saldoActual?: number
   pagosEspecialesAutorizados?: boolean
@@ -1218,7 +1215,6 @@ export interface UpdateClienteRequest {
   rfc?: string
   curp?: string
   rutaId?: string
-  zonaId?: string
   limiteCredito?: number
   saldoActual?: number
   pagosEspecialesAutorizados?: boolean
@@ -1817,35 +1813,9 @@ export interface CreatePedidoRequest {
     totalPorPorcentajes?: number
     cantidadDinero?: number
     litrosPorDinero?: number
-    numeroCarga?: number
-    totalCargas?: number
-  } | Array<{
-    tipoCalculo: 'ninguno' | 'litros' | 'porcentajes' | 'dinero'
-    cantidadLitros?: number
-    precioPorLitro?: number
-    totalPorLitros?: number
-    capacidadTanque?: number
-    porcentajeInicial?: number
-    porcentajeFinal?: number
-    litrosALlenar?: number
-    totalPorPorcentajes?: number
-    cantidadDinero?: number
-    litrosPorDinero?: number
-    numeroCarga?: number
-    totalCargas?: number
-  }>
+  }
   sedeId?: string
-  productos?: Array<{ 
-    productoId: string
-    cantidad: number
-    precio: number
-    litros?: number
-    subtotal?: number
-    descripcion?: string
-    indice?: number
-  }>
-  totalLitros?: number
-  totalMonto?: number
+  productos?: Array<{ productoId: string; cantidad: number; precio: number }>
 }
 
 export interface PedidosFilters {
@@ -1967,9 +1937,14 @@ export const ventasAPI = {
     if (sedeId) queryParams.append('sedeId', sedeId)
 
     const queryString = queryParams.toString()
-    const url = `/ventas/resumen${queryString ? `?${queryString}` : ''}`
+    const url = `${API_URL}/ventas/resumen${queryString ? `?${queryString}` : ''}`
 
-    const response = await fetchWithAuth(url)
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
 
     if (!response.ok) {
       // Si no existe el endpoint, retornar datos por defecto
@@ -1995,9 +1970,14 @@ export const ventasAPI = {
     if (sedeId) queryParams.append('sedeId', sedeId)
 
     const queryString = queryParams.toString()
-    const url = `/ventas/corte/pipas${queryString ? `?${queryString}` : ''}`
+    const url = `${API_URL}/ventas/corte/pipas${queryString ? `?${queryString}` : ''}`
 
-    const response = await fetchWithAuth(url)
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -2023,9 +2003,14 @@ export const ventasAPI = {
     if (sedeId) queryParams.append('sedeId', sedeId)
 
     const queryString = queryParams.toString()
-    const url = `/ventas/corte/cilindros${queryString ? `?${queryString}` : ''}`
+    const url = `${API_URL}/ventas/corte/cilindros${queryString ? `?${queryString}` : ''}`
 
-    const response = await fetchWithAuth(url)
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -2045,37 +2030,6 @@ export const ventasAPI = {
 
     return response.json()
   },
-
-  getAllCortes: async (): Promise<any[]> => {
-    const url = `/ventas`
-    const response = await fetchWithAuth(url)
-
-    if (!response.ok) {
-      if (response.status === 404) return []
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener todos los cortes')
-    }
-
-    return response.json()
-  },
-
-  validarCorte: async (corteId: string, data: { estado: string; observaciones?: string; validaciones?: any }): Promise<any> => {
-    const url = `/cortes-caja/${corteId}/validate`
-    const response = await fetchWithAuth(url, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(data)
-    })
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al validar el corte')
-    }
-
-    return response.json()
-  }
 }
 
 // API de Créditos y Abonos
@@ -2410,24 +2364,6 @@ export const creditosAbonosAPI = {
     const result = await response.json()
     return result.cliente || result
   },
-
-  getPedidosPendientes: async (clienteId?: string): Promise<Pedido[]> => {
-    const queryParams = new URLSearchParams()
-    if (clienteId) queryParams.append('clienteId', clienteId)
-    queryParams.append('estado', 'pendiente')
-
-    const queryString = queryParams.toString()
-    const url = `/pedidos${queryString ? `?${queryString}` : ''}`
-
-    const response = await fetchWithAuth(url)
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener pedidos pendientes')
-    }
-
-    return response.json()
-  },
 }
 
 // API de Newsletter
@@ -2644,585 +2580,6 @@ export const configuracionesAPI = {
 
     const result = await response.json()
     return result.configuracion || result
-  },
-}
-
-// API de Reportes
-export interface VentasPorMes {
-  mes: string
-  mesNombre: string
-  total: number
-  cantidad: number
-}
-
-export interface CortesPorMes {
-  mes: string
-  mesNombre: string
-  cantidad: number
-  validados: number
-  pendientes: number
-}
-
-export interface DineroEntregado {
-  mes: string
-  mesNombre: string
-  total: number
-  totalVentas: number
-  totalAbonos: number
-  totalEfectivo: number
-  totalOtros: number
-}
-
-export interface ClientesPorZona {
-  zonaId: string
-  zonaNombre: string
-  cantidad: number
-}
-
-export interface EstadisticasCreditos {
-  activos: number
-  pagados: number
-  deuda: number
-  totalImporte: number
-  totalSaldoPendiente: number
-}
-
-export interface CreditosPorMes {
-  mes: string
-  mesNombre: string
-  activos: number
-  pagados: number
-  vencidos: number
-  totalImporte: number
-  totalSaldoPendiente: number
-}
-
-export interface VentasPorTipoServicio {
-  pipas: { cantidad: number; total: number }
-  cilindros: { cantidad: number; total: number }
-}
-
-export interface VentasPorFormaPago {
-  nombre: string
-  tipo: string
-  cantidad: number
-  total: number
-}
-
-export interface ResumenGeneral {
-  ventasPorMes: VentasPorMes[]
-  cortesPorMes: CortesPorMes[]
-  dineroEntregado: DineroEntregado[]
-  clientesPorZona: ClientesPorZona[]
-  estadisticasCreditos: EstadisticasCreditos
-  creditosPorMes: CreditosPorMes[]
-  ventasPorTipoServicio: VentasPorTipoServicio
-  ventasPorFormaPago: VentasPorFormaPago[]
-}
-
-export interface ReportesFilters {
-  fechaDesde?: string
-  fechaHasta?: string
-}
-
-export const reportesAPI = {
-  getVentasPorMes: async (filtros?: ReportesFilters): Promise<VentasPorMes[]> => {
-    const queryParams = new URLSearchParams()
-    if (filtros?.fechaDesde) queryParams.append('fechaDesde', filtros.fechaDesde)
-    if (filtros?.fechaHasta) queryParams.append('fechaHasta', filtros.fechaHasta)
-
-    const queryString = queryParams.toString()
-    const url = `/reportes/ventas-por-mes${queryString ? `?${queryString}` : ''}`
-
-    const response = await fetchWithAuth(url)
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener ventas por mes')
-    }
-
-    return response.json()
-  },
-
-  getCortesPorMes: async (filtros?: ReportesFilters): Promise<CortesPorMes[]> => {
-    const queryParams = new URLSearchParams()
-    if (filtros?.fechaDesde) queryParams.append('fechaDesde', filtros.fechaDesde)
-    if (filtros?.fechaHasta) queryParams.append('fechaHasta', filtros.fechaHasta)
-
-    const queryString = queryParams.toString()
-    const url = `/reportes/cortes-por-mes${queryString ? `?${queryString}` : ''}`
-
-    const response = await fetchWithAuth(url)
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener cortes por mes')
-    }
-
-    return response.json()
-  },
-
-  getDineroEntregadoPorCortes: async (filtros?: ReportesFilters): Promise<DineroEntregado[]> => {
-    const queryParams = new URLSearchParams()
-    if (filtros?.fechaDesde) queryParams.append('fechaDesde', filtros.fechaDesde)
-    if (filtros?.fechaHasta) queryParams.append('fechaHasta', filtros.fechaHasta)
-
-    const queryString = queryParams.toString()
-    const url = `/reportes/dinero-entregado-cortes${queryString ? `?${queryString}` : ''}`
-
-    const response = await fetchWithAuth(url)
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener dinero entregado por cortes')
-    }
-
-    return response.json()
-  },
-
-  getClientesPorZona: async (): Promise<ClientesPorZona[]> => {
-    const response = await fetchWithAuth('/reportes/clientes-por-zona')
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener clientes por zona')
-    }
-
-    return response.json()
-  },
-
-  getEstadisticasCreditos: async (filtros?: ReportesFilters): Promise<EstadisticasCreditos> => {
-    const queryParams = new URLSearchParams()
-    if (filtros?.fechaDesde) queryParams.append('fechaDesde', filtros.fechaDesde)
-    if (filtros?.fechaHasta) queryParams.append('fechaHasta', filtros.fechaHasta)
-
-    const queryString = queryParams.toString()
-    const url = `/reportes/estadisticas-creditos${queryString ? `?${queryString}` : ''}`
-
-    const response = await fetchWithAuth(url)
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener estadísticas de créditos')
-    }
-
-    return response.json()
-  },
-
-  getCreditosPorMes: async (filtros?: ReportesFilters): Promise<CreditosPorMes[]> => {
-    const queryParams = new URLSearchParams()
-    if (filtros?.fechaDesde) queryParams.append('fechaDesde', filtros.fechaDesde)
-    if (filtros?.fechaHasta) queryParams.append('fechaHasta', filtros.fechaHasta)
-
-    const queryString = queryParams.toString()
-    const url = `/reportes/creditos-por-mes${queryString ? `?${queryString}` : ''}`
-
-    const response = await fetchWithAuth(url)
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener créditos por mes')
-    }
-
-    return response.json()
-  },
-
-  getVentasPorTipoServicio: async (filtros?: ReportesFilters): Promise<VentasPorTipoServicio> => {
-    const queryParams = new URLSearchParams()
-    if (filtros?.fechaDesde) queryParams.append('fechaDesde', filtros.fechaDesde)
-    if (filtros?.fechaHasta) queryParams.append('fechaHasta', filtros.fechaHasta)
-
-    const queryString = queryParams.toString()
-    const url = `/reportes/ventas-por-tipo-servicio${queryString ? `?${queryString}` : ''}`
-
-    const response = await fetchWithAuth(url)
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener ventas por tipo de servicio')
-    }
-
-    return response.json()
-  },
-
-  getVentasPorFormaPago: async (filtros?: ReportesFilters): Promise<VentasPorFormaPago[]> => {
-    const queryParams = new URLSearchParams()
-    if (filtros?.fechaDesde) queryParams.append('fechaDesde', filtros.fechaDesde)
-    if (filtros?.fechaHasta) queryParams.append('fechaHasta', filtros.fechaHasta)
-
-    const queryString = queryParams.toString()
-    const url = `/reportes/ventas-por-forma-pago${queryString ? `?${queryString}` : ''}`
-
-    const response = await fetchWithAuth(url)
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener ventas por forma de pago')
-    }
-
-    return response.json()
-  },
-
-  getResumenGeneral: async (filtros?: ReportesFilters): Promise<ResumenGeneral> => {
-    const queryParams = new URLSearchParams()
-    if (filtros?.fechaDesde) queryParams.append('fechaDesde', filtros.fechaDesde)
-    if (filtros?.fechaHasta) queryParams.append('fechaHasta', filtros.fechaHasta)
-
-    const queryString = queryParams.toString()
-    const url = `/reportes/resumen-general${queryString ? `?${queryString}` : ''}`
-
-    const response = await fetchWithAuth(url)
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener resumen general')
-    }
-
-    return response.json()
-  },
-}
-
-// API de Reportes Financieros
-export interface AntiguedadCartera {
-  menos30: Array<{
-    numeroNota: string
-    cliente: string
-    telefono: string
-    ruta: string
-    fechaVenta: string
-    fechaVencimiento: string
-    importe: number
-    saldoPendiente: number
-    diasVencidos: number
-    estado: string
-  }>
-  entre30y60: Array<{
-    numeroNota: string
-    cliente: string
-    telefono: string
-    ruta: string
-    fechaVenta: string
-    fechaVencimiento: string
-    importe: number
-    saldoPendiente: number
-    diasVencidos: number
-    estado: string
-  }>
-  entre60y90: Array<{
-    numeroNota: string
-    cliente: string
-    telefono: string
-    ruta: string
-    fechaVenta: string
-    fechaVencimiento: string
-    importe: number
-    saldoPendiente: number
-    diasVencidos: number
-    estado: string
-  }>
-  mas90: Array<{
-    numeroNota: string
-    cliente: string
-    telefono: string
-    ruta: string
-    fechaVenta: string
-    fechaVencimiento: string
-    importe: number
-    saldoPendiente: number
-    diasVencidos: number
-    estado: string
-  }>
-}
-
-export interface ClientePagador {
-  id: string
-  nombre: string
-  telefono: string
-  ruta: string
-  totalPagado: number
-  notasPagadas: number
-  promedioDiasPago: number
-  limiteCredito: number
-  saldoActual: number
-}
-
-export interface AnalisisRiesgo {
-  bajo: Array<{
-    id: string
-    nombre: string
-    telefono: string
-    ruta: string
-    limiteCredito: number
-    saldoActual: number
-    porcentajeUso: number
-    notasVencidas: number
-    totalVencido: number
-    diasPromedioVencimiento: number
-  }>
-  medio: Array<{
-    id: string
-    nombre: string
-    telefono: string
-    ruta: string
-    limiteCredito: number
-    saldoActual: number
-    porcentajeUso: number
-    notasVencidas: number
-    totalVencido: number
-    diasPromedioVencimiento: number
-  }>
-  alto: Array<{
-    id: string
-    nombre: string
-    telefono: string
-    ruta: string
-    limiteCredito: number
-    saldoActual: number
-    porcentajeUso: number
-    notasVencidas: number
-    totalVencido: number
-    diasPromedioVencimiento: number
-  }>
-  critico: Array<{
-    id: string
-    nombre: string
-    telefono: string
-    ruta: string
-    limiteCredito: number
-    saldoActual: number
-    porcentajeUso: number
-    notasVencidas: number
-    totalVencido: number
-    diasPromedioVencimiento: number
-  }>
-}
-
-export interface ClienteVisitaCobranza {
-  id: string
-  nombre: string
-  telefono: string
-  calle: string
-  numeroExterior: string
-  colonia: string
-  ruta: string
-  rutaId: string | null
-  zona: string
-  totalVencido: number
-  totalPorVencer: number
-  cantidadNotas: number
-  ultimaVisita: string | null
-}
-
-export interface Recordatorio {
-  id: string
-  numeroNota: string
-  cliente: string
-  email: string | null
-  telefono: string
-  fechaVencimiento: string
-  diasParaVencer: number
-  importe: number
-  saldoPendiente: number
-  enviado: boolean
-}
-
-export interface TransferenciaPendiente {
-  id: string
-  cliente: string
-  telefono: string
-  notaCredito: string
-  montoTotal: number
-  transferencias: Array<{
-    monto: number
-    referencia: string | null
-    banco: string | null
-    formaPago: string
-  }>
-  fechaPago: string
-  fechaCreacion: string
-  usuarioRegistro: string
-}
-
-export interface ClienteLimiteExcedido {
-  id: string
-  nombre: string
-  telefono: string
-  ruta: string
-  limiteCredito: number
-  saldoActual: number
-  exceso: number
-  porcentajeExceso: number
-  cantidadNotas: number
-  totalNotas: number
-}
-
-export interface ComparativoCarteraVentas {
-  periodo: {
-    fechaDesde: string | null
-    fechaHasta: string | null
-  }
-  ventas: {
-    total: number
-    pagado: number
-    pendiente: number
-  }
-  cartera: {
-    total: number
-    vigente: number
-    porcentajeSobreVentas: string
-  }
-  indicadores: {
-    ratioCobranza: string
-    diasPromedioCartera: number
-  }
-}
-
-export interface EficienciaRepartidor {
-  id: string
-  nombre: string
-  totalVentas: number
-  totalCartera: number
-  totalCobrado: number
-  eficiencia: number
-  cantidadClientes: number
-  cantidadPedidos: number
-}
-
-export interface TendenciaPago {
-  mes: string
-  mesNombre: string
-  total: number
-  porFormaPago: Record<string, number>
-}
-
-export interface ProyeccionFlujoCaja {
-  mes: string
-  mesNombre: string
-  vencimientosEsperados: number
-  cobranzaProyectada: number
-  diferencia: number
-}
-
-export const reportesFinancierosAPI = {
-  getAntiguedadCartera: async (): Promise<AntiguedadCartera> => {
-    const response = await fetchWithAuth('/reportes-financieros/antiguedad-cartera')
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener antigüedad de cartera')
-    }
-    return response.json()
-  },
-
-  getTopMejoresPagadores: async (limite: number = 10): Promise<ClientePagador[]> => {
-    const response = await fetchWithAuth(`/reportes-financieros/top-mejores-pagadores?limite=${limite}`)
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener mejores pagadores')
-    }
-    return response.json()
-  },
-
-  getTopPeoresPagadores: async (limite: number = 10): Promise<ClientePagador[]> => {
-    const response = await fetchWithAuth(`/reportes-financieros/top-peores-pagadores?limite=${limite}`)
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener peores pagadores')
-    }
-    return response.json()
-  },
-
-  getAnalisisRiesgo: async (): Promise<AnalisisRiesgo> => {
-    const response = await fetchWithAuth('/reportes-financieros/analisis-riesgo')
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener análisis de riesgo')
-    }
-    return response.json()
-  },
-
-  getClientesVisitaCobranza: async (rutaId?: string): Promise<ClienteVisitaCobranza[]> => {
-    const url = rutaId 
-      ? `/reportes-financieros/clientes-visita-cobranza?rutaId=${rutaId}`
-      : '/reportes-financieros/clientes-visita-cobranza'
-    const response = await fetchWithAuth(url)
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener clientes para visita de cobranza')
-    }
-    return response.json()
-  },
-
-  getRecordatoriosPorEnviar: async (): Promise<Recordatorio[]> => {
-    const response = await fetchWithAuth('/reportes-financieros/recordatorios-por-enviar')
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener recordatorios por enviar')
-    }
-    return response.json()
-  },
-
-  getTransferenciasPendientes: async (): Promise<TransferenciaPendiente[]> => {
-    const response = await fetchWithAuth('/reportes-financieros/transferencias-pendientes')
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener transferencias pendientes')
-    }
-    return response.json()
-  },
-
-  getClientesLimiteExcedido: async (): Promise<ClienteLimiteExcedido[]> => {
-    const response = await fetchWithAuth('/reportes-financieros/clientes-limite-excedido')
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener clientes con límite excedido')
-    }
-    return response.json()
-  },
-
-  getComparativoCarteraVentas: async (fechaDesde?: string, fechaHasta?: string): Promise<ComparativoCarteraVentas> => {
-    const queryParams = new URLSearchParams()
-    if (fechaDesde) queryParams.append('fechaDesde', fechaDesde)
-    if (fechaHasta) queryParams.append('fechaHasta', fechaHasta)
-    const queryString = queryParams.toString()
-    const url = `/reportes-financieros/comparativo-cartera-ventas${queryString ? `?${queryString}` : ''}`
-    const response = await fetchWithAuth(url)
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener comparativo cartera vs ventas')
-    }
-    return response.json()
-  },
-
-  getEficienciaCobranzaRepartidor: async (fechaDesde?: string, fechaHasta?: string): Promise<EficienciaRepartidor[]> => {
-    const queryParams = new URLSearchParams()
-    if (fechaDesde) queryParams.append('fechaDesde', fechaDesde)
-    if (fechaHasta) queryParams.append('fechaHasta', fechaHasta)
-    const queryString = queryParams.toString()
-    const url = `/reportes-financieros/eficiencia-cobranza-repartidor${queryString ? `?${queryString}` : ''}`
-    const response = await fetchWithAuth(url)
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener eficiencia de cobranza por repartidor')
-    }
-    return response.json()
-  },
-
-  getTendenciasPago: async (meses: number = 12): Promise<TendenciaPago[]> => {
-    const response = await fetchWithAuth(`/reportes-financieros/tendencias-pago?meses=${meses}`)
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener tendencias de pago')
-    }
-    return response.json()
-  },
-
-  getProyeccionFlujoCaja: async (meses: number = 6): Promise<ProyeccionFlujoCaja[]> => {
-    const response = await fetchWithAuth(`/reportes-financieros/proyeccion-flujo-caja?meses=${meses}`)
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Error al obtener proyección de flujo de caja')
-    }
-    return response.json()
   },
 }
 

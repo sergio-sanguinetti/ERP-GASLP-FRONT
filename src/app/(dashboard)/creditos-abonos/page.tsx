@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useMemo, useEffect } from 'react'
-import * as XLSX from 'xlsx'
 import { 
   creditosAbonosAPI, 
   clientesAPI, 
@@ -10,7 +9,6 @@ import {
   authAPI,
   sedesAPI,
   usuariosAPI,
-  reportesFinancierosAPI,
   type ClienteCredito as ClienteCreditoAPI,
   type NotaCredito as NotaCreditoAPI,
   type Pago as PagoAPI,
@@ -53,7 +51,6 @@ import {
   Switch,
   FormControlLabel,
   LinearProgress,
-  CircularProgress,
   Avatar,
   List,
   ListItem,
@@ -165,15 +162,11 @@ interface PagoPendienteAutorizacion {
 export default function CreditosAbonosPage() {
   const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'alertas' | 'reportes' | 'pagos-pendientes' | 'historial-pagos'>('dashboard')
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteCredito | null>(null)
-  const [pedidosPendientes, setPedidosPendientes] = useState<any[]>([])
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
-  const [tipoDialogo, setTipoDialogo] = useState<'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono' | 'cerrar-venta'>('modificar-limite')
-  const [pedidoSeleccionado, setPedidoSeleccionado] = useState<any>(null)
+  const [tipoDialogo, setTipoDialogo] = useState<'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono'>('modificar-limite')
   const [notaSeleccionada, setNotaSeleccionada] = useState<NotaCredito | null>(null)
-  const [formasPago, setFormasPago] = useState<Array<{ id: string; formaPagoId: string; metodo: string; monto: number; referencia?: string; banco?: string; tipo?: 'metodo_pago' | 'credito' }>>([])
+  const [formasPago, setFormasPago] = useState<Array<{ id: string; formaPagoId: string; metodo: string; monto: number; referencia?: string; banco?: string }>>([])
   const [montoTotalPago, setMontoTotalPago] = useState(0)
-  const [creditoUsado, setCreditoUsado] = useState(0)
-  const [usarCredito, setUsarCredito] = useState(false)
   const [filtros, setFiltros] = useState({
     nombre: '',
     ruta: '',
@@ -218,43 +211,11 @@ export default function CreditosAbonosPage() {
   const [pagoSeleccionadoDetalle, setPagoSeleccionadoDetalle] = useState<PagoAPI | null>(null)
   const [usuarioRegistroNombre, setUsuarioRegistroNombre] = useState<string>('')
   const [usuarioAutorizacionNombre, setUsuarioAutorizacionNombre] = useState<string>('')
-  const [generandoReporte, setGenerandoReporte] = useState<string | null>(null)
 
   // Cargar datos iniciales
   useEffect(() => {
     loadInitialData()
-    
-    // Verificar si hay un pedidoId en la URL para abrir el diálogo de cerrar venta
-    const params = new URLSearchParams(window.location.search)
-    const pedidoIdParam = params.get('pedidoId')
-    const clienteIdParam = params.get('clienteId')
-    
-    if (pedidoIdParam && clienteIdParam) {
-      handlePedidoDesdeURL(pedidoIdParam, clienteIdParam)
-    }
   }, [])
-
-  const handlePedidoDesdeURL = async (pedidoId: string, clienteId: string) => {
-    try {
-      // Cargar datos del cliente y del pedido
-      const [cliente, pedido] = await Promise.all([
-        clientesAPI.getById(clienteId),
-        pedidosAPI.getById(pedidoId)
-      ])
-      
-      if (cliente && pedido) {
-        // Convertir cliente al formato ClienteCredito si es necesario
-        const clienteCredito: any = {
-          ...cliente,
-          creditoDisponible: cliente.limiteCredito - cliente.saldoActual,
-          notasPendientes: [] // Se cargarán si es necesario
-        }
-        abrirDialogo('cerrar-venta', clienteCredito, pedido)
-      }
-    } catch (err) {
-      console.error('Error al cargar datos desde URL:', err)
-    }
-  }
 
   useEffect(() => {
     if (sedeId !== null) {
@@ -313,17 +274,15 @@ export default function CreditosAbonosPage() {
         filtrosAPI.estadoCliente = filtros.estado
       }
 
-      const [resumen, clientes, pagos, historial, pedidos] = await Promise.all([
+      const [resumen, clientes, pagos, historial] = await Promise.all([
         creditosAbonosAPI.getResumenCartera(),
         creditosAbonosAPI.getClientesCredito(filtrosAPI),
         creditosAbonosAPI.getAllPagos({ estado: 'pendiente' }),
-        creditosAbonosAPI.getAllPagos(),
-        creditosAbonosAPI.getPedidosPendientes ? creditosAbonosAPI.getPedidosPendientes() : Promise.resolve([])
+        creditosAbonosAPI.getAllPagos()
       ])
 
       setResumenCredito(resumen)
       setClientesCredito(clientes)
-      setPedidosPendientes(pedidos)
       
       // Convertir pagos pendientes al formato esperado
       // Obtener nombres de usuarios únicos
@@ -448,16 +407,10 @@ export default function CreditosAbonosPage() {
     }
   }
 
-  const abrirDialogo = (tipo: 'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono' | 'cerrar-venta', cliente?: ClienteCredito, item?: any) => {
+  const abrirDialogo = (tipo: 'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono', cliente?: ClienteCredito, nota?: NotaCredito) => {
     setTipoDialogo(tipo)
     setClienteSeleccionado(cliente || null)
-    
-    if (tipo === 'registrar-pago') {
-      setNotaSeleccionada(item || null)
-    } else if (tipo === 'cerrar-venta') {
-      setPedidoSeleccionado(item || null)
-    }
-    
+    setNotaSeleccionada(nota || null)
     setFormasPago([])
     setMontoTotalPago(0)
     setNuevoLimite(cliente?.limiteCredito || 0)
@@ -588,7 +541,7 @@ export default function CreditosAbonosPage() {
   }
 
   const registrarPago = async () => {
-    if (!clienteSeleccionado || (formasPago.length === 0 && !usarCredito) || montoTotalPago <= 0) return
+    if (!clienteSeleccionado || formasPago.length === 0 || montoTotalPago <= 0) return
 
     try {
       setSaving(true)
@@ -598,34 +551,20 @@ export default function CreditosAbonosPage() {
         formaPagoId: fp.formaPagoId,
         monto: fp.monto,
         referencia: fp.referencia,
-        banco: fp.banco,
-        tipo: 'metodo_pago'
+        banco: fp.banco
       }))
-
-      if (usarCredito && creditoUsado > 0) {
-        formasPagoData.push({
-          formaPagoId: '',
-          monto: creditoUsado,
-          referencia: undefined,
-          banco: undefined,
-          tipo: 'credito'
-        } as any)
-      }
 
       await creditosAbonosAPI.createPago({
         clienteId: clienteSeleccionado.id,
-        pedidoId: pedidoSeleccionado?.id,
         notaCreditoId: notaSeleccionada?.id,
         montoTotal: montoTotalPago,
         tipo: notaSeleccionada ? 'nota_especifica' : 'abono_general',
         observaciones: observacionesPago,
-        formasPago: formasPagoData,
-        estado: 'autorizado' // En la web se autoriza directamente si tiene permisos
+        formasPago: formasPagoData
       })
 
       await cargarDatos()
       cerrarDialogo()
-      setSuccessMessage('Venta cerrada y pago registrado correctamente')
     } catch (err: any) {
       setError(err.message || 'Error al registrar pago')
     } finally {
@@ -661,10 +600,8 @@ export default function CreditosAbonosPage() {
 
   // Calcular total del pago usando useMemo para evitar re-renders infinitos
   const totalPago = useMemo(() => {
-    const totalMetodos = formasPago.reduce((sum, fp) => sum + fp.monto, 0)
-    const totalCredito = usarCredito ? creditoUsado : 0
-    return totalMetodos + totalCredito
-  }, [formasPago, usarCredito, creditoUsado])
+    return formasPago.reduce((sum, fp) => sum + fp.monto, 0)
+  }, [formasPago])
 
   // Actualizar montoTotalPago cuando cambie el total
   useEffect(() => {
@@ -677,7 +614,6 @@ export default function CreditosAbonosPage() {
       case 'transferencia': return 'primary'
       case 'tarjeta': return 'secondary'
       case 'cheque': return 'warning'
-      case 'credito': return 'info'
       default: return 'default'
     }
   }
@@ -685,7 +621,6 @@ export default function CreditosAbonosPage() {
   const cerrarDialogo = () => {
     setDialogoAbierto(false)
     setClienteSeleccionado(null)
-    setPedidoSeleccionado(null)
     setNotaSeleccionada(null)
     setFormasPago([])
     setMontoTotalPago(0)
@@ -713,7 +648,6 @@ export default function CreditosAbonosPage() {
       case 'vigente': return 'success'
       case 'por-vencer': return 'warning'
       case 'vencida': return 'error'
-      case 'pagada': return 'info'
       default: return 'default'
     }
   }
@@ -758,186 +692,6 @@ export default function CreditosAbonosPage() {
       cargarDatos()
     }
   }, [filtros.nombre, filtros.ruta, filtros.estado])
-
-  // Función para descargar datos como Excel
-  const descargarExcel = (datos: any[] | any, nombreArchivo: string, hojas?: Array<{ nombre: string; datos: any[] }>) => {
-    try {
-      const workbook = XLSX.utils.book_new()
-      const fecha = new Date().toISOString().split('T')[0]
-      let hojasAgregadas = 0
-
-      if (hojas && Array.isArray(hojas)) {
-        // Múltiples hojas
-        hojas.forEach(hoja => {
-          if (hoja.datos && Array.isArray(hoja.datos) && hoja.datos.length > 0) {
-            const worksheet = XLSX.utils.json_to_sheet(hoja.datos)
-            XLSX.utils.book_append_sheet(workbook, worksheet, hoja.nombre)
-            hojasAgregadas++
-          } else if (hoja.datos && Array.isArray(hoja.datos) && hoja.datos.length === 0) {
-            // Crear hoja vacía con encabezados si no hay datos
-            const worksheet = XLSX.utils.aoa_to_sheet([['No hay datos disponibles']])
-            XLSX.utils.book_append_sheet(workbook, worksheet, hoja.nombre)
-            hojasAgregadas++
-          }
-        })
-      } else if (Array.isArray(datos)) {
-        // Una sola hoja con array de datos
-        if (datos.length === 0) {
-          // Crear hoja vacía con mensaje
-          const worksheet = XLSX.utils.aoa_to_sheet([['No hay datos disponibles']])
-          XLSX.utils.book_append_sheet(workbook, worksheet, 'Datos')
-          hojasAgregadas++
-        } else {
-          const worksheet = XLSX.utils.json_to_sheet(datos)
-          XLSX.utils.book_append_sheet(workbook, worksheet, 'Datos')
-          hojasAgregadas++
-        }
-      } else if (datos && typeof datos === 'object') {
-        // Objeto único - crear hojas separadas si es necesario
-        const keys = Object.keys(datos)
-        let tieneArrays = false
-        
-        keys.forEach(key => {
-          if (Array.isArray(datos[key])) {
-            tieneArrays = true
-            if (datos[key].length > 0) {
-              const worksheet = XLSX.utils.json_to_sheet(datos[key])
-              XLSX.utils.book_append_sheet(workbook, worksheet, key)
-              hojasAgregadas++
-            } else {
-              // Hoja vacía con mensaje
-              const worksheet = XLSX.utils.aoa_to_sheet([['No hay datos disponibles']])
-              XLSX.utils.book_append_sheet(workbook, worksheet, key)
-              hojasAgregadas++
-            }
-          }
-        })
-
-        if (!tieneArrays) {
-          // Si no tiene arrays, crear una hoja con el objeto
-          const worksheet = XLSX.utils.json_to_sheet([datos])
-          XLSX.utils.book_append_sheet(workbook, worksheet, 'Datos')
-          hojasAgregadas++
-        }
-      } else {
-        setError('Formato de datos no válido')
-        return
-      }
-
-      // Verificar que se agregó al menos una hoja
-      if (hojasAgregadas === 0) {
-        // Crear una hoja por defecto con mensaje
-        const worksheet = XLSX.utils.aoa_to_sheet([['No hay datos disponibles para este reporte']])
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Datos')
-      }
-
-      // Generar el archivo Excel
-      XLSX.writeFile(workbook, `${nombreArchivo}_${fecha}.xlsx`)
-    } catch (error: any) {
-      console.error('Error al generar Excel:', error)
-      setError('Error al generar el archivo Excel: ' + (error.message || 'Error desconocido'))
-    }
-  }
-
-  // Funciones para generar reportes
-  const generarReporte = async (tipo: string) => {
-    try {
-      setGenerandoReporte(tipo)
-      setError(null)
-
-      switch (tipo) {
-        case 'antiguedad-cartera': {
-          const data = await reportesFinancierosAPI.getAntiguedadCartera()
-          descargarExcel(null, 'Antiguedad_Cartera', [
-            { nombre: 'Menos de 30 días', datos: data.menos30 },
-            { nombre: '30 a 60 días', datos: data.entre30y60 },
-            { nombre: '60 a 90 días', datos: data.entre60y90 },
-            { nombre: 'Más de 90 días', datos: data.mas90 }
-          ])
-          break
-        }
-        case 'top-mejores-pagadores': {
-          const data = await reportesFinancierosAPI.getTopMejoresPagadores(10)
-          descargarExcel(data, 'Top_10_Mejores_Pagadores')
-          break
-        }
-        case 'top-peores-pagadores': {
-          const data = await reportesFinancierosAPI.getTopPeoresPagadores(10)
-          descargarExcel(data, 'Top_10_Peores_Pagadores')
-          break
-        }
-        case 'analisis-riesgo': {
-          const data = await reportesFinancierosAPI.getAnalisisRiesgo()
-          descargarExcel(null, 'Analisis_Riesgo', [
-            { nombre: 'Crítico', datos: data.critico.map(c => ({ ...c, nivel: 'CRÍTICO' })) },
-            { nombre: 'Alto', datos: data.alto.map(c => ({ ...c, nivel: 'ALTO' })) },
-            { nombre: 'Medio', datos: data.medio.map(c => ({ ...c, nivel: 'MEDIO' })) },
-            { nombre: 'Bajo', datos: data.bajo.map(c => ({ ...c, nivel: 'BAJO' })) }
-          ])
-          break
-        }
-        case 'clientes-visita-cobranza': {
-          const data = await reportesFinancierosAPI.getClientesVisitaCobranza()
-          descargarExcel(data, 'Clientes_Visita_Cobranza')
-          break
-        }
-        case 'recordatorios-por-enviar': {
-          const data = await reportesFinancierosAPI.getRecordatoriosPorEnviar()
-          descargarExcel(data, 'Recordatorios_Por_Enviar')
-          break
-        }
-        case 'transferencias-pendientes': {
-          const data = await reportesFinancierosAPI.getTransferenciasPendientes()
-          descargarExcel(data, 'Transferencias_Pendientes')
-          break
-        }
-        case 'clientes-limite-excedido': {
-          const data = await reportesFinancierosAPI.getClientesLimiteExcedido()
-          descargarExcel(data, 'Clientes_Limite_Excedido')
-          break
-        }
-        case 'comparativo-cartera-ventas': {
-          const data = await reportesFinancierosAPI.getComparativoCarteraVentas()
-          // Convertir objeto a formato de hoja Excel
-          const datosFormateados = [
-            { 'Métrica': 'Ventas Total', 'Valor': `$${data.ventas.total.toLocaleString()}` },
-            { 'Métrica': 'Ventas Pagado', 'Valor': `$${data.ventas.pagado.toLocaleString()}` },
-            { 'Métrica': 'Ventas Pendiente', 'Valor': `$${data.ventas.pendiente.toLocaleString()}` },
-            { 'Métrica': 'Cartera Total', 'Valor': `$${data.cartera.total.toLocaleString()}` },
-            { 'Métrica': 'Cartera Vigente', 'Valor': `$${data.cartera.vigente.toLocaleString()}` },
-            { 'Métrica': 'Porcentaje sobre Ventas', 'Valor': `${data.cartera.porcentajeSobreVentas}%` },
-            { 'Métrica': 'Ratio de Cobranza', 'Valor': `${data.indicadores.ratioCobranza}%` }
-          ]
-          descargarExcel(datosFormateados, 'Comparativo_Cartera_Ventas')
-          break
-        }
-        case 'eficiencia-cobranza-repartidor': {
-          const data = await reportesFinancierosAPI.getEficienciaCobranzaRepartidor()
-          descargarExcel(data, 'Eficiencia_Cobranza_Repartidor')
-          break
-        }
-        case 'tendencias-pago': {
-          const data = await reportesFinancierosAPI.getTendenciasPago(12)
-          descargarExcel(data, 'Tendencias_Pago')
-          break
-        }
-        case 'proyeccion-flujo-caja': {
-          const data = await reportesFinancierosAPI.getProyeccionFlujoCaja(6)
-          descargarExcel(data, 'Proyeccion_Flujo_Caja')
-          break
-        }
-        default:
-          setError('Tipo de reporte no reconocido')
-      }
-      
-      setSuccessMessage('Reporte generado y descargado exitosamente')
-    } catch (err: any) {
-      setError(err.message || 'Error al generar el reporte')
-      console.error('Error generando reporte:', err)
-    } finally {
-      setGenerandoReporte(null)
-    }
-  }
 
   return (
     <Box sx={{ p: 3 }}>
@@ -1288,25 +1042,9 @@ export default function CreditosAbonosPage() {
                                 <EditIcon />
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title='Cerrar Venta'>
-                              <IconButton 
-                                size='small' 
-                                color='primary'
-                                onClick={async () => {
-                                  // Intentar obtener pedidos pendientes para este cliente
-                                  try {
-                                    const pedidos = await creditosAbonosAPI.getPedidosPendientes(cliente.id)
-                                    if (pedidos && pedidos.length > 0) {
-                                      abrirDialogo('cerrar-venta', cliente, pedidos[0])
-                                    } else {
-                                      alert('El cliente no tiene pedidos pendientes para cerrar.')
-                                    }
-                                  } catch (err) {
-                                    console.error('Error al obtener pedidos:', err)
-                                  }
-                                }}
-                              >
-                                <CheckCircleIcon />
+                            <Tooltip title='Enviar recordatorio'>
+                              <IconButton size='small' onClick={() => abrirDialogo('recordatorio', cliente)}>
+                                <SendIcon />
                               </IconButton>
                             </Tooltip>
                             <Tooltip title='Registrar pago'>
@@ -1411,8 +1149,9 @@ export default function CreditosAbonosPage() {
                   </Grid>
                 </Grid>
 
+                {/* Tabla de Notas Pendientes */}
                 <Typography variant='h6' gutterBottom>
-                  Notas del Cliente
+                  Notas Pendientes
                 </Typography>
                 
                 {clienteSeleccionado.notasPendientes.length > 0 ? (
@@ -1423,8 +1162,7 @@ export default function CreditosAbonosPage() {
                           <TableCell>Número de Nota</TableCell>
                           <TableCell>Fecha Venta</TableCell>
                           <TableCell>Fecha Vencimiento</TableCell>
-                          <TableCell align='right'>Importe Original</TableCell>
-                          <TableCell align='right'>Saldo Pendiente</TableCell>
+                          <TableCell align='right'>Importe</TableCell>
                           <TableCell align='right'>Días Vencimiento</TableCell>
                           <TableCell align='center'>Estado</TableCell>
                         </TableRow>
@@ -1444,11 +1182,8 @@ export default function CreditosAbonosPage() {
                               {formatearFecha(nota.fechaVencimiento)}
                             </TableCell>
                             <TableCell align='right'>
-                              ${nota.importe.toLocaleString()}
-                            </TableCell>
-                            <TableCell align='right'>
-                              <Typography variant='subtitle1' color={nota.saldoPendiente > 0 ? 'primary' : 'text.disabled'} fontWeight='bold'>
-                                ${nota.saldoPendiente.toLocaleString()}
+                              <Typography variant='h6' color='primary'>
+                                ${nota.importe.toLocaleString()}
                               </Typography>
                             </TableCell>
                             <TableCell align='right'>
@@ -1466,16 +1201,14 @@ export default function CreditosAbonosPage() {
                                 color={getNotaEstadoColor(nota.estado) as any}
                                 size='small'
                               />
-                              {nota.estado !== 'pagada' && (
-                                <Tooltip title='Pagar esta nota'>
-                                  <IconButton 
-                                    size='small' 
-                                    onClick={() => abrirDialogo('registrar-pago', clienteSeleccionado, nota)}
-                                  >
-                                    <PaymentIcon />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
+                              <Tooltip title='Pagar esta nota'>
+                                <IconButton 
+                                  size='small' 
+                                  onClick={() => abrirDialogo('registrar-pago', clienteSeleccionado, nota)}
+                                >
+                                  <PaymentIcon />
+                                </IconButton>
+                              </Tooltip>
                             </Box>
                           </TableCell>
                           </TableRow>
@@ -1499,23 +1232,11 @@ export default function CreditosAbonosPage() {
                     Modificar Límite
                   </Button>
                   <Button
-                    variant='contained'
-                    color='primary'
-                    startIcon={<CheckCircleIcon />}
-                    onClick={async () => {
-                      try {
-                        const pedidos = await creditosAbonosAPI.getPedidosPendientes(clienteSeleccionado.id)
-                        if (pedidos && pedidos.length > 0) {
-                          abrirDialogo('cerrar-venta', clienteSeleccionado, pedidos[0])
-                        } else {
-                          alert('El cliente no tiene pedidos pendientes para cerrar.')
-                        }
-                      } catch (err) {
-                        console.error('Error al obtener pedidos:', err)
-                      }
-                    }}
+                    variant='outlined'
+                    startIcon={<SendIcon />}
+                    onClick={() => abrirDialogo('recordatorio', clienteSeleccionado)}
                   >
-                    Cerrar Venta
+                    Enviar Recordatorio
                   </Button>
                   <Button
                     variant='contained'
@@ -1844,37 +1565,21 @@ export default function CreditosAbonosPage() {
                   </Box>
                   
                   <List>
-                    <ListItem 
-                      button 
-                      onClick={() => generarReporte('antiguedad-cartera')}
-                      disabled={generandoReporte === 'antiguedad-cartera'}
-                    >
+                    <ListItem button>
                       <ListItemText primary='Antigüedad de Cartera (30, 60, 90+ días)' />
-                      {generandoReporte === 'antiguedad-cartera' ? <CircularProgress size={20} /> : <DownloadIcon />}
+                      <DownloadIcon />
                     </ListItem>
-                    <ListItem 
-                      button 
-                      onClick={() => generarReporte('top-mejores-pagadores')}
-                      disabled={generandoReporte === 'top-mejores-pagadores'}
-                    >
+                    <ListItem button>
                       <ListItemText primary='Top 10 Mejores Pagadores' />
-                      {generandoReporte === 'top-mejores-pagadores' ? <CircularProgress size={20} /> : <DownloadIcon />}
+                      <DownloadIcon />
                     </ListItem>
-                    <ListItem 
-                      button 
-                      onClick={() => generarReporte('top-peores-pagadores')}
-                      disabled={generandoReporte === 'top-peores-pagadores'}
-                    >
+                    <ListItem button>
                       <ListItemText primary='Top 10 Peores Pagadores' />
-                      {generandoReporte === 'top-peores-pagadores' ? <CircularProgress size={20} /> : <DownloadIcon />}
+                      <DownloadIcon />
                     </ListItem>
-                    <ListItem 
-                      button 
-                      onClick={() => generarReporte('analisis-riesgo')}
-                      disabled={generandoReporte === 'analisis-riesgo'}
-                    >
+                    <ListItem button>
                       <ListItemText primary='Análisis de Riesgo' />
-                      {generandoReporte === 'analisis-riesgo' ? <CircularProgress size={20} /> : <DownloadIcon />}
+                      <DownloadIcon />
                     </ListItem>
                   </List>
                 </CardContent>
@@ -1893,37 +1598,21 @@ export default function CreditosAbonosPage() {
                   </Box>
                   
                   <List>
-                    <ListItem 
-                      button 
-                      onClick={() => generarReporte('clientes-visita-cobranza')}
-                      disabled={generandoReporte === 'clientes-visita-cobranza'}
-                    >
+                    <ListItem button>
                       <ListItemText primary='Clientes para Visita de Cobranza (por Ruta)' />
-                      {generandoReporte === 'clientes-visita-cobranza' ? <CircularProgress size={20} /> : <DownloadIcon />}
+                      <DownloadIcon />
                     </ListItem>
-                    <ListItem 
-                      button 
-                      onClick={() => generarReporte('recordatorios-por-enviar')}
-                      disabled={generandoReporte === 'recordatorios-por-enviar'}
-                    >
+                    <ListItem button>
                       <ListItemText primary='Recordatorios por Enviar' />
-                      {generandoReporte === 'recordatorios-por-enviar' ? <CircularProgress size={20} /> : <DownloadIcon />}
+                      <DownloadIcon />
                     </ListItem>
-                    <ListItem 
-                      button 
-                      onClick={() => generarReporte('transferencias-pendientes')}
-                      disabled={generandoReporte === 'transferencias-pendientes'}
-                    >
+                    <ListItem button>
                       <ListItemText primary='Transferencias Pendientes Confirmación' />
-                      {generandoReporte === 'transferencias-pendientes' ? <CircularProgress size={20} /> : <DownloadIcon />}
+                      <DownloadIcon />
                     </ListItem>
-                    <ListItem 
-                      button 
-                      onClick={() => generarReporte('clientes-limite-excedido')}
-                      disabled={generandoReporte === 'clientes-limite-excedido'}
-                    >
+                    <ListItem button>
                       <ListItemText primary='Clientes con Límite Excedido' />
-                      {generandoReporte === 'clientes-limite-excedido' ? <CircularProgress size={20} /> : <DownloadIcon />}
+                      <DownloadIcon />
                     </ListItem>
                   </List>
                 </CardContent>
@@ -1942,37 +1631,21 @@ export default function CreditosAbonosPage() {
                   </Box>
                   
                   <List>
-                    <ListItem 
-                      button 
-                      onClick={() => generarReporte('comparativo-cartera-ventas')}
-                      disabled={generandoReporte === 'comparativo-cartera-ventas'}
-                    >
+                    <ListItem button>
                       <ListItemText primary='Comparativo Cartera vs Ventas' />
-                      {generandoReporte === 'comparativo-cartera-ventas' ? <CircularProgress size={20} /> : <DownloadIcon />}
+                      <DownloadIcon />
                     </ListItem>
-                    <ListItem 
-                      button 
-                      onClick={() => generarReporte('eficiencia-cobranza-repartidor')}
-                      disabled={generandoReporte === 'eficiencia-cobranza-repartidor'}
-                    >
+                    <ListItem button>
                       <ListItemText primary='Eficiencia de Cobranza por Repartidor' />
-                      {generandoReporte === 'eficiencia-cobranza-repartidor' ? <CircularProgress size={20} /> : <DownloadIcon />}
+                      <DownloadIcon />
                     </ListItem>
-                    <ListItem 
-                      button 
-                      onClick={() => generarReporte('tendencias-pago')}
-                      disabled={generandoReporte === 'tendencias-pago'}
-                    >
+                    <ListItem button>
                       <ListItemText primary='Análisis de Tendencias de Pago' />
-                      {generandoReporte === 'tendencias-pago' ? <CircularProgress size={20} /> : <DownloadIcon />}
+                      <DownloadIcon />
                     </ListItem>
-                    <ListItem 
-                      button 
-                      onClick={() => generarReporte('proyeccion-flujo-caja')}
-                      disabled={generandoReporte === 'proyeccion-flujo-caja'}
-                    >
+                    <ListItem button>
                       <ListItemText primary='Proyección de Flujo de Caja' />
-                      {generandoReporte === 'proyeccion-flujo-caja' ? <CircularProgress size={20} /> : <DownloadIcon />}
+                      <DownloadIcon />
                     </ListItem>
                   </List>
                 </CardContent>
@@ -2201,7 +1874,6 @@ export default function CreditosAbonosPage() {
           {tipoDialogo === 'estado-cuenta' && 'Generar Estado de Cuenta'}
           {tipoDialogo === 'registrar-pago' && 'Registrar Pago'}
           {tipoDialogo === 'registrar-abono' && 'Registrar Abono General'}
-          {tipoDialogo === 'cerrar-venta' && 'Cerrar Venta - Registrar Pago'}
         </DialogTitle>
         <DialogContent>
           {clienteSeleccionado && (
@@ -2277,7 +1949,7 @@ export default function CreditosAbonosPage() {
                 </Box>
               )}
 
-              {(tipoDialogo === 'registrar-pago' || tipoDialogo === 'registrar-abono' || tipoDialogo === 'cerrar-venta') && (
+              {(tipoDialogo === 'registrar-pago' || tipoDialogo === 'registrar-abono') && (
                 <Box>
                   {notaSeleccionada && (
                     <Box sx={{ mb: 3, p: 2, bgcolor: 'primary.light', borderRadius: 1 }}>
@@ -2287,177 +1959,11 @@ export default function CreditosAbonosPage() {
                       <Typography variant='body2' color='text.secondary'>
                         Importe de la nota: ${notaSeleccionada.importe.toLocaleString()}
                       </Typography>
-
-                      <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                        <Button 
-                          size="small" 
-                          variant="contained" 
-                          color="info"
-                          startIcon={<CreditCardIcon />}
-                          disabled={clienteSeleccionado.creditoDisponible <= 0}
-                          onClick={() => {
-                            const pending = notaSeleccionada.importe - totalPago
-                            if (pending > 0) {
-                              const amountToUse = Math.min(pending, clienteSeleccionado.creditoDisponible)
-                              setUsarCredito(true)
-                              setCreditoUsado(prev => prev + amountToUse)
-                            }
-                          }}
-                        >
-                          Usar Crédito
-                        </Button>
-                        <Button 
-                          size="small" 
-                          variant="contained" 
-                          color="success"
-                          startIcon={<AttachMoneyIcon />}
-                          onClick={() => {
-                            const cashMethod = formasPagoDisponibles.find(fp => 
-                              fp.tipo === 'efectivo' || 
-                              fp.nombre.toLowerCase().includes('efectivo')
-                            )
-                            if (cashMethod) {
-                              const pending = notaSeleccionada.importe - totalPago
-                              if (pending > 0) {
-                                const formaExistente = formasPago.find(fp => fp.formaPagoId === cashMethod.id)
-                                if (formaExistente) {
-                                  actualizarFormaPago(formaExistente.id, 'monto', formaExistente.monto + pending)
-                                } else {
-                                  const nuevaForma = {
-                                    id: `fp-${contadorId}`,
-                                    formaPagoId: cashMethod.id,
-                                    metodo: 'efectivo',
-                                    monto: pending,
-                                    tipo: 'metodo_pago' as const
-                                  }
-                                  setFormasPago(prev => [...prev, nuevaForma])
-                                  setContadorId(prev => prev + 1)
-                                }
-                              }
-                            }
-                          }}
-                        >
-                          Saldo en Efectivo
-                        </Button>
-                      </Box>
-                    </Box>
-                  )}
-
-                  {pedidoSeleccionado && (
-                    <Box sx={{ mb: 3, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
-                      <Typography variant='h6' gutterBottom>
-                        Pedido a Cerrar: {pedidoSeleccionado.numeroPedido}
-                      </Typography>
-                      <Typography variant='body2' color='text.secondary'>
-                        Total Venta: ${pedidoSeleccionado.ventaTotal.toLocaleString()}
-                      </Typography>
-                      <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
-                        Crédito Disponible: ${clienteSeleccionado.creditoDisponible.toLocaleString()}
-                      </Typography>
-
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button 
-                          size="small" 
-                          variant="contained" 
-                          color="info"
-                          startIcon={<CreditCardIcon />}
-                          disabled={clienteSeleccionado.creditoDisponible <= 0}
-                          onClick={() => {
-                            const pending = pedidoSeleccionado.ventaTotal - totalPago
-                            if (pending > 0) {
-                              const amountToUse = Math.min(pending, clienteSeleccionado.creditoDisponible)
-                              setUsarCredito(true)
-                              setCreditoUsado(prev => prev + amountToUse)
-                            }
-                          }}
-                        >
-                          Usar Crédito
-                        </Button>
-                        <Button 
-                          size="small" 
-                          variant="contained" 
-                          color="success"
-                          startIcon={<AttachMoneyIcon />}
-                          onClick={() => {
-                            const cashMethod = formasPagoDisponibles.find(fp => 
-                              fp.tipo === 'efectivo' || 
-                              fp.nombre.toLowerCase().includes('efectivo')
-                            )
-                            if (cashMethod) {
-                              const pending = pedidoSeleccionado.ventaTotal - totalPago
-                              if (pending > 0) {
-                                const formaExistente = formasPago.find(fp => fp.formaPagoId === cashMethod.id)
-                                if (formaExistente) {
-                                  actualizarFormaPago(formaExistente.id, 'monto', formaExistente.monto + pending)
-                                } else {
-                                  const nuevaForma = {
-                                    id: `fp-${contadorId}`,
-                                    formaPagoId: cashMethod.id,
-                                    metodo: 'efectivo',
-                                    monto: pending,
-                                    tipo: 'metodo_pago' as const
-                                  }
-                                  setFormasPago(prev => [...prev, nuevaForma])
-                                  setContadorId(prev => prev + 1)
-                                }
-                              }
-                            }
-                          }}
-                        >
-                          Saldo en Efectivo
-                        </Button>
-                        <Button 
-                          size="small" 
-                          variant="outlined" 
-                          onClick={() => {
-                            setFormasPago([])
-                            setUsarCredito(false)
-                            setCreditoUsado(0)
-                          }}
-                        >
-                          Limpiar
-                        </Button>
-                      </Box>
                     </Box>
                   )}
 
                   <Typography variant='h6' gutterBottom>
-                    Pago con Crédito Disponible
-                  </Typography>
-                  <Card variant="outlined" sx={{ mb: 3, p: 2, bgcolor: usarCredito ? 'info.light' : 'transparent' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <FormControlLabel
-                        control={
-                          <Switch 
-                            checked={usarCredito} 
-                            onChange={(e) => setUsarCredito(e.target.checked)}
-                            disabled={clienteSeleccionado.creditoDisponible <= 0}
-                          />
-                        }
-                        label="Usar Crédito del Cliente"
-                      />
-                      <Typography variant="body2" fontWeight="bold">
-                        Disponible: ${clienteSeleccionado.creditoDisponible.toLocaleString()}
-                      </Typography>
-                    </Box>
-                    {usarCredito && (
-                      <TextField
-                        fullWidth
-                        label="Monto a cargar al crédito"
-                        type="number"
-                        size="small"
-                        value={creditoUsado}
-                        onChange={(e) => setCreditoUsado(Number(e.target.value))}
-                        sx={{ mt: 2 }}
-                        InputProps={{
-                          startAdornment: <InputAdornment position="start">$</InputAdornment>
-                        }}
-                      />
-                    )}
-                  </Card>
-
-                  <Typography variant='h6' gutterBottom>
-                    Otras Formas de Pago
+                    Formas de Pago
                   </Typography>
 
                   {formasPago.map((forma, index) => (
@@ -2492,11 +1998,11 @@ export default function CreditosAbonosPage() {
                               }}
                             />
                           </Grid>
-                          {(forma.metodo === 'transferencia' || forma.metodo === 'cheque' || forma.metodo === 'tarjeta' || forma.metodo === 'terminal') && (
+                          {(forma.metodo === 'transferencia' || forma.metodo === 'cheque') && (
                             <Grid item xs={12} sm={3}>
                               <TextField
                                 fullWidth
-                                label='Referencia / Folio'
+                                label='Referencia'
                                 value={forma.referencia || ''}
                                 onChange={(e) => actualizarFormaPago(forma.id, 'referencia', e.target.value)}
                               />
@@ -2547,11 +2053,6 @@ export default function CreditosAbonosPage() {
                           Faltante: ${(notaSeleccionada.importe - totalPago).toLocaleString()}
                         </Typography>
                       )}
-                      {pedidoSeleccionado && (
-                        <Typography variant='body2' color='text.secondary'>
-                          Diferencia: ${(pedidoSeleccionado.ventaTotal - totalPago).toLocaleString()}
-                        </Typography>
-                      )}
                     </CardContent>
                   </Card>
 
@@ -2580,7 +2081,7 @@ export default function CreditosAbonosPage() {
             onClick={() => {
               if (tipoDialogo === 'modificar-limite') {
                 guardarLimiteCredito()
-              } else if (tipoDialogo === 'registrar-pago' || tipoDialogo === 'registrar-abono' || tipoDialogo === 'cerrar-venta') {
+              } else if (tipoDialogo === 'registrar-pago' || tipoDialogo === 'registrar-abono') {
                 registrarPago()
               }
             }}
@@ -2594,7 +2095,6 @@ export default function CreditosAbonosPage() {
                 {tipoDialogo === 'estado-cuenta' && 'Generar Estado'}
                 {tipoDialogo === 'registrar-pago' && 'Registrar Pago'}
                 {tipoDialogo === 'registrar-abono' && 'Registrar Abono'}
-                {tipoDialogo === 'cerrar-venta' && 'Finalizar Venta'}
               </>
             )}
           </Button>
