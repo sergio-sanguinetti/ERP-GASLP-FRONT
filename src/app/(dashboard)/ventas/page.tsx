@@ -231,9 +231,12 @@ export default function VentasPage() {
 
   const [formularioDescuento, setFormularioDescuento] = useState({
     repartidorId: '',
+    nombre: '',
+    descripcion: '',
     descuentoAutorizado: 0,
     descuentoPorLitro: 0
   })
+  const [descuentoEditando, setDescuentoEditando] = useState<DescuentoRepartidor | null>(null)
 
   const [formularioCategoria, setFormularioCategoria] = useState<CreateCategoriaProductoRequest>({
     nombre: '',
@@ -649,17 +652,22 @@ export default function VentasPage() {
       
       if (item) {
         setRepartidorSeleccionado(item)
-        const descuento = descuentosRepartidor.find(d => d.repartidorId === item.id)
+        setDescuentoEditando(null)
         setFormularioDescuento({
           repartidorId: item.id,
-          descuentoAutorizado: descuento?.descuentoAutorizado || 0,
-          descuentoPorLitro: descuento?.descuentoPorLitro || 0
+          nombre: '',
+          descripcion: '',
+          descuentoAutorizado: 0,
+          descuentoPorLitro: 0
         })
       } else {
         // Abrir diálogo para crear nuevo descuento sin repartidor seleccionado
         setRepartidorSeleccionado(null)
+        setDescuentoEditando(null)
         setFormularioDescuento({
           repartidorId: '',
+          nombre: '',
+          descripcion: '',
           descuentoAutorizado: 0,
           descuentoPorLitro: 0
         })
@@ -743,6 +751,14 @@ export default function VentasPage() {
       descripcion: '',
       activa: true
     })
+    setFormularioDescuento({
+      repartidorId: '',
+      nombre: '',
+      descripcion: '',
+      descuentoAutorizado: 0,
+      descuentoPorLitro: 0
+    })
+    setDescuentoEditando(null)
   }
 
   const abrirDialogoEliminar = (pedido: Pedido) => {
@@ -997,16 +1013,21 @@ export default function VentasPage() {
 
   const guardarDescuento = async () => {
     try {
-      const descuentoExistente = descuentosRepartidor.find(d => d.repartidorId === formularioDescuento.repartidorId)
-      if (descuentoExistente) {
-        await descuentosRepartidorAPI.update(descuentoExistente.id, {
+      if (descuentoEditando) {
+        // Actualizar descuento existente
+        await descuentosRepartidorAPI.update(descuentoEditando.id, {
+          nombre: formularioDescuento.nombre,
+          descripcion: formularioDescuento.descripcion,
           descuentoAutorizado: formularioDescuento.descuentoAutorizado,
           descuentoPorLitro: formularioDescuento.descuentoPorLitro
         })
         alert('Descuento actualizado exitosamente')
       } else {
+        // Crear nuevo descuento (permite múltiples por repartidor)
         await descuentosRepartidorAPI.create({
           repartidorId: formularioDescuento.repartidorId,
+          nombre: formularioDescuento.nombre || undefined,
+          descripcion: formularioDescuento.descripcion || undefined,
           descuentoAutorizado: formularioDescuento.descuentoAutorizado,
           descuentoPorLitro: formularioDescuento.descuentoPorLitro,
           activo: true
@@ -1019,6 +1040,21 @@ export default function VentasPage() {
       alert('Error al guardar descuento: ' + (err.message || 'Error desconocido'))
       console.error('Error saving descuento:', err)
     }
+  }
+
+  const abrirDialogoEditarDescuento = (descuento: DescuentoRepartidor) => {
+    setDescuentoEditando(descuento)
+    const repartidor = repartidores.find(r => r.id === descuento.repartidorId)
+    setRepartidorSeleccionado(repartidor || null)
+    setFormularioDescuento({
+      repartidorId: descuento.repartidorId,
+      nombre: descuento.nombre || '',
+      descripcion: descuento.descripcion || '',
+      descuentoAutorizado: descuento.descuentoAutorizado,
+      descuentoPorLitro: descuento.descuentoPorLitro || 0
+    })
+    setTipoDialogo('descuentos')
+    setDialogoAbierto(true)
   }
 
   const actualizarPrecios = async () => {
@@ -1904,6 +1940,7 @@ export default function VentasPage() {
                       <TableHead>
                         <TableRow>
                           <TableCell>Repartidor</TableCell>
+                          <TableCell>Nombre Descuento</TableCell>
                           <TableCell align='right'>Descuento (%)</TableCell>
                           <TableCell align='right'>Descuento por Litro</TableCell>
                           <TableCell align='center'>Acciones</TableCell>
@@ -1912,7 +1949,7 @@ export default function VentasPage() {
                       <TableBody>
                         {repartidores.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={4} align='center'>
+                            <TableCell colSpan={5} align='center'>
                               <Typography variant='body2' color='text.secondary' sx={{ py: 2 }}>
                                 No hay repartidores disponibles
                               </Typography>
@@ -1920,54 +1957,94 @@ export default function VentasPage() {
                           </TableRow>
                         ) : (
                           repartidores.map(repartidor => {
-                            const descuento = descuentosRepartidor.find(d => d.repartidorId === repartidor.id)
-                            return (
-                              <TableRow key={repartidor.id}>
+                            const descuentosDelRepartidor = descuentosRepartidor.filter(d => d.repartidorId === repartidor.id)
+                            
+                            if (descuentosDelRepartidor.length === 0) {
+                              return (
+                                <TableRow key={repartidor.id}>
+                                  <TableCell>
+                                    <Typography variant='subtitle2'>
+                                      {repartidor.nombres} {repartidor.apellidoPaterno}
+                                    </Typography>
+                                    <Chip
+                                      label={repartidor.tipoRepartidor || 'N/A'}
+                                      size='small'
+                                      color={repartidor.tipoRepartidor === 'pipas' ? 'primary' : 'secondary'}
+                                    />
+                                  </TableCell>
+                                  <TableCell colSpan={3}>
+                                    <Typography variant='body2' color='text.secondary'>
+                                      Sin descuentos configurados
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell align='center'>
+                                    <Tooltip title='Agregar descuento'>
+                                      <IconButton size='small' onClick={() => abrirDialogo('descuentos', repartidor)}>
+                                        <AddIcon />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </TableCell>
+                                </TableRow>
+                              )
+                            }
+                            
+                            return descuentosDelRepartidor.map((descuento, index) => (
+                              <TableRow key={`${repartidor.id}-${descuento.id}`}>
+                                {index === 0 && (
+                                  <TableCell rowSpan={descuentosDelRepartidor.length}>
+                                    <Typography variant='subtitle2'>
+                                      {repartidor.nombres} {repartidor.apellidoPaterno}
+                                    </Typography>
+                                    <Chip
+                                      label={repartidor.tipoRepartidor || 'N/A'}
+                                      size='small'
+                                      color={repartidor.tipoRepartidor === 'pipas' ? 'primary' : 'secondary'}
+                                    />
+                                  </TableCell>
+                                )}
                                 <TableCell>
-                                  <Typography variant='subtitle2'>
-                                    {repartidor.nombres} {repartidor.apellidoPaterno}
+                                  <Typography variant='body2' fontWeight={descuento.nombre ? 'bold' : 'normal'}>
+                                    {descuento.nombre || `Descuento ${index + 1}`}
                                   </Typography>
-                                  <Chip
-                                    label={repartidor.tipoRepartidor || 'N/A'}
-                                    size='small'
-                                    color={repartidor.tipoRepartidor === 'pipas' ? 'primary' : 'secondary'}
-                                  />
+                                  {descuento.descripcion && (
+                                    <Typography variant='caption' color='text.secondary' display='block'>
+                                      {descuento.descripcion}
+                                    </Typography>
+                                  )}
                                 </TableCell>
                                 <TableCell align='right'>
                                   <Typography variant='h6' color='success.main'>
-                                    {descuento?.descuentoAutorizado || 0}%
+                                    {descuento.descuentoAutorizado}%
                                   </Typography>
                                 </TableCell>
                                 <TableCell align='right'>
                                   <Typography variant='h6' color='info.main'>
-                                    ${descuento?.descuentoPorLitro || 0}
+                                    ${descuento.descuentoPorLitro || 0}
                                   </Typography>
                                 </TableCell>
                                 <TableCell align='center'>
                                   <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
                                     <Tooltip title='Editar descuento'>
-                                      <IconButton size='small' onClick={() => abrirDialogo('descuentos', repartidor)}>
+                                      <IconButton size='small' onClick={() => abrirDialogoEditarDescuento(descuento)}>
                                         <EditIcon />
                                       </IconButton>
                                     </Tooltip>
-                                    {descuento && (
-                                      <Tooltip title='Eliminar descuento'>
-                                        <IconButton 
-                                          size='small' 
-                                          color='error'
-                                          onClick={() => {
-                                            setDescuentoAEliminar(descuento)
-                                            setDialogoEliminar(true)
-                                          }}
-                                        >
-                                          <DeleteIcon />
-                                        </IconButton>
-                                      </Tooltip>
-                                    )}
+                                    <Tooltip title='Eliminar descuento'>
+                                      <IconButton 
+                                        size='small' 
+                                        color='error'
+                                        onClick={() => {
+                                          setDescuentoAEliminar(descuento)
+                                          setDialogoEliminar(true)
+                                        }}
+                                      >
+                                        <DeleteIcon />
+                                      </IconButton>
+                                    </Tooltip>
                                   </Box>
                                 </TableCell>
                               </TableRow>
-                            )
+                            ))
                           })
                         )}
                       </TableBody>
@@ -2774,8 +2851,8 @@ export default function VentasPage() {
       <Dialog open={dialogoAbierto && tipoDialogo === 'descuentos'} onClose={cerrarDialogo} maxWidth='sm' fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <EditIcon />
-            {repartidorSeleccionado ? 'Editar Descuento por Repartidor' : 'Agregar Descuento por Repartidor'}
+            {descuentoEditando ? <EditIcon /> : <AddIcon />}
+            {descuentoEditando ? 'Editar Descuento' : 'Agregar Descuento por Repartidor'}
           </Box>
         </DialogTitle>
         <DialogContent>
@@ -2787,18 +2864,18 @@ export default function VentasPage() {
                   value={formularioDescuento.repartidorId}
                   onChange={(e) => setFormularioDescuento(prev => ({ ...prev, repartidorId: e.target.value }))}
                   label='Repartidor'
-                  disabled={!!repartidorSeleccionado}
+                  disabled={!!repartidorSeleccionado || !!descuentoEditando}
                 >
                   {repartidores.length === 0 ? (
                     <MenuItem disabled>No hay repartidores disponibles. Cargando...</MenuItem>
                   ) : (
                     repartidores.map(repartidor => {
-                      const descuentoExistente = descuentosRepartidor.find(d => d.repartidorId === repartidor.id)
+                      const descuentosDelRepartidor = descuentosRepartidor.filter(d => d.repartidorId === repartidor.id)
                       return (
                         <MenuItem key={repartidor.id} value={repartidor.id}>
-                          {repartidor.nombres} {repartidor.apellidoPaterno} 
-                          {descuentoExistente && (
-                            ` (${descuentoExistente.descuentoAutorizado}%${descuentoExistente.descuentoPorLitro ? `, $${descuentoExistente.descuentoPorLitro}/L` : ''})`
+                          {repartidor.nombres} {repartidor.apellidoPaterno}
+                          {descuentosDelRepartidor.length > 0 && (
+                            ` (${descuentosDelRepartidor.length} descuento${descuentosDelRepartidor.length > 1 ? 's' : ''})`
                           )}
                         </MenuItem>
                       )
@@ -2806,6 +2883,28 @@ export default function VentasPage() {
                   )}
                 </Select>
               </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label='Nombre del Descuento'
+                value={formularioDescuento.nombre}
+                onChange={e => setFormularioDescuento(prev => ({ ...prev, nombre: e.target.value }))}
+                placeholder='Ej: Descuento por volumen, Descuento especial, etc.'
+                helperText='Nombre identificador para este descuento (opcional)'
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label='Descripción'
+                multiline
+                rows={2}
+                value={formularioDescuento.descripcion}
+                onChange={e => setFormularioDescuento(prev => ({ ...prev, descripcion: e.target.value }))}
+                placeholder='Descripción opcional del descuento'
+                helperText='Descripción adicional del descuento (opcional)'
+              />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
@@ -2847,10 +2946,10 @@ export default function VentasPage() {
           <Button 
             onClick={guardarDescuento} 
             variant='contained' 
-            startIcon={<EditIcon />}
+            startIcon={descuentoEditando ? <EditIcon /> : <AddIcon />}
             disabled={!formularioDescuento.repartidorId}
           >
-            {repartidorSeleccionado ? 'Actualizar Descuento' : 'Crear Descuento'}
+            {descuentoEditando ? 'Actualizar Descuento' : 'Crear Descuento'}
           </Button>
         </DialogActions>
       </Dialog>

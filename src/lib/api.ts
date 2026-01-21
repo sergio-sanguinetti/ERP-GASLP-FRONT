@@ -80,10 +80,15 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Re
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const response = await fetch(`${API_URL}${url}`, {
+  const fullUrl = `${API_URL}${url}`
+  console.log('[fetchWithAuth] URL completa:', fullUrl, 'Method:', options.method || 'GET')
+  
+  const response = await fetch(fullUrl, {
     ...options,
     headers,
   })
+  
+  console.log('[fetchWithAuth] Response:', response.status, response.statusText, 'URL:', fullUrl)
 
   if (response.status === 401) {
     // Token expirado o inválido
@@ -1633,6 +1638,8 @@ export interface DescuentoRepartidor {
   id: string
   repartidorId: string
   repartidor?: Usuario
+  nombre?: string
+  descripcion?: string
   descuentoAutorizado: number
   descuentoPorLitro?: number
   activo: boolean
@@ -1642,12 +1649,16 @@ export interface DescuentoRepartidor {
 
 export interface CreateDescuentoRepartidorRequest {
   repartidorId: string
+  nombre?: string
+  descripcion?: string
   descuentoAutorizado: number
   descuentoPorLitro?: number
   activo?: boolean
 }
 
 export interface UpdateDescuentoRepartidorRequest {
+  nombre?: string
+  descripcion?: string
   descuentoAutorizado?: number
   descuentoPorLitro?: number
   activo?: boolean
@@ -1686,7 +1697,7 @@ export const descuentosRepartidorAPI = {
     }
   },
 
-  getByRepartidor: async (repartidorId: string): Promise<DescuentoRepartidor | null> => {
+  getByRepartidor: async (repartidorId: string): Promise<DescuentoRepartidor[]> => {
     const response = await fetch(`${API_URL}/descuentos-repartidor/repartidor/${repartidorId}`, {
       method: 'GET',
       headers: {
@@ -1695,12 +1706,14 @@ export const descuentosRepartidorAPI = {
     })
 
     if (!response.ok) {
-      if (response.status === 404) return null
+      if (response.status === 404) return []
       const error = await response.json()
-      throw new Error(error.message || 'Error al obtener descuento')
+      throw new Error(error.message || 'Error al obtener descuentos')
     }
 
-    return response.json()
+    const data = await response.json()
+    // Asegurar que siempre retorne un array
+    return Array.isArray(data) ? data : []
   },
 
   create: async (data: CreateDescuentoRepartidorRequest): Promise<DescuentoRepartidor> => {
@@ -2882,6 +2895,278 @@ export const reportesFinancierosAPI = {
       throw new Error(error.message || 'Error al obtener proyección de flujo de caja');
     }
     return response.json();
+  },
+}
+
+// API de Configuración de Tickets
+export interface ConfiguracionTicket {
+  id: string
+  tipoTicket: string
+  nombreEmpresa: string
+  razonSocial?: string
+  direccion?: string
+  telefono?: string
+  email?: string
+  sitioWeb?: string
+  rfc?: string
+  logo?: string
+  mostrarLogo: boolean
+  tamañoLogo: 'pequeño' | 'mediano' | 'grande'
+  redesSociales: {
+    facebook?: string
+    instagram?: string
+    twitter?: string
+    linkedin?: string
+    whatsapp?: string
+  }
+  mostrarRedesSociales: boolean
+  textos: {
+    encabezado?: string
+    piePagina?: string
+    mensajeEspecial?: string
+    mostrarMensaje: boolean
+  }
+  diseño: {
+    mostrarFecha: boolean
+    mostrarHora: boolean
+    mostrarCajero: boolean
+    mostrarCliente: boolean
+    colorPrincipal: string
+    alineacion: 'izquierda' | 'centro' | 'derecha'
+  }
+  activo: boolean
+  fechaCreacion: string
+  fechaModificacion: string
+}
+
+export interface UpdateConfiguracionTicketRequest {
+  tipoTicket?: string
+  nombreEmpresa?: string
+  razonSocial?: string
+  direccion?: string
+  telefono?: string
+  email?: string
+  sitioWeb?: string
+  rfc?: string
+  logo?: string
+  mostrarLogo?: boolean
+  tamañoLogo?: 'pequeño' | 'mediano' | 'grande'
+  redesSociales?: {
+    facebook?: string
+    instagram?: string
+    twitter?: string
+    linkedin?: string
+    whatsapp?: string
+  }
+  mostrarRedesSociales?: boolean
+  textos?: {
+    encabezado?: string
+    piePagina?: string
+    mensajeEspecial?: string
+    mostrarMensaje?: boolean
+  }
+  diseño?: {
+    mostrarFecha?: boolean
+    mostrarHora?: boolean
+    mostrarCajero?: boolean
+    mostrarCliente?: boolean
+    colorPrincipal?: string
+    alineacion?: 'izquierda' | 'centro' | 'derecha'
+  }
+  activo?: boolean
+}
+
+export const configuracionTicketsAPI = {
+  getAll: async (): Promise<ConfiguracionTicket[]> => {
+    try {
+      const response = await fetch(`${API_URL}/configuracion-tickets/all`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        // Si es 404, la ruta no existe (probablemente el backend no tiene la ruta o no está corriendo)
+        if (response.status === 404) {
+          console.warn('Ruta /configuracion-tickets/all no encontrada. Asegúrate de que el backend esté corriendo y tenga la ruta configurada.');
+          return []; // Retornar array vacío en lugar de lanzar error
+        }
+        let errorMessage = 'Error al obtener configuraciones de tickets'
+        try {
+          const error = await response.json()
+          errorMessage = error.message || errorMessage
+        } catch (e) {
+          errorMessage = `Error ${response.status}: ${response.statusText}`
+        }
+        throw new Error(errorMessage)
+      }
+
+      return response.json()
+    } catch (error: any) {
+      console.error('Error al obtener configuraciones:', error)
+      return []
+    }
+  },
+
+  get: async (tipoTicket: string = 'venta'): Promise<ConfiguracionTicket> => {
+    try {
+      const response = await fetch(`${API_URL}/configuracion-tickets?tipoTicket=${tipoTicket}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          // Si no existe configuración, retornar valores por defecto
+          return {
+            id: '',
+            tipoTicket: tipoTicket,
+            nombreEmpresa: 'Mi Empresa S.A. de C.V.',
+            razonSocial: 'Mi Empresa Sociedad Anónima de Capital Variable',
+            direccion: 'Av. Principal #123, Col. Centro, CDMX, CP 06000',
+            telefono: '(55) 1234-5678',
+            email: 'contacto@miempresa.com',
+            sitioWeb: 'www.miempresa.com',
+            rfc: 'MEMP950101ABC',
+            logo: '',
+            mostrarLogo: true,
+            tamañoLogo: 'mediano',
+            redesSociales: {},
+            mostrarRedesSociales: true,
+            textos: {
+              encabezado: '¡Gracias por su compra!',
+              piePagina: 'Visite nuestro sitio web para más información',
+              mostrarMensaje: false
+            },
+            diseño: {
+              mostrarFecha: true,
+              mostrarHora: true,
+              mostrarCajero: true,
+              mostrarCliente: true,
+              colorPrincipal: '#1976d2',
+              alineacion: 'centro'
+            },
+            activo: true,
+            fechaCreacion: new Date().toISOString(),
+            fechaModificacion: new Date().toISOString()
+          }
+        }
+        let errorMessage = 'Error al obtener configuración de tickets'
+        try {
+          const error = await response.json()
+          errorMessage = error.message || errorMessage
+        } catch (e) {
+          errorMessage = `Error ${response.status}: ${response.statusText}`
+        }
+        throw new Error(errorMessage)
+      }
+
+      return response.json()
+    } catch (error: any) {
+      // Si es un error de red, retornar valores por defecto
+      if (error.message?.includes('fetch') || error.message?.includes('network')) {
+        console.warn('Error de conexión al obtener configuración de tickets. Usando valores por defecto.')
+        return {
+          id: '',
+          tipoTicket: tipoTicket,
+          nombreEmpresa: 'Mi Empresa S.A. de C.V.',
+          razonSocial: 'Mi Empresa Sociedad Anónima de Capital Variable',
+          direccion: 'Av. Principal #123, Col. Centro, CDMX, CP 06000',
+          telefono: '(55) 1234-5678',
+          email: 'contacto@miempresa.com',
+          sitioWeb: 'www.miempresa.com',
+          rfc: 'MEMP950101ABC',
+          logo: '',
+          mostrarLogo: true,
+          tamañoLogo: 'mediano',
+          redesSociales: {},
+          mostrarRedesSociales: true,
+          textos: {
+            encabezado: '¡Gracias por su compra!',
+            piePagina: 'Visite nuestro sitio web para más información',
+            mostrarMensaje: false
+          },
+          diseño: {
+            mostrarFecha: true,
+            mostrarHora: true,
+            mostrarCajero: true,
+            mostrarCliente: true,
+            colorPrincipal: '#1976d2',
+            alineacion: 'centro'
+          },
+          activo: true,
+          fechaCreacion: new Date().toISOString(),
+          fechaModificacion: new Date().toISOString()
+        }
+      }
+      throw error
+    }
+  },
+
+  update: async (data: UpdateConfiguracionTicketRequest): Promise<ConfiguracionTicket> => {
+    try {
+      const url = `${API_URL}/configuracion-tickets`;
+      console.log('[configuracionTicketsAPI.update] Iniciando actualización...');
+      console.log('[configuracionTicketsAPI.update] URL:', url);
+      console.log('[configuracionTicketsAPI.update] Data:', JSON.stringify(data, null, 2));
+      console.log('[configuracionTicketsAPI.update] API_URL:', API_URL);
+      
+      const response = await fetchWithAuth('/configuracion-tickets', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      })
+      
+      console.log('[configuracionTicketsAPI.update] Response status:', response.status, response.statusText);
+      console.log('[configuracionTicketsAPI.update] Response ok:', response.ok);
+
+      if (!response.ok) {
+        let errorMessage = 'Error al actualizar configuración de tickets'
+        try {
+          const error = await response.json()
+          errorMessage = error.message || errorMessage
+        } catch (e) {
+          // Si no se puede parsear el error, usar el status
+          if (response.status === 404) {
+            errorMessage = 'Ruta no encontrada. Asegúrate de que el backend esté corriendo y tenga la ruta /api/configuracion-tickets configurada.'
+          } else {
+            errorMessage = `Error ${response.status}: ${response.statusText}`
+          }
+        }
+        throw new Error(errorMessage)
+      }
+
+      const result = await response.json()
+      return result.configuracion || result
+    } catch (error: any) {
+      console.error('[configuracionTicketsAPI.update] Error completo:', error);
+      console.error('[configuracionTicketsAPI.update] Error message:', error.message);
+      console.error('[configuracionTicketsAPI.update] Error stack:', error.stack);
+      
+      // Si es un error de red, proporcionar un mensaje más útil
+      if (error.message?.includes('fetch') || error.message?.includes('network') || error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+        console.error('[configuracionTicketsAPI.update] Error de red detectado');
+        throw new Error('No se pudo conectar con el backend. Verifica que el servidor esté corriendo en http://localhost:3001')
+      }
+      throw error
+    }
+  },
+
+  create: async (data: UpdateConfiguracionTicketRequest): Promise<ConfiguracionTicket> => {
+    const response = await fetchWithAuth('/configuracion-tickets', {
+      method: 'PUT', // Usamos PUT porque crea si no existe
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al crear configuración de tickets')
+    }
+
+    const result = await response.json()
+    return result.configuracion || result
   },
 }
 

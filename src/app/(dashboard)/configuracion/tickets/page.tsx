@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
+import { configuracionTicketsAPI, type ConfiguracionTicket } from '@lib/api'
 
 import {
   Box,
@@ -26,7 +27,13 @@ import {
   CircularProgress,
   Avatar,
   Chip,
-  Stack
+  Stack,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Tabs,
+  Tab
 } from '@mui/material'
 import {
   Store as StoreIcon,
@@ -50,6 +57,8 @@ import {
 
 // Tipos de datos
 interface ConfigTicket {
+  id?: string
+  tipoTicket: string
   // Información de la empresa
   nombreEmpresa: string
   razonSocial: string
@@ -98,8 +107,16 @@ interface ConfigTicket {
   fechaModificacion: string
 }
 
+// Tipos de tickets disponibles
+const tiposTickets = [
+  { value: 'venta', label: 'Ticket de Venta' },
+  { value: 'corte-venta-dia', label: 'Ticket de Corte Venta Día' },
+  { value: 'corte-abono', label: 'Ticket de Corte Abono' },
+]
+
 // Datos iniciales
 const configInicial: ConfigTicket = {
+  tipoTicket: 'venta',
   nombreEmpresa: 'Mi Empresa S.A. de C.V.',
   razonSocial: 'Mi Empresa Sociedad Anónima de Capital Variable',
   direccion: 'Av. Principal #123, Col. Centro, CDMX, CP 06000',
@@ -139,10 +156,154 @@ const configInicial: ConfigTicket = {
 
 export default function ConfiguracionTicketsPage() {
   const [config, setConfig] = useState<ConfigTicket>(configInicial)
+  const [tipoTicketSeleccionado, setTipoTicketSeleccionado] = useState<string>('venta')
+  const [configuraciones, setConfiguraciones] = useState<ConfigTicket[]>([])
   const [snackbar, setSnackbar] = useState({ abierto: false, mensaje: '', tipo: 'success' as 'success' | 'error' })
   const [dialogoImagen, setDialogoImagen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [loadingData, setLoadingData] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Cargar configuraciones al montar el componente
+  useEffect(() => {
+    loadConfiguraciones()
+  }, [])
+
+  // Cargar configuración cuando cambia el tipo de ticket seleccionado
+  useEffect(() => {
+    if (tipoTicketSeleccionado) {
+      loadConfiguracion(tipoTicketSeleccionado)
+    }
+  }, [tipoTicketSeleccionado])
+
+  const loadConfiguraciones = async () => {
+    try {
+      setLoadingData(true)
+      const data = await configuracionTicketsAPI.getAll()
+      
+      // Si no hay configuraciones, crear una por defecto para el tipo seleccionado
+      if (!data || data.length === 0) {
+        // Cargar la configuración del tipo seleccionado (se creará automáticamente si no existe)
+        await loadConfiguracion(tipoTicketSeleccionado)
+        return
+      }
+      
+      // Transformar los datos del backend al formato del frontend
+      const configsFormateadas = data.map(item => ({
+        id: item.id,
+        tipoTicket: item.tipoTicket,
+        nombreEmpresa: item.nombreEmpresa,
+        razonSocial: item.razonSocial || '',
+        direccion: item.direccion || '',
+        telefono: item.telefono || '',
+        email: item.email || '',
+        sitioWeb: item.sitioWeb || '',
+        rfc: item.rfc || '',
+        logo: item.logo || '',
+        mostrarLogo: item.mostrarLogo,
+        tamañoLogo: item.tamañoLogo as 'pequeño' | 'mediano' | 'grande',
+        redesSociales: {
+          facebook: item.redesSociales?.facebook || '',
+          instagram: item.redesSociales?.instagram || '',
+          twitter: item.redesSociales?.twitter || '',
+          linkedin: item.redesSociales?.linkedin || '',
+          whatsapp: item.redesSociales?.whatsapp || ''
+        },
+        mostrarRedesSociales: item.mostrarRedesSociales,
+        textos: {
+          encabezado: item.textos?.encabezado || '',
+          piePagina: item.textos?.piePagina || '',
+          mensajeEspecial: item.textos?.mensajeEspecial || '',
+          mostrarMensaje: item.textos?.mostrarMensaje || false
+        },
+        diseño: {
+          mostrarFecha: item.diseño?.mostrarFecha ?? true,
+          mostrarHora: item.diseño?.mostrarHora ?? true,
+          mostrarCajero: item.diseño?.mostrarCajero ?? true,
+          mostrarCliente: item.diseño?.mostrarCliente ?? true,
+          colorPrincipal: item.diseño?.colorPrincipal || '#1976d2',
+          alineacion: item.diseño?.alineacion as 'izquierda' | 'centro' | 'derecha' || 'centro'
+        },
+        activo: item.activo,
+        fechaCreacion: item.fechaCreacion,
+        fechaModificacion: item.fechaModificacion
+      }))
+      
+      setConfiguraciones(configsFormateadas)
+      
+      // Si hay configuraciones, cargar la primera o la seleccionada
+      if (configsFormateadas.length > 0) {
+        const configExistente = configsFormateadas.find(c => c.tipoTicket === tipoTicketSeleccionado)
+        if (configExistente) {
+          setConfig(configExistente)
+        } else {
+          // Cargar la configuración del tipo seleccionado (puede que no exista aún)
+          await loadConfiguracion(tipoTicketSeleccionado)
+        }
+      } else {
+        // Si no hay configuraciones, cargar la del tipo seleccionado
+        await loadConfiguracion(tipoTicketSeleccionado)
+      }
+    } catch (error: any) {
+      console.error('Error al cargar configuraciones:', error)
+      setSnackbar({ abierto: true, mensaje: 'Error al cargar las configuraciones: ' + (error.message || 'Error desconocido'), tipo: 'error' })
+    } finally {
+      setLoadingData(false)
+    }
+  }
+
+  const loadConfiguracion = async (tipoTicket: string) => {
+    try {
+      setLoadingData(true)
+      const data = await configuracionTicketsAPI.get(tipoTicket)
+      
+      // Transformar los datos del backend al formato del frontend
+      setConfig({
+        id: data.id,
+        tipoTicket: data.tipoTicket,
+        nombreEmpresa: data.nombreEmpresa,
+        razonSocial: data.razonSocial || '',
+        direccion: data.direccion || '',
+        telefono: data.telefono || '',
+        email: data.email || '',
+        sitioWeb: data.sitioWeb || '',
+        rfc: data.rfc || '',
+        logo: data.logo || '',
+        mostrarLogo: data.mostrarLogo,
+        tamañoLogo: data.tamañoLogo as 'pequeño' | 'mediano' | 'grande',
+        redesSociales: {
+          facebook: data.redesSociales?.facebook || '',
+          instagram: data.redesSociales?.instagram || '',
+          twitter: data.redesSociales?.twitter || '',
+          linkedin: data.redesSociales?.linkedin || '',
+          whatsapp: data.redesSociales?.whatsapp || ''
+        },
+        mostrarRedesSociales: data.mostrarRedesSociales,
+        textos: {
+          encabezado: data.textos?.encabezado || '',
+          piePagina: data.textos?.piePagina || '',
+          mensajeEspecial: data.textos?.mensajeEspecial || '',
+          mostrarMensaje: data.textos?.mostrarMensaje || false
+        },
+        diseño: {
+          mostrarFecha: data.diseño?.mostrarFecha ?? true,
+          mostrarHora: data.diseño?.mostrarHora ?? true,
+          mostrarCajero: data.diseño?.mostrarCajero ?? true,
+          mostrarCliente: data.diseño?.mostrarCliente ?? true,
+          colorPrincipal: data.diseño?.colorPrincipal || '#1976d2',
+          alineacion: data.diseño?.alineacion as 'izquierda' | 'centro' | 'derecha' || 'centro'
+        },
+        activo: data.activo,
+        fechaCreacion: data.fechaCreacion,
+        fechaModificacion: data.fechaModificacion
+      })
+    } catch (error: any) {
+      console.error('Error al cargar configuración:', error)
+      setSnackbar({ abierto: true, mensaje: 'Error al cargar la configuración: ' + (error.message || 'Error desconocido'), tipo: 'error' })
+    } finally {
+      setLoadingData(false)
+    }
+  }
 
   const manejarCambio = (campo: string, valor: any) => {
     setConfig(prev => ({
@@ -204,19 +365,56 @@ export default function ConfiguracionTicketsPage() {
   const guardarConfiguracion = async () => {
     setLoading(true)
     try {
-      // Aquí iría la lógica para guardar en el backend
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await configuracionTicketsAPI.update({
+        tipoTicket: config.tipoTicket,
+        nombreEmpresa: config.nombreEmpresa,
+        razonSocial: config.razonSocial,
+        direccion: config.direccion,
+        telefono: config.telefono,
+        email: config.email,
+        sitioWeb: config.sitioWeb,
+        rfc: config.rfc,
+        logo: config.logo,
+        mostrarLogo: config.mostrarLogo,
+        tamañoLogo: config.tamañoLogo,
+        redesSociales: config.redesSociales,
+        mostrarRedesSociales: config.mostrarRedesSociales,
+        textos: config.textos,
+        diseño: config.diseño,
+        activo: config.activo
+      })
+      
+      // Actualizar fecha de modificación
+      setConfig(prev => ({ ...prev, fechaModificacion: new Date().toISOString().split('T')[0] }))
+      
+      // Recargar configuraciones para actualizar la lista
+      await loadConfiguraciones()
+      
       setSnackbar({ abierto: true, mensaje: 'Configuración guardada exitosamente', tipo: 'success' })
-    } catch (error) {
-      setSnackbar({ abierto: true, mensaje: 'Error al guardar la configuración', tipo: 'error' })
+    } catch (error: any) {
+      console.error('Error al guardar configuración:', error)
+      setSnackbar({ abierto: true, mensaje: 'Error al guardar la configuración: ' + (error.message || 'Error desconocido'), tipo: 'error' })
     } finally {
       setLoading(false)
     }
   }
 
+  const manejarCambioTipoTicket = (tipo: string) => {
+    setTipoTicketSeleccionado(tipo)
+    // La configuración se cargará automáticamente con el useEffect
+  }
+
   const restablecerConfiguracion = () => {
     setConfig(configInicial)
     setSnackbar({ abierto: true, mensaje: 'Configuración restablecida', tipo: 'success' })
+  }
+
+  if (loadingData) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <CircularProgress />
+      </Box>
+    )
   }
 
   return (
@@ -231,6 +429,32 @@ export default function ConfiguracionTicketsPage() {
           Personaliza la apariencia y contenido de tus tickets en tiempo real
         </Typography>
       </Box>
+
+      {/* Selector de Tipo de Ticket */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Seleccionar Tipo de Ticket
+          </Typography>
+          <FormControl fullWidth>
+            <InputLabel>Tipo de Ticket</InputLabel>
+            <Select
+              value={tipoTicketSeleccionado}
+              onChange={(e) => manejarCambioTipoTicket(e.target.value)}
+              label="Tipo de Ticket"
+            >
+              {tiposTickets.map(tipo => (
+                <MenuItem key={tipo.value} value={tipo.value}>
+                  {tipo.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+            Cada tipo de ticket puede tener su propia configuración personalizada
+          </Typography>
+        </CardContent>
+      </Card>
 
       <Grid container spacing={3}>
         {/* Formulario de Configuración */}

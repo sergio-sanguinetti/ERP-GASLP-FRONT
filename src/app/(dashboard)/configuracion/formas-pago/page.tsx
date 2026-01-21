@@ -1399,31 +1399,15 @@ export default function ConfiguracionFormasPagoPage() {
               <DialogContent>
                 <Grid container spacing={2} sx={{ mt: 1 }}>
                   <Grid item xs={12} sm={6}>
-                    <FormControl fullWidth required disabled={tipoDialogo === 'editar'}>
-                      <InputLabel>Código</InputLabel>
-                      <Select
-                        value={formularioTipo.codigo || ''}
-                        onChange={e => setFormularioTipo(prev => ({ ...prev, codigo: e.target.value }))}
-                        label='Código'
-                      >
-                        <MenuItem value='efectivo'>Efectivo</MenuItem>
-                        <MenuItem value='terminal'>Terminal</MenuItem>
-                        <MenuItem value='transferencia'>Transferencia</MenuItem>
-                        <MenuItem value='cheque'>Cheque</MenuItem>
-                        <MenuItem value='deposito'>Depósito</MenuItem>
-                        <MenuItem value='credito'>Crédito</MenuItem>
-                      </Select>
-                      {tipoDialogo === 'crear' && (
-                        <Typography variant='caption' color='text.secondary' sx={{ mt: 0.5, ml: 1.75 }}>
-                          Selecciona el código del tipo de forma de pago
-                        </Typography>
-                      )}
-                      {tipoDialogo === 'editar' && (
-                        <Typography variant='caption' color='text.secondary' sx={{ mt: 0.5, ml: 1.75 }}>
-                          El código no se puede modificar después de crear el tipo
-                        </Typography>
-                      )}
-                    </FormControl>
+                    <TextField
+                      fullWidth
+                      label='Código'
+                      value={formularioTipo.codigo || ''}
+                      onChange={e => setFormularioTipo(prev => ({ ...prev, codigo: e.target.value }))}
+                      required
+                      placeholder='Ej: efectivo, terminal, transferencia, etc.'
+                      helperText='El código puede ser libre y permitir duplicados'
+                    />
                   </Grid>
 
                   <Grid item xs={12} sm={6}>
