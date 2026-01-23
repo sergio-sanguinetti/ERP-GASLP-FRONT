@@ -3432,6 +3432,116 @@ export default function VentasPage() {
                 </>
               )}
 
+              {/* Información de Métodos de Pago */}
+              {pedidoSeleccionado.pagos && pedidoSeleccionado.pagos.length > 0 && (
+                <>
+                  <Grid item xs={12}>
+                    <Typography variant='subtitle1' fontWeight='bold' sx={{ mt: 2, mb: 1 }}>
+                      Métodos de Pago
+                    </Typography>
+                    <Divider sx={{ mb: 2 }} />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TableContainer component={Paper} variant='outlined'>
+                      <Table size='small'>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Método de Pago</TableCell>
+                            <TableCell align='right'>Monto</TableCell>
+                            <TableCell>Referencia/Folio</TableCell>
+                            <TableCell>Tipo</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {pedidoSeleccionado.pagos.map((pagoPedido: any, index: number) => (
+                            <TableRow key={pagoPedido.id || index}>
+                              <TableCell>
+                                {pagoPedido.metodo ? (
+                                  <Typography variant='body2' fontWeight='bold'>
+                                    {pagoPedido.metodo.nombre || pagoPedido.metodo.tipo}
+                                  </Typography>
+                                ) : (
+                                  <Typography variant='body2' fontWeight='bold'>
+                                    {pagoPedido.tipo === 'credito' ? 'Crédito' : 'Método de Pago'}
+                                  </Typography>
+                                )}
+                              </TableCell>
+                              <TableCell align='right'>
+                                <Typography variant='body2' fontWeight='bold' color='primary'>
+                                  ${pagoPedido.monto.toFixed(2)}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant='body2'>
+                                  {pagoPedido.folio || '-'}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={pagoPedido.tipo === 'credito' ? 'Crédito' : 'Pago'}
+                                  color={pagoPedido.tipo === 'credito' ? 'warning' : 'success'}
+                                  size='small'
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow>
+                            <TableCell colSpan={3} align='right'>
+                              <Typography variant='body1' fontWeight='bold'>
+                                Total Pagado:
+                              </Typography>
+                            </TableCell>
+                            <TableCell align='right'>
+                              <Typography variant='body1' fontWeight='bold' color='primary'>
+                                ${pedidoSeleccionado.pagos.reduce((sum: number, p: any) => sum + p.monto, 0).toFixed(2)}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Grid>
+
+                  {/* Mostrar Firma si existe (solo para pagos a crédito) */}
+                  {pedidoSeleccionado.pagos.some((p: any) => p.tipo === 'credito' && p.firmaCliente) && (
+                    <>
+                      <Grid item xs={12}>
+                        <Typography variant='subtitle1' fontWeight='bold' sx={{ mt: 2, mb: 1 }}>
+                          Firma del Cliente (Pago a Crédito)
+                        </Typography>
+                        <Divider sx={{ mb: 2 }} />
+                      </Grid>
+                      <Grid item xs={12}>
+                        {pedidoSeleccionado.pagos
+                          .filter((p: any) => p.tipo === 'credito' && p.firmaCliente)
+                          .map((pago: any, index: number) => (
+                            <Box key={index} sx={{ mb: 2 }}>
+                              <Paper variant='outlined' sx={{ p: 2, bgcolor: 'grey.50' }}>
+                                <Typography variant='caption' color='text.secondary' sx={{ mb: 1, display: 'block' }}>
+                                  Firma del cliente para pago a crédito de ${pago.monto.toFixed(2)}
+                                </Typography>
+                                <Box
+                                  component='img'
+                                  src={pago.firmaCliente}
+                                  alt='Firma del cliente'
+                                  sx={{
+                                    maxWidth: '100%',
+                                    height: 'auto',
+                                    border: '1px solid #ccc',
+                                    borderRadius: 1,
+                                    bgcolor: 'white',
+                                    p: 1
+                                  }}
+                                />
+                              </Paper>
+                            </Box>
+                          ))}
+                      </Grid>
+                    </>
+                  )}
+                </>
+              )}
+
               {/* Información de Sede */}
               {pedidoSeleccionado.sede && (
                 <>

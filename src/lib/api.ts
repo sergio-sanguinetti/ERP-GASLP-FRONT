@@ -1769,6 +1769,18 @@ export interface PedidoProducto {
   subtotal: number
 }
 
+export interface PagoPedido {
+  id: string
+  pedidoId: string
+  monto: number
+  folio?: string
+  tipo: 'credito' | 'metodo_pago'
+  metodoId?: string
+  metodo?: FormaPago
+  fecha: string
+  firmaCliente?: string
+}
+
 export interface Pedido {
   id: string
   numeroPedido: string
@@ -1804,6 +1816,7 @@ export interface Pedido {
   fechaCreacion?: string
   fechaModificacion?: string
   productosPedido?: PedidoProducto[]
+  pagos?: PagoPedido[]
 }
 
 export interface CreatePedidoRequest {

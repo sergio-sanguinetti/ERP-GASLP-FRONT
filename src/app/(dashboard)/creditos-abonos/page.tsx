@@ -219,7 +219,35 @@ export default function CreditosAbonosPage() {
 
   useEffect(() => {
     if (sedeId !== null) {
+      // Recargar rutas cuando cambia la sede
+      const cargarRutas = async () => {
+        try {
+          const rutasData = await rutasAPI.getAll({ sedeId })
+          setRutas(rutasData)
+        } catch (err) {
+          console.error('Error al cargar rutas:', err)
+          // Si falla, intentar cargar todas las rutas
+          try {
+            const rutasData = await rutasAPI.getAll()
+            setRutas(rutasData)
+          } catch (err2) {
+            console.error('Error al cargar todas las rutas:', err2)
+          }
+        }
+      }
+      cargarRutas()
       cargarDatos()
+    } else {
+      // Si no hay sede seleccionada, cargar todas las rutas
+      const cargarRutas = async () => {
+        try {
+          const rutasData = await rutasAPI.getAll()
+          setRutas(rutasData)
+        } catch (err) {
+          console.error('Error al cargar rutas:', err)
+        }
+      }
+      cargarRutas()
     }
   }, [sedeId])
 
@@ -229,20 +257,48 @@ export default function CreditosAbonosPage() {
       const user = await authAPI.getProfile()
       setUsuario(user)
       
-      const [sedesData, rutasData, formasPagoData] = await Promise.all([
+      const [sedesData, formasPagoData] = await Promise.all([
         sedesAPI.getAll(),
-        rutasAPI.getAll(),
         formasPagoAPI.getAll()
       ])
       
       setSedes(sedesData)
-      setRutas(rutasData)
       setFormasPagoDisponibles(formasPagoData)
       
+      let initialSedeId: string | null = null
       if (user.rol === 'superAdministrador') {
-        setSedeId(user.sede || sedesData[0]?.id || null)
+        initialSedeId = user.sede || sedesData[0]?.id || null
       } else {
-        setSedeId(user.sede || null)
+        initialSedeId = user.sede || null
+      }
+      
+      setSedeId(initialSedeId)
+      
+      // Cargar rutas con el filtro de sede
+      if (initialSedeId) {
+        try {
+          const rutasData = await rutasAPI.getAll({ sedeId: initialSedeId })
+          setRutas(rutasData)
+        } catch (err) {
+          console.error('Error al cargar rutas:', err)
+          // Si falla, intentar cargar todas las rutas
+          try {
+            const rutasData = await rutasAPI.getAll()
+            setRutas(rutasData)
+          } catch (err2) {
+            console.error('Error al cargar todas las rutas:', err2)
+            setRutas([])
+          }
+        }
+      } else {
+        // Si no hay sede, cargar todas las rutas
+        try {
+          const rutasData = await rutasAPI.getAll()
+          setRutas(rutasData)
+        } catch (err) {
+          console.error('Error al cargar rutas:', err)
+          setRutas([])
+        }
       }
     } catch (err: any) {
       setError(err.message || 'Error al cargar datos iniciales')
@@ -683,8 +739,12 @@ export default function CreditosAbonosPage() {
   }, [clientesCredito, filtros])
 
   const rutasUnicas = useMemo(() => {
-    return [...new Set(clientesCredito.map(c => c.ruta))]
-  }, [clientesCredito])
+    // Usar las rutas cargadas de la API, no solo las de los clientes cargados
+    const rutasDeClientes = [...new Set(clientesCredito.map(c => c.ruta))]
+    const rutasDeAPI = rutas.map(r => r.nombre)
+    // Combinar ambas y eliminar duplicados
+    return [...new Set([...rutasDeAPI, ...rutasDeClientes])].filter(r => r && r !== 'Sin ruta')
+  }, [clientesCredito, rutas])
 
   // Recargar datos cuando cambien los filtros
   useEffect(() => {
@@ -695,9 +755,29 @@ export default function CreditosAbonosPage() {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant='h4' component='h1' gutterBottom>
-        Gestión de Créditos y Abonos
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant='h4' component='h1'>
+          Gestión de Créditos y Abonos
+        </Typography>
+        
+        {/* Selector de Sede */}
+        {usuario && (usuario.rol === 'superAdministrador' || sedes.length > 1) && (
+          <FormControl sx={{ minWidth: 250 }}>
+            <InputLabel>Sede</InputLabel>
+            <Select
+              value={sedeId || ''}
+              onChange={(e) => setSedeId(e.target.value || null)}
+              label='Sede'
+            >
+              {sedes.map((sede) => (
+                <MenuItem key={sede.id} value={sede.id}>
+                  {sede.nombre}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+      </Box>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
