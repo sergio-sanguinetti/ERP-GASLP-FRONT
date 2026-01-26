@@ -143,7 +143,7 @@ const LoginV2 = ({ mode }: { mode: SystemMode }) => {
             }
           )}
         >
-          <LoginIllustration src={'/images/camion_2.jpg'} alt='character-illustration' />
+          <LoginIllustration src={'/images/portada.webp'} alt='character-illustration' />
           {!hidden && (
             <MaskImg
               alt='mask'
