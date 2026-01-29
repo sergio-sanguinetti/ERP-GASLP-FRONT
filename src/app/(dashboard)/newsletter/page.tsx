@@ -117,15 +117,16 @@ const NewsletterPage = () => {
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
-      // Validar tamaño del archivo (10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        setError('El archivo es demasiado grande. El tamaño máximo es 10MB')
+      // Validar tamaño del archivo (15MB) para permitir imágenes grandes
+      const maxSizeMB = 15
+      if (file.size > maxSizeMB * 1024 * 1024) {
+        setError(`El archivo es demasiado grande. El tamaño máximo es ${maxSizeMB}MB`)
         return
       }
       
-      // Validar tipo de archivo
+      // Aceptar cualquier tipo de imagen (MIME image/*)
       if (!file.type.startsWith('image/')) {
-        setError('Por favor seleccione un archivo de imagen válido')
+        setError('Por favor seleccione un archivo de imagen válido (JPEG, PNG, GIF, WebP, SVG, BMP, etc.)')
         return
       }
       
@@ -683,7 +684,7 @@ const NewsletterPage = () => {
                 Haz clic para seleccionar una imagen
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                PNG, JPG, GIF hasta 10MB
+                Cualquier formato de imagen (JPEG, PNG, GIF, WebP, SVG, BMP, etc.) hasta 15MB
               </Typography>
             </Box>
           )}
@@ -728,7 +729,7 @@ const NewsletterPage = () => {
           <input
             ref={imageInputRef}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/svg+xml,image/bmp,image/x-icon,image/tiff,image/apng,image/*"
             style={{ display: 'none' }}
             onChange={handleImageChange}
           />

@@ -1318,6 +1318,40 @@ export const clientesAPI = {
     }
   },
 
+  importarMasivo: async (archivo: File): Promise<{
+    total: number
+    exitosos: number
+    errores: number
+    detalles: {
+      exitosos: Array<{ fila: number; cliente: any }>
+      errores: Array<{ fila: number; error: string; datos: any }>
+    }
+  }> => {
+    const formData = new FormData()
+    formData.append('archivo', archivo)
+
+    const token = localStorage.getItem('token')
+    if (!token) {
+      throw new Error('No hay token de autenticación')
+    }
+
+    const response = await fetch(`${API_URL}/clientes/importar-masivo`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al importar clientes')
+    }
+
+    const result = await response.json()
+    return result.resultados
+  },
+
   // Domicilios
   getDomicilios: async (clienteId: string): Promise<Domicilio[]> => {
     const response = await fetch(`${API_URL}/clientes/${clienteId}/domicilios`, {
@@ -1880,12 +1914,7 @@ export const pedidosAPI = {
   },
 
   getById: async (id: string): Promise<Pedido> => {
-    const response = await fetch(`${API_URL}/pedidos/${id}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
+    const response = await fetchWithAuth(`/pedidos/${id}`)
 
     if (!response.ok) {
       const error = await response.json()

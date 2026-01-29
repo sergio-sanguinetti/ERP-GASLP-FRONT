@@ -667,6 +667,7 @@ export default function ClientesPage() {
   const [municipios, setMunicipios] = useState<Municipio[]>([])
   const [ciudades, setCiudades] = useState<Ciudad[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingSede, setLoadingSede] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
   const [tipoDialogo, setTipoDialogo] = useState<
@@ -692,6 +693,8 @@ export default function ClientesPage() {
   // Estados de paginación
   const [page, setPage] = useState(1)
   const [rowsPerPage] = useState(10)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [rutaFiltroId, setRutaFiltroId] = useState<string>('todas')
 
   const esSuperAdministrador = usuario?.rol === 'superAdministrador'
 
@@ -771,6 +774,7 @@ export default function ClientesPage() {
       console.error('Error cargando datos:', err)
     } finally {
       setLoading(false)
+      setLoadingSede(false)
     }
   }
   
@@ -820,9 +824,12 @@ export default function ClientesPage() {
     setRutasFiltradas(rutasFiltradas)
   }
 
-  const handleSedeChange = (nuevaSedeId: string) => {
+  const handleSedeChange = async (nuevaSedeId: string) => {
     setSedeSeleccionada(nuevaSedeId)
+    setLoadingSede(true)
+    setRutaFiltroId('todas')
     setSedeId(nuevaSedeId)
+    // El useEffect se encargará de cargar los datos
   }
 
   // Función para adaptar el cliente de la API al formato del componente
@@ -1149,15 +1156,58 @@ export default function ClientesPage() {
 
     setImportando(true)
     setProgresoImportacion(0)
+    setError(null)
 
-    // Simular proceso de importación
-    for (let i = 0; i <= 100; i += 10) {
-      await new Promise(resolve => setTimeout(resolve, 200))
-      setProgresoImportacion(i)
+    let resultados: any = null
+
+    try {
+      // Subir archivo al backend
+      resultados = await clientesAPI.importarMasivo(archivoSeleccionado)
+      
+      // Simular progreso mientras se procesa
+      for (let i = 0; i <= 90; i += 10) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+        setProgresoImportacion(i)
+      }
+
+      setProgresoImportacion(100)
+
+      // Mostrar resultados
+      if (resultados.exitosos > 0) {
+        alert(`Importación completada:\n- Exitosos: ${resultados.exitosos}\n- Errores: ${resultados.errores}\n- Total procesados: ${resultados.total}`)
+      }
+
+      if (resultados.errores > 0 && resultados.exitosos === 0) {
+        setError(`No se pudieron importar clientes. Errores: ${resultados.errores}`)
+      } else if (resultados.exitosos > 0) {
+        // Recargar la lista de clientes
+        await cargarDatos()
+        cerrarDialogo()
+      }
+
+      // Si hay errores, mostrar detalles
+      if (resultados.errores > 0 && resultados.detalles.errores.length > 0) {
+        const erroresDetalle = resultados.detalles.errores
+          .slice(0, 5)
+          .map(e => `Fila ${e.fila}: ${e.error}`)
+          .join('\n')
+        const mensajeErrores = erroresDetalle + (resultados.errores > 5 ? `\n... y ${resultados.errores - 5} errores más` : '')
+        console.error('Errores de importación:', resultados.detalles.errores)
+        if (resultados.exitosos === 0) {
+          setError(`Errores encontrados:\n${mensajeErrores}`)
+        } else {
+          alert(`Se importaron ${resultados.exitosos} clientes, pero hubo ${resultados.errores} errores:\n${mensajeErrores}`)
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error al importar el archivo')
+      console.error('Error importando:', err)
+    } finally {
+      setImportando(false)
+      if (resultados && resultados.exitosos > 0) {
+        setProgresoImportacion(0)
+      }
     }
-
-    setImportando(false)
-    cerrarDialogo()
   }
 
   const abrirDialogoEliminar = (cliente: Cliente) => {
@@ -1287,11 +1337,50 @@ export default function ClientesPage() {
     return `${cliente.nombre} ${cliente.apellidoPaterno} ${cliente.apellidoMaterno}`
   }
 
-  // Calcular clientes paginados
-  const totalPages = Math.ceil(clientes.length / rowsPerPage)
+  // Calcular clientes paginados (filtro por ruta + buscador global)
+  const normalizedSearch = searchTerm.trim().toLowerCase()
+
+  const clientesPorRuta = rutaFiltroId === 'todas'
+    ? clientes
+    : clientes.filter(cliente => {
+        const ruta = cliente.ruta as any
+        const rutaIdCliente =
+          ruta && typeof ruta === 'object' && ruta.id
+            ? ruta.id
+            : null
+        return rutaIdCliente === rutaFiltroId
+      })
+
+  const filteredClientes = normalizedSearch
+    ? clientesPorRuta.filter(cliente => {
+        const nombreCompleto = obtenerNombreCompleto(cliente).toLowerCase()
+        const email = (cliente.email || '').toLowerCase()
+        const telefono = (cliente.telefono || '').toLowerCase()
+        const rutaNombre = (
+          (cliente.ruta as any)?.nombre ||
+          (cliente.ruta as any) ||
+          ''
+        )
+          .toString()
+          .toLowerCase()
+        const estado = cliente.estadoCliente.toLowerCase()
+        const direccion = obtenerDireccionCompleta(cliente).toLowerCase()
+
+        return (
+          nombreCompleto.includes(normalizedSearch) ||
+          email.includes(normalizedSearch) ||
+          telefono.includes(normalizedSearch) ||
+          rutaNombre.includes(normalizedSearch) ||
+          estado.includes(normalizedSearch) ||
+          direccion.includes(normalizedSearch)
+        )
+      })
+    : clientesPorRuta
+
+  const totalPages = Math.ceil(filteredClientes.length / rowsPerPage)
   const startIndex = (page - 1) * rowsPerPage
   const endIndex = startIndex + rowsPerPage
-  const paginatedClientes = clientes.slice(startIndex, endIndex)
+  const paginatedClientes = filteredClientes.slice(startIndex, endIndex)
 
   const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
     setPage(value)
@@ -1336,11 +1425,64 @@ export default function ClientesPage() {
         </Box>
       ) : null}
 
-      <Card sx={{ mb: 3 }}>
+      <Card sx={{ mb: 3, position: 'relative' }}>
+        {loadingSede && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(255, 255, 255, 0.8)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 1000,
+              borderRadius: '4px'
+            }}
+          >
+            <Box sx={{ textAlign: 'center' }}>
+              <CircularProgress size={60} />
+              <Typography variant='body2' sx={{ mt: 2, color: 'text.secondary' }}>
+                Cargando clientes de la sede...
+              </Typography>
+            </Box>
+          </Box>
+        )}
         <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
             <Typography variant='h6'>Lista de Clientes</Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+              <FormControl size='small' sx={{ minWidth: 200 }}>
+                <InputLabel>Ruta</InputLabel>
+                <Select
+                  label='Ruta'
+                  value={rutaFiltroId}
+                  onChange={e => {
+                    setRutaFiltroId(e.target.value as string)
+                    setPage(1)
+                  }}
+                >
+                  <MenuItem value='todas'>Todas las rutas</MenuItem>
+                  {rutas
+                    .filter(r => r.activa)
+                    .map(ruta => (
+                      <MenuItem key={ruta.id} value={ruta.id}>
+                        {ruta.nombre} {ruta.codigo ? `- ${ruta.codigo}` : ''}
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+              <TextField
+                size='small'
+                label='Buscar en la tabla'
+                value={searchTerm}
+                onChange={e => {
+                  setSearchTerm(e.target.value)
+                  setPage(1)
+                }}
+              />
               <Button
                 variant='outlined'
                 startIcon={<AccountBalanceIcon />}
@@ -1502,7 +1644,7 @@ export default function ClientesPage() {
           </TableContainer>
           
           {/* Paginación */}
-          {clientes.length > 0 && (
+          {filteredClientes.length > 0 && (
             <Stack spacing={2} sx={{ mt: 2, alignItems: 'center' }}>
               <Pagination
                 count={totalPages}
@@ -1514,7 +1656,7 @@ export default function ClientesPage() {
                 showLastButton
               />
               <Typography variant='body2' color='text.secondary'>
-                Mostrando {startIndex + 1} - {Math.min(endIndex, clientes.length)} de {clientes.length} clientes
+                Mostrando {startIndex + 1} - {Math.min(endIndex, filteredClientes.length)} de {filteredClientes.length} clientes
               </Typography>
             </Stack>
           )}
@@ -1531,10 +1673,18 @@ export default function ClientesPage() {
         </DialogTitle>
         <DialogContent>
           <Alert severity='info' sx={{ mb: 2 }}>
-            Selecciona un archivo CSV o Excel con los datos de los clientes. El archivo debe contener las columnas:
-            nombre (opcional), apellidoPaterno (opcional), apellidoMaterno (opcional), email, telefono (opcional),
-            calle, numeroExterior, colonia, municipio, estado, codigoPostal, rfc (opcional), curp (opcional), ruta,
-            limiteCredito.
+            <Typography variant='subtitle2' gutterBottom>
+              Formato de archivo para subida masiva:
+            </Typography>
+            <Typography variant='body2' component='div'>
+              El archivo debe ser Excel (.xlsx, .xls) o CSV y debe contener las siguientes columnas:
+              <ul style={{ marginTop: '8px', marginBottom: '8px', paddingLeft: '20px' }}>
+                <li><strong>CLIENTE</strong> (requerido): Nombre completo del cliente</li>
+                <li><strong>RUTA_PRINCIPAL</strong> (requerido): Ruta principal del cliente (ej: "RUTA P 1DH", "RUTA P 1SMA", "R C 1DH")</li>
+              </ul>
+              El sistema mapeará automáticamente la ruta al código correspondiente y creará los clientes con los datos mínimos necesarios.
+              Los campos de dirección se completarán con valores por defecto que podrás editar después.
+            </Typography>
           </Alert>
 
           <Box sx={{ mb: 2 }}>

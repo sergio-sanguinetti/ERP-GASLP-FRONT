@@ -162,6 +162,7 @@ export default function VentasPage() {
   const [productoSeleccionado, setProductoSeleccionado] = useState<Producto | null>(null)
   const [repartidorSeleccionado, setRepartidorSeleccionado] = useState<Usuario | null>(null)
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState<Pedido | null>(null)
+  const [pedidoEditando, setPedidoEditando] = useState<Pedido | null>(null)
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<CategoriaProducto | null>(null)
   const [filtrosPedidos, setFiltrosPedidos] = useState<FiltrosPedidos>({
     fechaDesde: '',
@@ -695,10 +696,48 @@ export default function VentasPage() {
         console.log('Cargando rutas...')
         await loadRutas()
       }
-      // Resetear cliente buscado
+      // Resetear cliente buscado y modo edición
       setClienteBuscado(null)
+      setPedidoEditando(null)
       console.log('Categorías disponibles:', categoriasProducto.length)
       console.log('Productos disponibles:', productos.length)
+    }
+    setDialogoAbierto(true)
+  }
+
+  const abrirDialogoEditarPedido = async (pedido: Pedido) => {
+    setTipoDialogo('pedido')
+    if (categoriasProducto.length === 0) await loadCategoriasProducto()
+    if (productos.length === 0) await loadProductos()
+    if (clientes.length === 0) await loadClientes()
+    if (repartidores.length === 0) await loadRepartidores()
+    if (rutas.length === 0) await loadRutas()
+    try {
+      const pedidoCompleto = await pedidosAPI.getById(pedido.id)
+      const prods = pedidoCompleto.productosPedido || []
+      setFormularioPedido({
+        clienteId: pedidoCompleto.clienteId,
+        tipoServicio: pedidoCompleto.tipoServicio,
+        horario: pedidoCompleto.horaPedido || '',
+        prioridad: 'normal',
+        repartidorId: pedidoCompleto.repartidorId || '',
+        observaciones: pedidoCompleto.observaciones || '',
+        productos: prods.map((pp: any) => ({
+          productoId: pp.productoId,
+          cantidad: pp.cantidad,
+          precio: pp.precio,
+          nombre: pp.producto?.nombre,
+          litros: pp.cantidad,
+          subtotal: pp.subtotal ?? pp.precio * pp.cantidad,
+          descripcion: pp.producto?.descripcion
+        }))
+      })
+      setClienteBuscado(pedidoCompleto.cliente ?? null)
+      setPedidoEditando(pedidoCompleto)
+    } catch (err: any) {
+      alert('Error al cargar el pedido: ' + (err.message || 'Error desconocido'))
+      console.error('Error loading pedido for edit:', err)
+      return
     }
     setDialogoAbierto(true)
   }
@@ -708,6 +747,7 @@ export default function VentasPage() {
     setProductoSeleccionado(null)
     setRepartidorSeleccionado(null)
     setPedidoSeleccionado(null)
+    setPedidoEditando(null)
     setFormularioPedido({
       clienteId: '',
       tipoServicio: 'pipas',
@@ -927,30 +967,40 @@ export default function VentasPage() {
         }
       }
       
+      const productosPayload = formularioPedido.productos.map((p) => ({
+        productoId: p.productoId,
+        cantidad: p.litros ?? p.cantidad,
+        precio: p.precio
+      }))
+
       const data: CreatePedidoRequest = {
         clienteId: formularioPedido.clienteId,
         tipoServicio: formularioPedido.tipoServicio,
-        horaPedido: formularioPedido.horario || ahora.toTimeString().slice(0, 5),
-        fechaPedido: ahora.toISOString().split('T')[0],
+        horaPedido: formularioPedido.horario || ahora.toISOString().slice(11, 16),
+        fechaPedido: pedidoEditando
+          ? (pedidoEditando.fechaPedido && String(pedidoEditando.fechaPedido).slice(0, 10)) || ahora.toISOString().split('T')[0]
+          : ahora.toISOString().split('T')[0],
         repartidorId: formularioPedido.repartidorId || undefined,
         observaciones: formularioPedido.observaciones || undefined,
         calculoPipas: calculoPipasData,
-        sedeId: sedeId || undefined, // Incluir la sede del usuario
-        productos: productos,
-        // Incluir totales calculados
-        totalLitros: totalLitros,
-        totalMonto: totalMonto,
+        sedeId: sedeId || undefined,
+        productos: productosPayload
       }
 
-      await pedidosAPI.create(data)
-      alert('Pedido creado exitosamente')
+      if (pedidoEditando) {
+        await pedidosAPI.update(pedidoEditando.id, data)
+        alert('Pedido actualizado exitosamente')
+      } else {
+        await pedidosAPI.create(data)
+        alert('Pedido creado exitosamente')
+      }
       cerrarDialogo()
       if (vistaActual === 'listado-pedidos') {
         loadPedidos()
       }
     } catch (err: any) {
-      alert('Error al crear pedido: ' + (err.message || 'Error desconocido'))
-      console.error('Error creating pedido:', err)
+      alert((pedidoEditando ? 'Error al actualizar pedido: ' : 'Error al crear pedido: ') + (err.message || 'Error desconocido'))
+      console.error(pedidoEditando ? 'Error updating pedido:' : 'Error creating pedido:', err)
     }
   }
 
@@ -2299,6 +2349,15 @@ export default function VentasPage() {
                                 <VisibilityIcon />
                               </IconButton>
                             </Tooltip>
+                            <Tooltip title='Editar pedido'>
+                              <IconButton
+                                size='small'
+                                color='primary'
+                                onClick={() => abrirDialogoEditarPedido(pedido)}
+                              >
+                                <EditIcon />
+                              </IconButton>
+                            </Tooltip>
 
                             {pedido.estado === 'pendiente' && (
                               <Tooltip title='Cerrar Venta (Registrar Pago)'>
@@ -3597,8 +3656,8 @@ export default function VentasPage() {
       <Dialog open={dialogoAbierto && tipoDialogo === 'pedido'} onClose={cerrarDialogo} maxWidth='sm' fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <AddIcon />
-            Crear Nuevo Pedido
+            {pedidoEditando ? <EditIcon /> : <AddIcon />}
+            {pedidoEditando ? 'Editar Pedido' : 'Crear Nuevo Pedido'}
           </Box>
         </DialogTitle>
         <DialogContent>
@@ -4484,8 +4543,12 @@ export default function VentasPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={cerrarDialogo}>Cancelar</Button>
-          <Button onClick={crearPedido} variant='contained' startIcon={<AddIcon />}>
-            Crear Pedido
+          <Button
+            onClick={crearPedido}
+            variant='contained'
+            startIcon={pedidoEditando ? <EditIcon /> : <AddIcon />}
+          >
+            {pedidoEditando ? 'Guardar cambios' : 'Crear Pedido'}
           </Button>
         </DialogActions>
       </Dialog>
