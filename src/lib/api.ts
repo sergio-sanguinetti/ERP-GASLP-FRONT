@@ -1196,6 +1196,7 @@ export interface CreateClienteRequest {
   rfc?: string
   curp?: string
   rutaId?: string
+  zonaId?: string
   limiteCredito?: number
   saldoActual?: number
   pagosEspecialesAutorizados?: boolean
@@ -1886,6 +1887,7 @@ export interface PedidosFilters {
   tipoServicio?: string
   repartidorId?: string
   sedeId?: string
+  rutaId?: string
 }
 
 export const pedidosAPI = {
@@ -1898,6 +1900,7 @@ export const pedidosAPI = {
     if (filtros?.tipoServicio) queryParams.append('tipoServicio', filtros.tipoServicio)
     if (filtros?.repartidorId) queryParams.append('repartidorId', filtros.repartidorId)
     if (filtros?.sedeId) queryParams.append('sedeId', filtros.sedeId)
+    if (filtros?.rutaId) queryParams.append('rutaId', filtros.rutaId)
 
     const queryString = queryParams.toString()
     const url = `/pedidos${queryString ? `?${queryString}` : ''}`
@@ -1990,19 +1993,12 @@ export const ventasAPI = {
   getResumen: async (sedeId?: string): Promise<ResumenVentas> => {
     const queryParams = new URLSearchParams()
     if (sedeId) queryParams.append('sedeId', sedeId)
-
     const queryString = queryParams.toString()
-    const url = `${API_URL}/ventas/resumen${queryString ? `?${queryString}` : ''}`
+    const url = `/ventas/resumen${queryString ? `?${queryString}` : ''}`
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
+    const response = await fetchWithAuth(url, { method: 'GET' })
 
     if (!response.ok) {
-      // Si no existe el endpoint, retornar datos por defecto
       if (response.status === 404) {
         return {
           ventasHoy: 0,
@@ -2023,16 +2019,10 @@ export const ventasAPI = {
   getCortePipas: async (sedeId?: string): Promise<CorteRepartidor> => {
     const queryParams = new URLSearchParams()
     if (sedeId) queryParams.append('sedeId', sedeId)
-
     const queryString = queryParams.toString()
-    const url = `${API_URL}/ventas/corte/pipas${queryString ? `?${queryString}` : ''}`
+    const url = `/ventas/corte/pipas${queryString ? `?${queryString}` : ''}`
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
+    const response = await fetchWithAuth(url, { method: 'GET' })
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -2056,16 +2046,10 @@ export const ventasAPI = {
   getCorteCilindros: async (sedeId?: string): Promise<CorteRepartidor> => {
     const queryParams = new URLSearchParams()
     if (sedeId) queryParams.append('sedeId', sedeId)
-
     const queryString = queryParams.toString()
-    const url = `${API_URL}/ventas/corte/cilindros${queryString ? `?${queryString}` : ''}`
+    const url = `/ventas/corte/cilindros${queryString ? `?${queryString}` : ''}`
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
+    const response = await fetchWithAuth(url, { method: 'GET' })
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -2976,6 +2960,7 @@ export interface ConfiguracionTicket {
     colorPrincipal: string
     alineacion: 'izquierda' | 'centro' | 'derecha'
   }
+  urlQR?: string
   activo: boolean
   fechaCreacion: string
   fechaModificacion: string
@@ -3015,6 +3000,7 @@ export interface UpdateConfiguracionTicketRequest {
     colorPrincipal?: string
     alineacion?: 'izquierda' | 'centro' | 'derecha'
   }
+  urlQR?: string
   activo?: boolean
 }
 
@@ -3091,6 +3077,7 @@ export const configuracionTicketsAPI = {
               colorPrincipal: '#1976d2',
               alineacion: 'centro'
             },
+            urlQR: '',
             activo: true,
             fechaCreacion: new Date().toISOString(),
             fechaModificacion: new Date().toISOString()

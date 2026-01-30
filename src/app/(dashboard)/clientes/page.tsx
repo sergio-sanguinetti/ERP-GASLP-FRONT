@@ -231,18 +231,11 @@ const generarFechaQR = (): string => {
   return new Date().toISOString().split('T')[0]
 }
 
-// Función para generar contenido del QR
-const generarContenidoQR = (cliente: Cliente, domicilio: Domicilio): string => {
-  return JSON.stringify({
-    clienteId: cliente.id,
-    clienteNombre: `${cliente.nombre} ${cliente.apellidoPaterno} ${cliente.apellidoMaterno}`,
-    domicilioId: domicilio.id,
-    domicilioDireccion: `${domicilio.calle} ${domicilio.numeroExterior}${domicilio.numeroInterior ? ` Int. ${domicilio.numeroInterior}` : ''}, ${domicilio.colonia}, ${domicilio.municipio}`,
-    codigoQR: domicilio.codigoQR,
-    tipoDomicilio: domicilio.tipo,
-    fechaGeneracion: new Date().toISOString()
-  })
-}
+// Contenido del QR domicilio = id del domicilio (para que la app reconozca el domicilio al escanear)
+const generarContenidoQRDomicilio = (domicilio: Domicilio): string => domicilio.id
+
+// Contenido del QR general del cliente = id del cliente
+const generarContenidoQRCliente = (cliente: Cliente): string => cliente.id
 
 // Datos de ejemplo (ya no se usan, se cargan del servidor)
 const clientesEjemplo: Cliente[] = [
@@ -689,6 +682,8 @@ export default function ClientesPage() {
   const [modalQR, setModalQR] = useState(false)
   const [qrDataURL, setQrDataURL] = useState<string>('')
   const [domicilioQR, setDomicilioQR] = useState<Domicilio | null>(null)
+  const [modalQRCliente, setModalQRCliente] = useState(false)
+  const [qrDataURLCliente, setQrDataURLCliente] = useState<string>('')
   
   // Estados de paginación
   const [page, setPage] = useState(1)
@@ -1241,7 +1236,7 @@ export default function ClientesPage() {
 
     try {
       setDomicilioQR(domicilio)
-      const contenidoQR = generarContenidoQR(clienteSeleccionado, domicilio)
+      const contenidoQR = generarContenidoQRDomicilio(domicilio)
 
       // Crear un canvas para el QR
       const canvas = document.createElement('canvas')
@@ -1310,7 +1305,63 @@ export default function ClientesPage() {
 
     const link = document.createElement('a')
     link.href = qrDataURL
-    link.download = `QR_${domicilioQR.codigoQR}_${obtenerNombreCompleto(clienteSeleccionado!).replace(/\s+/g, '_')}.png`
+    link.download = `QR_domicilio_${domicilioQR.id}_${obtenerNombreCompleto(clienteSeleccionado!).replace(/\s+/g, '_')}.png`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const abrirModalQRCliente = async () => {
+    if (!clienteSeleccionado) return
+    try {
+      const contenidoQR = generarContenidoQRCliente(clienteSeleccionado)
+      const canvas = document.createElement('canvas')
+      const qrSize = 500
+      canvas.width = qrSize
+      canvas.height = qrSize
+      await QRCode.toCanvas(canvas, contenidoQR, {
+        width: qrSize,
+        margin: 2,
+        color: { dark: '#000000', light: '#FFFFFF' }
+      })
+      const logo = new Image()
+      logo.crossOrigin = 'anonymous'
+      await new Promise<void>((resolve, reject) => {
+        logo.onload = () => {
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            reject(new Error('No se pudo obtener el contexto del canvas'))
+            return
+          }
+          const logoSize = qrSize * 0.2
+          const logoX = (qrSize - logoSize) / 2
+          const logoY = (qrSize - logoSize) / 2
+          ctx.fillStyle = '#FFFFFF'
+          ctx.fillRect(logoX - 5, logoY - 5, logoSize + 10, logoSize + 10)
+          ctx.drawImage(logo, logoX, logoY, logoSize, logoSize)
+          resolve()
+        }
+        logo.onerror = () => reject(new Error('Error al cargar el logo'))
+        logo.src = '/images/flama.png'
+      }).catch(() => {})
+      setQrDataURLCliente(canvas.toDataURL('image/png'))
+      setModalQRCliente(true)
+    } catch (err) {
+      console.error('Error generando QR cliente:', err)
+      setError('Error al generar el código QR del cliente')
+    }
+  }
+
+  const cerrarModalQRCliente = () => {
+    setModalQRCliente(false)
+    setQrDataURLCliente('')
+  }
+
+  const descargarQRCliente = () => {
+    if (!qrDataURLCliente || !clienteSeleccionado) return
+    const link = document.createElement('a')
+    link.href = qrDataURLCliente
+    link.download = `QR_cliente_${clienteSeleccionado.id}_${obtenerNombreCompleto(clienteSeleccionado).replace(/\s+/g, '_')}.png`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -2605,6 +2656,25 @@ export default function ClientesPage() {
                 </CardContent>
               </Card>
 
+              {/* QR general del cliente */}
+              <Card variant='outlined' sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant='h6' gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <QrCodeIcon /> QR general (cliente)
+                  </Typography>
+                  <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
+                    Este QR identifica al cliente. Al escanearlo en Ventas, Abonos o Clientes se cargan los domicilios si los hay.
+                  </Typography>
+                  <Button
+                    variant='outlined'
+                    startIcon={<QrCodeIcon />}
+                    onClick={abrirModalQRCliente}
+                  >
+                    Ver e imprimir QR del cliente
+                  </Button>
+                </CardContent>
+              </Card>
+
               {/* Domicilios */}
               <Card variant='outlined'>
                 <CardContent>
@@ -2638,7 +2708,7 @@ export default function ClientesPage() {
                                   />
                                   <Chip
                                     icon={<QrCodeIcon />}
-                                    label={domicilio.codigoQR}
+                                    label='Ver QR domicilio'
                                     color='primary'
                                     variant='outlined'
                                     size='small'
@@ -2709,13 +2779,13 @@ export default function ClientesPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Modal de Código QR */}
+      {/* Modal de Código QR (domicilio) */}
       <Dialog open={modalQR} onClose={cerrarModalQR} maxWidth='sm' fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <QrCodeIcon />
-              <Typography variant='h6'>Código QR - {domicilioQR?.codigoQR}</Typography>
+              <Typography variant='h6'>QR domicilio</Typography>
             </Box>
             <IconButton onClick={cerrarModalQR} size='small'>
               <CloseIcon />
@@ -2770,6 +2840,56 @@ export default function ClientesPage() {
         <DialogActions>
           <Button onClick={cerrarModalQR}>Cerrar</Button>
           <Button onClick={descargarQR} variant='contained' startIcon={<DownloadIcon />} disabled={!qrDataURL}>
+            Descargar como Imagen
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal QR general del cliente */}
+      <Dialog open={modalQRCliente} onClose={cerrarModalQRCliente} maxWidth='sm' fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <QrCodeIcon />
+              <Typography variant='h6'>QR general (cliente)</Typography>
+            </Box>
+            <IconButton onClick={cerrarModalQRCliente} size='small'>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {clienteSeleccionado && (
+            <Box sx={{ textAlign: 'center', py: 2 }}>
+              <Typography variant='body2' color='text.secondary' gutterBottom>
+                {obtenerNombreCompleto(clienteSeleccionado)}
+              </Typography>
+              {qrDataURLCliente && (
+                <Box sx={{ my: 3 }}>
+                  <img
+                    src={qrDataURLCliente}
+                    alt='QR Code Cliente'
+                    style={{
+                      width: '80%',
+                      maxWidth: '400px',
+                      height: 'auto',
+                      border: '2px solid #e0e0e0',
+                      borderRadius: '8px',
+                      padding: '16px',
+                      backgroundColor: '#ffffff'
+                    }}
+                  />
+                </Box>
+              )}
+              <Typography variant='caption' color='text.secondary'>
+                Al escanear en Ventas, Abonos o Clientes se identifica al cliente y se listan sus domicilios.
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cerrarModalQRCliente}>Cerrar</Button>
+          <Button onClick={descargarQRCliente} variant='contained' startIcon={<DownloadIcon />} disabled={!qrDataURLCliente}>
             Descargar como Imagen
           </Button>
         </DialogActions>

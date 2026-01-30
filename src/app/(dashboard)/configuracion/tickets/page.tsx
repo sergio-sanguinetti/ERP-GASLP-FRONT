@@ -101,6 +101,8 @@ interface ConfigTicket {
     alineacion: 'izquierda' | 'centro' | 'derecha'
   }
   
+  // QR del ticket (URL o texto que se codifica en el QR)
+  urlQR: string
   // Estado
   activo: boolean
   fechaCreacion: string
@@ -149,6 +151,7 @@ const configInicial: ConfigTicket = {
     colorPrincipal: '#1976d2',
     alineacion: 'centro'
   },
+  urlQR: '',
   activo: true,
   fechaCreacion: '2024-01-01',
   fechaModificacion: '2024-01-01'
@@ -224,6 +227,7 @@ export default function ConfiguracionTicketsPage() {
           colorPrincipal: item.diseño?.colorPrincipal || '#1976d2',
           alineacion: item.diseño?.alineacion as 'izquierda' | 'centro' | 'derecha' || 'centro'
         },
+        urlQR: item.urlQR || '',
         activo: item.activo,
         fechaCreacion: item.fechaCreacion,
         fechaModificacion: item.fechaModificacion
@@ -293,6 +297,7 @@ export default function ConfiguracionTicketsPage() {
           colorPrincipal: data.diseño?.colorPrincipal || '#1976d2',
           alineacion: data.diseño?.alineacion as 'izquierda' | 'centro' | 'derecha' || 'centro'
         },
+        urlQR: data.urlQR || '',
         activo: data.activo,
         fechaCreacion: data.fechaCreacion,
         fechaModificacion: data.fechaModificacion
@@ -381,6 +386,7 @@ export default function ConfiguracionTicketsPage() {
         mostrarRedesSociales: config.mostrarRedesSociales,
         textos: config.textos,
         diseño: config.diseño,
+        urlQR: config.urlQR || undefined,
         activo: config.activo
       })
       
@@ -593,6 +599,33 @@ export default function ConfiguracionTicketsPage() {
                   onChange={handleFileChange}
                 />
               </Box>
+            </CardContent>
+          </Card>
+
+          {/* QR del ticket */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                QR del ticket de venta
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                URL o texto que se codificará en el código QR del ticket. Al escanear el QR en el ticket de venta (app móvil) se abrirá o mostrará este contenido. Si está vacío, se usa el QR por defecto (datos del ticket).
+              </Typography>
+              <TextField
+                fullWidth
+                label="URL o texto para el QR"
+                placeholder="https://ejemplo.com o texto libre"
+                value={config.urlQR}
+                onChange={(e) => manejarCambio('urlQR', e.target.value)}
+                margin="normal"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <LanguageIcon />
+                    </InputAdornment>
+                  )
+                }}
+              />
             </CardContent>
           </Card>
 

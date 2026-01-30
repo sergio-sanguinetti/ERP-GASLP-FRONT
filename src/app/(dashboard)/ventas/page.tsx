@@ -13,6 +13,7 @@ import {
   configuracionesAPI,
   categoriasProductoAPI,
   rutasAPI,
+  configuracionTicketsAPI,
   type Cliente,
   type Usuario,
   type Producto,
@@ -26,7 +27,8 @@ import {
   type CreateCategoriaProductoRequest,
   type Sede,
   type Ruta,
-  type CreateClienteRequest
+  type CreateClienteRequest,
+  type ConfiguracionTicket
 } from '@/lib/api'
 
 import {
@@ -47,6 +49,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   IconButton,
   Tooltip,
   Dialog,
@@ -92,7 +95,8 @@ import {
   Search as SearchIcon,
   Person as PersonIcon,
   LocationOn as LocationOnIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  Receipt as ReceiptIcon
 } from '@mui/icons-material'
 
 // Tipos locales
@@ -102,6 +106,7 @@ interface FiltrosPedidos {
   cliente: string
   tipoCliente: string
   zona: string
+  rutaId: string
   estado: string
   mostrarTodos: boolean
 }
@@ -148,7 +153,8 @@ export default function VentasPage() {
     calle: '',
     numeroExterior: '',
     colonia: '',
-    rutaId: ''
+    rutaId: '',
+    zonaId: '' // Se asigna automáticamente al seleccionar la ruta
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -170,10 +176,17 @@ export default function VentasPage() {
     cliente: '',
     tipoCliente: '',
     zona: '',
+    rutaId: '',
     estado: '',
     mostrarTodos: false
   })
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteAnalisis | null>(null)
+  const [paginaPedidos, setPaginaPedidos] = useState(0)
+  const [filasPorPaginaPedidos, setFilasPorPaginaPedidos] = useState(10)
+  const [pedidoParaTicket, setPedidoParaTicket] = useState<Pedido | null>(null)
+  const [dialogoTicketAbierto, setDialogoTicketAbierto] = useState(false)
+  const [htmlTicket, setHtmlTicket] = useState('')
+  const [loadingTicket, setLoadingTicket] = useState(false)
 
   const [formularioPedido, setFormularioPedido] = useState({
     clienteId: '',
@@ -309,6 +322,56 @@ export default function VentasPage() {
       }))
     }
   }, [preciosBase.precioPorLitro])
+
+  // Cargar configuración de ticket y generar HTML cuando se abre el diálogo de ticket
+  useEffect(() => {
+    if (!dialogoTicketAbierto || !pedidoParaTicket) {
+      if (!dialogoTicketAbierto) setHtmlTicket('')
+      return
+    }
+    let cancelled = false
+    setLoadingTicket(true)
+    configuracionTicketsAPI
+      .get('venta')
+      .then(config => {
+        if (!cancelled && pedidoParaTicket) {
+          setHtmlTicket(generarHtmlTicketVenta(pedidoParaTicket, config))
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          const configDefault: ConfiguracionTicket = {
+            id: '',
+            tipoTicket: 'venta',
+            nombreEmpresa: 'ERPGASLP',
+            razonSocial: '',
+            direccion: 'Av. Principal #123',
+            telefono: '',
+            email: '',
+            sitioWeb: '',
+            rfc: '',
+            logo: '',
+            mostrarLogo: true,
+            tamañoLogo: 'mediano',
+            redesSociales: {},
+            mostrarRedesSociales: false,
+            textos: { encabezado: '', piePagina: '', mostrarMensaje: false },
+            diseño: { mostrarFecha: true, mostrarHora: true, mostrarCajero: true, mostrarCliente: true, colorPrincipal: '#1976d2', alineacion: 'centro' },
+            urlQR: '',
+            activo: true,
+            fechaCreacion: '',
+            fechaModificacion: ''
+          }
+          setHtmlTicket(generarHtmlTicketVenta(pedidoParaTicket, configDefault))
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingTicket(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [dialogoTicketAbierto, pedidoParaTicket])
 
   const esSuperAdministrador = usuario?.rol === 'superAdministrador'
 
@@ -490,22 +553,15 @@ export default function VentasPage() {
         }
       }
       
-      // Si el usuario es repartidor, filtrar por sus rutas asignadas
+      // Si el usuario es repartidor, mostrar solo las rutas asignadas al repartidor
       if (usuario?.rol === 'repartidor' && usuario?.id) {
-        // Filtrar rutas donde el usuario es repartidor
-        const rutasDelUsuario = rutasFiltradas.filter(ruta => 
+        const rutasDelUsuario = rutasFiltradas.filter(ruta =>
           ruta.repartidores?.some((rep: any) => rep.id === usuario.id)
         )
-        
-        // Extraer las zonas únicas de las rutas del usuario
-        const zonasDelUsuario = [...new Set(rutasDelUsuario.map(r => r.zona).filter(Boolean))]
-        
-        // Si el usuario tiene rutas asignadas, filtrar todas las rutas por esas zonas
-        if (zonasDelUsuario.length > 0) {
-          rutasFiltradas = rutasFiltradas.filter(ruta => zonasDelUsuario.includes(ruta.zona))
-          console.log(`Rutas filtradas por zona para repartidor: ${rutasFiltradas.length} rutas en zonas: ${zonasDelUsuario.join(', ')}`)
+        if (rutasDelUsuario.length > 0) {
+          rutasFiltradas = rutasDelUsuario
+          console.log(`Rutas asignadas al repartidor: ${rutasFiltradas.length}`, rutasFiltradas.map(r => r.nombre))
         } else {
-          // Si no tiene rutas asignadas, no mostrar ninguna
           rutasFiltradas = []
           console.log('El repartidor no tiene rutas asignadas')
         }
@@ -550,10 +606,12 @@ export default function VentasPage() {
       if (filtrosPedidos.fechaDesde) filtros.fechaDesde = filtrosPedidos.fechaDesde
       if (filtrosPedidos.fechaHasta) filtros.fechaHasta = filtrosPedidos.fechaHasta
       if (filtrosPedidos.estado) filtros.estado = filtrosPedidos.estado
+      if (filtrosPedidos.rutaId) filtros.rutaId = filtrosPedidos.rutaId
 
       console.log('Filtros enviados:', filtros)
 
       const data = await pedidosAPI.getAll(filtros)
+      setPaginaPedidos(0)
 
       console.log('Pedidos recibidos:', data.length, 'pedidos')
       console.log(
@@ -854,6 +912,7 @@ export default function VentasPage() {
         estado: '',
         codigoPostal: '',
         rutaId: formularioClienteRapido.rutaId || undefined,
+        zonaId: formularioClienteRapido.zonaId || undefined, // Zona de la ruta seleccionada
         estadoCliente: 'activo',
         limiteCredito: 0,
         saldoActual: 0,
@@ -878,7 +937,8 @@ export default function VentasPage() {
         calle: '',
         numeroExterior: '',
         colonia: '',
-        rutaId: ''
+        rutaId: '',
+        zonaId: ''
       })
       
       alert('Cliente creado exitosamente')
@@ -901,7 +961,10 @@ export default function VentasPage() {
       }
 
       const ahora = new Date()
-      
+      const tzMexico = 'America/Mexico_City'
+      const fechaPedidoMexico = ahora.toLocaleDateString('en-CA', { timeZone: tzMexico })
+      const horaPedidoMexico = ahora.toLocaleTimeString('en-GB', { timeZone: tzMexico, hour: '2-digit', minute: '2-digit', hour12: false })
+
       // Calcular totales
       const totalLitros = formularioPedido.productos.reduce((sum, p) => sum + (p.litros || p.cantidad || 0), 0)
       const totalMonto = formularioPedido.productos.reduce((sum, p) => sum + (p.subtotal || (p.cantidad * p.precio) || 0), 0)
@@ -976,10 +1039,10 @@ export default function VentasPage() {
       const data: CreatePedidoRequest = {
         clienteId: formularioPedido.clienteId,
         tipoServicio: formularioPedido.tipoServicio,
-        horaPedido: formularioPedido.horario || ahora.toISOString().slice(11, 16),
+        horaPedido: formularioPedido.horario || horaPedidoMexico,
         fechaPedido: pedidoEditando
-          ? (pedidoEditando.fechaPedido && String(pedidoEditando.fechaPedido).slice(0, 10)) || ahora.toISOString().split('T')[0]
-          : ahora.toISOString().split('T')[0],
+          ? (pedidoEditando.fechaPedido && String(pedidoEditando.fechaPedido).slice(0, 10)) || fechaPedidoMexico
+          : fechaPedidoMexico,
         repartidorId: formularioPedido.repartidorId || undefined,
         observaciones: formularioPedido.observaciones || undefined,
         calculoPipas: calculoPipasData,
@@ -1252,6 +1315,185 @@ export default function VentasPage() {
     }
   }
 
+  const numberToWords = (num: number) => {
+    const ones = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE']
+    const tens = ['', '', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA']
+    const teens = ['DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISÉIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE']
+    const integerPart = Math.floor(num)
+    const decimalPart = Math.round((num - integerPart) * 100)
+    if (integerPart === 0) return `CERO ${decimalPart}/100 M.N.`
+    if (integerPart < 10) return `${ones[integerPart]} ${decimalPart}/100 M.N.`
+    if (integerPart < 20) return `${teens[integerPart - 10]} ${decimalPart}/100 M.N.`
+    if (integerPart < 100) {
+      const tensDigit = Math.floor(integerPart / 10)
+      const onesDigit = integerPart % 10
+      if (onesDigit === 0) return `${tens[tensDigit]} ${decimalPart}/100 M.N.`
+      return `${tens[tensDigit]} Y ${ones[onesDigit]} ${decimalPart}/100 M.N.`
+    }
+    return `${integerPart.toLocaleString('es-MX')} ${decimalPart}/100 M.N.`
+  }
+
+  const generarHtmlTicketVenta = (pedido: Pedido, config: ConfiguracionTicket) => {
+    const total = pedido.ventaTotal ?? 0
+    const clientName = pedido.cliente
+      ? `${pedido.cliente.nombre} ${pedido.cliente.apellidoPaterno ?? ''} ${pedido.cliente.apellidoMaterno ?? ''}`.trim()
+      : 'Público en General'
+    const clientAddress = pedido.cliente
+      ? [pedido.cliente.calle, pedido.cliente.numeroExterior, pedido.cliente.colonia].filter(Boolean).join(', ')
+      : ''
+    const repartidorName = pedido.repartidor
+      ? `${pedido.repartidor.nombres} ${pedido.repartidor.apellidoPaterno ?? ''} ${pedido.repartidor.apellidoMaterno ?? ''}`.trim()
+      : 'Operador'
+    const folio = `F${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`
+    const formattedDate = new Date(pedido.fechaPedido).toLocaleString('es-MX', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })
+
+    let productsHTML = ''
+    if (pedido.productosPedido && pedido.productosPedido.length > 0) {
+      productsHTML = pedido.productosPedido
+        .map(
+          (pp) =>
+            `<tr>
+              <td style="text-align: left; padding: 2px; font-size: 9px;">${pp.producto?.nombre ?? 'Producto'}</td>
+              <td style="text-align: center; padding: 2px; font-size: 9px;">${pp.cantidad}</td>
+              <td style="text-align: right; padding: 2px; font-size: 9px;">$${(pp.precio ?? 0).toFixed(2)}</td>
+              <td style="text-align: right; padding: 2px; font-size: 9px;">$${(pp.subtotal ?? pp.cantidad * (pp.precio ?? 0)).toFixed(2)}</td>
+            </tr>`
+        )
+        .join('')
+    } else {
+      const label = pedido.tipoServicio === 'pipas' ? 'Litro de Gas LP' : 'Cilindro de Gas LP'
+      productsHTML = `<tr>
+        <td style="text-align: left; padding: 2px; font-size: 9px;">${label}</td>
+        <td style="text-align: center; padding: 2px; font-size: 9px;">1</td>
+        <td style="text-align: right; padding: 2px; font-size: 9px;">$${total.toFixed(2)}</td>
+        <td style="text-align: right; padding: 2px; font-size: 9px;">$${total.toFixed(2)}</td>
+      </tr>`
+    }
+
+    const paymentMethodsHTML =
+      pedido.pagos
+        ?.map(
+          (p) =>
+            `<p style="margin: 4px 0;">${p.tipo === 'credito' ? 'Uso de Crédito' : p.metodo?.nombre ?? 'Pago'}: $${(p.monto ?? 0).toFixed(2)}${p.folio ? ` (Folio: ${p.folio})` : ''}</p>`
+        )
+        .join('') ?? ''
+    const signatureFromPago = pedido.pagos?.find((p) => p.firmaCliente)?.firmaCliente
+    const signatureHTML =
+      signatureFromPago && typeof signatureFromPago === 'string'
+        ? `<div style="margin: 10px 0;"><p style="font-size: 10px; font-weight: bold; margin-bottom: 4px;">Firma del cliente:</p><img src="${signatureFromPago}" alt="Firma" style="max-width: 100%; max-height: 80px; border: 1px solid #ccc; display: block;" /></div>`
+        : ''
+
+    const companyInfo = {
+      name: config.nombreEmpresa ?? 'ERPGASLP',
+      address: config.direccion ?? '',
+      city: config.razonSocial ?? '',
+      phone: config.telefono ? `Tel: ${config.telefono}` : '',
+      email: config.email ?? '',
+      sitioWeb: config.sitioWeb ?? '',
+      rfc: config.rfc ?? '',
+      logo: config.logo,
+      mostrarLogo: config.mostrarLogo ?? true,
+      tamañoLogo: config.tamañoLogo ?? 'mediano',
+      textos: config.textos ?? {},
+      diseño: config.diseño ?? { mostrarFecha: true, mostrarHora: true, mostrarCajero: true, mostrarCliente: true, colorPrincipal: '#1976d2', alineacion: 'centro' }
+    }
+    const qrData =
+      config.urlQR && String(config.urlQR).trim()
+        ? String(config.urlQR).trim()
+        : JSON.stringify({
+            folio,
+            fecha: formattedDate,
+            monto: total.toFixed(2),
+            cliente: clientName,
+            repartidor: repartidorName,
+            tipo: 'venta'
+          })
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          @media print { @page { margin: 0; } body { margin: 0; } }
+          body { font-family: Arial, sans-serif; max-width: 80mm; width: 80mm; margin: 0 auto; padding: 10px 8px; font-size: 11px; color: #000; box-sizing: border-box; }
+          * { box-sizing: border-box; }
+          .header { text-align: center; margin-bottom: 10px; }
+          .company-name { font-size: 16px; font-weight: bold; margin-bottom: 4px; text-transform: uppercase; }
+          .separator { border-top: 1px solid #000; margin: 8px 0; }
+          .title { text-align: center; font-size: 12px; font-weight: bold; margin: 8px 0; }
+          .folio { text-align: center; font-size: 10px; margin-bottom: 8px; }
+          table { width: 100%; border-collapse: collapse; margin: 8px 0; table-layout: fixed; }
+          th { border-bottom: 2px solid #000; padding: 3px; font-size: 9px; font-weight: bold; text-align: left; }
+          th.col-qty { text-align: center; width: 15%; }
+          th.col-price, th.col-amount { text-align: right; width: 25%; }
+          td { padding: 3px; font-size: 9px; }
+          .total-row { display: flex; justify-content: space-between; margin: 8px 0; font-weight: bold; font-size: 12px; border-top: 1px solid #000; padding-top: 4px; }
+          .total-words { text-align: center; font-style: italic; font-size: 9px; margin: 8px 0; }
+          .footer { text-align: center; font-size: 10px; margin-top: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          ${companyInfo.mostrarLogo && companyInfo.logo ? `<img src="${companyInfo.logo}" style="max-width: ${companyInfo.tamañoLogo === 'pequeño' ? '60px' : companyInfo.tamañoLogo === 'mediano' ? '100px' : '140px'}; max-height: 80px; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;" />` : ''}
+          <div class="company-name">${companyInfo.name}</div>
+          ${companyInfo.address ? `<div>${companyInfo.address}</div>` : ''}
+          ${companyInfo.city ? `<div>${companyInfo.city}</div>` : ''}
+          ${companyInfo.phone ? `<div>${companyInfo.phone}</div>` : ''}
+          ${companyInfo.email ? `<div>${companyInfo.email}</div>` : ''}
+          ${companyInfo.rfc ? `<div><strong>RFC: ${companyInfo.rfc}</strong></div>` : ''}
+        </div>
+        <div class="separator"></div>
+        <div class="title">TICKET VENTA</div>
+        <div class="folio">Folio: ${folio}</div>
+        ${companyInfo.diseño?.mostrarFecha ? `<p style="text-align: center; font-size: 11px;"><strong>Fecha:</strong> ${formattedDate}</p>` : ''}
+        <div class="separator"></div>
+        <div><p><strong>Cliente:</strong> ${clientName}</p>${clientAddress ? `<p><strong>Dirección:</strong> ${clientAddress}</p>` : ''}</div>
+        <div class="separator"></div>
+        <table>
+          <thead><tr><th>Producto</th><th class="col-qty">Cant.</th><th class="col-price">Precio Unit.</th><th class="col-amount">Importe</th></tr></thead>
+          <tbody>${productsHTML}</tbody>
+        </table>
+        <div class="separator"></div>
+        <div class="total-row"><span>TOTAL:</span><span>$${total.toFixed(2)}</span></div>
+        <div class="total-words">${numberToWords(total)}</div>
+        <div class="separator"></div>
+        ${paymentMethodsHTML ? `<div><p><strong>Forma de Pago:</strong></p>${paymentMethodsHTML}</div><div class="separator"></div>` : ''}
+        ${signatureHTML}
+        <p><strong>Repartidor(a):</strong> ${repartidorName}</p>
+        <div class="separator"></div>
+        <div class="footer"><p>Representación impresa de la factura electrónica</p><p>Gracias por su preferencia</p></div>
+        <div style="text-align: center; margin: 10px 0;"><img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrData)}" alt="QR" style="max-width: 150px; height: auto;" /><p style="font-size: 9px;">Folio: ${folio}</p></div>
+      </body>
+      </html>
+    `
+  }
+
+  const abrirDialogoTicket = (pedido: Pedido) => {
+    setPedidoParaTicket(pedido)
+    setDialogoTicketAbierto(true)
+  }
+
+  const descargarTicketPdf = () => {
+    if (!htmlTicket) return
+    const ventana = window.open('', '_blank')
+    if (ventana) {
+      ventana.document.write(htmlTicket)
+      ventana.document.close()
+      ventana.focus()
+      setTimeout(() => {
+        ventana.print()
+      }, 300)
+    }
+  }
+
   const getEstadoLabel = (estado: string) => {
     switch (estado) {
       case 'entregado':
@@ -1291,14 +1533,31 @@ export default function VentasPage() {
     const cumpleCliente =
       !filtrosPedidos.cliente || nombreCliente.toLowerCase().includes(filtrosPedidos.cliente.toLowerCase())
     const cumpleZona = !filtrosPedidos.zona || pedido.zona === filtrosPedidos.zona
+    const cumpleRuta =
+      !filtrosPedidos.rutaId || pedido.rutaId === filtrosPedidos.rutaId || pedido.ruta?.id === filtrosPedidos.rutaId
     const cumpleEstado = !filtrosPedidos.estado || pedido.estado === filtrosPedidos.estado
     const cumpleMostrarTodos = filtrosPedidos.mostrarTodos || pedido.estado !== 'cancelado'
 
-    return cumpleFechaDesde && cumpleFechaHasta && cumpleCliente && cumpleZona && cumpleEstado && cumpleMostrarTodos
+    return (
+      cumpleFechaDesde &&
+      cumpleFechaHasta &&
+      cumpleCliente &&
+      cumpleZona &&
+      cumpleRuta &&
+      cumpleEstado &&
+      cumpleMostrarTodos
+    )
   })
 
   const zonasUnicas = [...new Set(pedidos.map(p => p.zona).filter(Boolean))]
   const rutasUnicas = [...new Set(pedidos.map(p => p.ruta?.nombre).filter(Boolean))]
+
+  // Paginación del listado de pedidos (página efectiva para no quedar fuera de rango al filtrar)
+  const totalFilas = pedidosFiltrados.length
+  const totalPaginas = filasPorPaginaPedidos > 0 ? Math.max(1, Math.ceil(totalFilas / filasPorPaginaPedidos)) : 1
+  const paginaEfectiva = totalFilas === 0 ? 0 : Math.min(paginaPedidos, totalPaginas - 1)
+  const inicioPagina = paginaEfectiva * filasPorPaginaPedidos
+  const pedidosPaginados = pedidosFiltrados.slice(inicioPagina, inicioPagina + filasPorPaginaPedidos)
 
   const granTotalOperacion = (cortePipas?.totalVentas || 0) + (corteCilindros?.totalVentas || 0)
   const efectivoConsolidado = (cortePipas?.totalAbonos || 0) + (corteCilindros?.totalAbonos || 0)
@@ -1319,12 +1578,22 @@ export default function VentasPage() {
     )
   }
 
+  const fechaHoy = new Date()
+  const diaNumero = fechaHoy.getDate()
+  const diaSemana = fechaHoy.toLocaleDateString('es-MX', { weekday: 'long' })
+  const diaSemanaCapitalizado = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1)
+
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant='h4' component='h1'>
-          Sistema de Ventas
-        </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Typography variant='h4' component='h1'>
+            Sistema de Ventas
+          </Typography>
+          <Typography variant='body1' color='text.secondary' sx={{ mt: 0.5 }}>
+            Hoy: {diaSemanaCapitalizado} {diaNumero}
+          </Typography>
+        </Box>
         {/* Selector de sede solo para super administradores y solo en vistas que no sean catálogo */}
         {esSuperAdministrador && vistaActual !== 'catalogo' && (
           <FormControl sx={{ minWidth: 250 }}>
@@ -1852,6 +2121,69 @@ export default function VentasPage() {
                     </TableContainer>
                   </Box>
 
+                  {/* Válvulas (para cilindros) */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant='h6' sx={{ color: 'info.main' }} gutterBottom>
+                      VÁLVULAS
+                    </Typography>
+                    <TableContainer component={Paper} variant='outlined'>
+                      <Table size='small'>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Producto</TableCell>
+                            <TableCell align='right'>Precio</TableCell>
+                            <TableCell>Unidad</TableCell>
+                            <TableCell align='center'>Acciones</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {productos
+                            .filter(p => {
+                              const categoriaCodigo = p.categoria?.codigo || categoriasProducto.find(c => c.id === p.categoriaId)?.codigo
+                              const categoriaNombre = p.categoria?.nombre || categoriasProducto.find(c => c.id === p.categoriaId)?.nombre
+                              return categoriaCodigo === 'val' || categoriaNombre?.toLowerCase().includes('valvula')
+                            })
+                            .map(producto => (
+                              <TableRow key={producto.id}>
+                                <TableCell>
+                                  <Typography variant='subtitle2'>{producto.nombre}</Typography>
+                                  <Typography variant='body2' color='text.secondary'>
+                                    {producto.descripcion}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell align='right'>
+                                  <Typography variant='h6' color='primary'>
+                                    ${typeof producto.precio === 'number' ? producto.precio.toFixed(2) : parseFloat(producto.precio || 0).toFixed(2)}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>{producto.unidad}</TableCell>
+                                <TableCell align='center'>
+                                  <Tooltip title='Editar producto'>
+                                    <IconButton size='small' onClick={() => abrirDialogo('producto', producto)}>
+                                      <EditIcon />
+                                    </IconButton>
+                                  </Tooltip>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          {productos.filter(p => {
+                            const categoriaCodigo = p.categoria?.codigo || categoriasProducto.find(c => c.id === p.categoriaId)?.codigo
+                            const categoriaNombre = p.categoria?.nombre || categoriasProducto.find(c => c.id === p.categoriaId)?.nombre
+                            return categoriaCodigo === 'val' || categoriaNombre?.toLowerCase().includes('valvula')
+                          }).length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={4} align='center'>
+                                <Typography variant='body2' color='text.secondary'>
+                                  No hay productos de VÁLVULAS disponibles
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Box>
+
                   {/* Tanques Nuevos */}
                   <Box>
                     <Typography variant='h6' color='success.main' gutterBottom>
@@ -2201,14 +2533,14 @@ export default function VentasPage() {
                   <FormControl fullWidth>
                     <InputLabel>Ruta</InputLabel>
                     <Select
-                      value={filtrosPedidos.zona}
-                      onChange={e => manejarCambioFiltros('zona', e.target.value)}
+                      value={filtrosPedidos.rutaId}
+                      onChange={e => manejarCambioFiltros('rutaId', e.target.value)}
                       label='Ruta'
                     >
                       <MenuItem value=''>Todas las rutas</MenuItem>
-                      {zonasUnicas.map(zona => (
-                        <MenuItem key={zona} value={zona}>
-                          {zona}
+                      {rutas.map(ruta => (
+                        <MenuItem key={ruta.id} value={ruta.id}>
+                          {ruta.nombre} {ruta.codigo ? `(${ruta.codigo})` : ''}
                         </MenuItem>
                       ))}
                     </Select>
@@ -2258,6 +2590,7 @@ export default function VentasPage() {
                           cliente: '',
                           tipoCliente: '',
                           zona: '',
+                          rutaId: '',
                           estado: '',
                           mostrarTodos: false
                         })
@@ -2296,7 +2629,7 @@ export default function VentasPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {pedidosFiltrados.map(pedido => (
+                    {pedidosPaginados.map(pedido => (
                       <TableRow key={pedido.id} hover>
                         <TableCell>
                           <Typography variant='subtitle2' fontWeight='bold'>
@@ -2337,6 +2670,14 @@ export default function VentasPage() {
                         </TableCell>
                         <TableCell align='center'>
                           <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            <Tooltip title='Ver ticket'>
+                              <IconButton
+                                size='small'
+                                onClick={() => abrirDialogoTicket(pedido)}
+                              >
+                                <ReceiptIcon />
+                              </IconButton>
+                            </Tooltip>
                             <Tooltip title='Ver detalles'>
                               <IconButton
                                 size='small'
@@ -2395,6 +2736,20 @@ export default function VentasPage() {
                   </TableBody>
                 </Table>
               </TableContainer>
+              <TablePagination
+                component='div'
+                count={totalFilas}
+                page={paginaEfectiva}
+                onPageChange={(_, nuevaPagina) => setPaginaPedidos(nuevaPagina)}
+                rowsPerPage={filasPorPaginaPedidos}
+                onRowsPerPageChange={e => {
+                  setFilasPorPaginaPedidos(parseInt(e.target.value, 10))
+                  setPaginaPedidos(0)
+                }}
+                rowsPerPageOptions={[5, 10, 25, 50]}
+                labelRowsPerPage='Filas por página:'
+                labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+              />
             </CardContent>
           </Card>
         </Box>
@@ -4594,8 +4949,21 @@ export default function VentasPage() {
                 <InputLabel>Ruta</InputLabel>
                 <Select
                   value={formularioClienteRapido.rutaId}
-                  onChange={e => setFormularioClienteRapido(prev => ({ ...prev, rutaId: e.target.value }))}
+                  onChange={e => {
+                    const id = e.target.value as string
+                    const ruta = rutas.find(r => r.id === id)
+                    const zonaId = ruta?.zonaId || (ruta as any)?.zonaRelacion?.id || ''
+                    setFormularioClienteRapido(prev => ({ ...prev, rutaId: id, zonaId }))
+                  }}
                   label='Ruta'
+                  MenuProps={{
+                    PaperProps: {
+                      sx: {
+                        maxHeight: 'min(400px, 60vh)',
+                        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 24px)',
+                      },
+                    },
+                  }}
                 >
                   <MenuItem value=''>Sin ruta</MenuItem>
                   {rutas
@@ -4694,8 +5062,21 @@ export default function VentasPage() {
                 <InputLabel>Ruta</InputLabel>
                 <Select
                   value={formularioClienteRapido.rutaId}
-                  onChange={e => setFormularioClienteRapido(prev => ({ ...prev, rutaId: e.target.value }))}
+                  onChange={e => {
+                    const id = e.target.value as string
+                    const ruta = rutas.find(r => r.id === id)
+                    const zonaId = ruta?.zonaId || (ruta as any)?.zonaRelacion?.id || ''
+                    setFormularioClienteRapido(prev => ({ ...prev, rutaId: id, zonaId }))
+                  }}
                   label='Ruta'
+                  MenuProps={{
+                    PaperProps: {
+                      sx: {
+                        maxHeight: 'min(400px, 60vh)',
+                        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 24px)',
+                      },
+                    },
+                  }}
                 >
                   <MenuItem value=''>Sin ruta</MenuItem>
                   {rutas
@@ -4974,6 +5355,59 @@ export default function VentasPage() {
             disabled={eliminando || (categoriaSeleccionada?._count?.productos || 0) > 0}
           >
             {eliminando ? 'Eliminando...' : 'Eliminar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Diálogo Ver / Descargar ticket de venta */}
+      <Dialog
+        open={dialogoTicketAbierto}
+        onClose={() => {
+          setDialogoTicketAbierto(false)
+          setPedidoParaTicket(null)
+        }}
+        maxWidth='sm'
+        fullWidth
+      >
+        <DialogTitle>
+          Ticket de venta {pedidoParaTicket?.numeroPedido ?? ''}
+        </DialogTitle>
+        <DialogContent>
+          {loadingTicket ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <LinearProgress sx={{ width: '100%' }} />
+            </Box>
+          ) : htmlTicket ? (
+            <Box sx={{ maxHeight: '70vh', overflow: 'auto' }}>
+              <iframe
+                title='Vista previa del ticket'
+                srcDoc={htmlTicket}
+                style={{
+                  width: '100%',
+                  minHeight: '500px',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: 4
+                }}
+              />
+            </Box>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setDialogoTicketAbierto(false)
+              setPedidoParaTicket(null)
+            }}
+          >
+            Cerrar
+          </Button>
+          <Button
+            variant='contained'
+            startIcon={<DownloadIcon />}
+            onClick={descargarTicketPdf}
+            disabled={!htmlTicket}
+          >
+            Descargar PDF
           </Button>
         </DialogActions>
       </Dialog>
