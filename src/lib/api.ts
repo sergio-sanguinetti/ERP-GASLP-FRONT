@@ -1,6 +1,13 @@
 // API Client para conectar con el backend
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+// En producción (HTTPS en Vercel), si la API está en HTTP se usa el proxy para evitar Mixed Content
+function getApiBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && envUrl.startsWith('http://')) {
+    return `${window.location.origin}/api/proxy`
+  }
+  return envUrl
+}
+const API_URL = getApiBaseUrl()
 
 export interface LoginRequest {
   email: string
@@ -743,13 +750,10 @@ export const rutasAPI = {
     if (filtros?.sedeId) queryParams.append('sedeId', filtros.sedeId)
 
     const queryString = queryParams.toString()
-    const url = `${API_URL}/rutas${queryString ? `?${queryString}` : ''}`
+    const url = `/rutas${queryString ? `?${queryString}` : ''}`
 
-    const response = await fetch(url, {
+    const response = await fetchWithAuth(url, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
     })
 
     if (!response.ok) {
@@ -761,7 +765,7 @@ export const rutasAPI = {
   },
 
   getById: async (id: string): Promise<Ruta> => {
-    const response = await fetch(`${API_URL}/rutas/${id}`, {
+    const response = await fetchWithAuth(`/rutas/${id}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -2069,6 +2073,24 @@ export const ventasAPI = {
 
     return response.json()
   },
+
+  /** Lista todos los cortes de caja (repartidores) para la página de Corte de Caja. */
+  getAllCortes: async (sedeId?: string): Promise<any[]> => {
+    const queryParams = new URLSearchParams()
+    if (sedeId) queryParams.append('sedeId', sedeId)
+    const queryString = queryParams.toString()
+    const url = `/cortes-caja${queryString ? `?${queryString}` : ''}`
+
+    const response = await fetchWithAuth(url, { method: 'GET' })
+
+    if (!response.ok) {
+      if (response.status === 404) return []
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener cortes')
+    }
+
+    return response.json()
+  },
 }
 
 // API de Créditos y Abonos
@@ -2194,6 +2216,7 @@ export interface PagosFilters {
   estado?: string
   fechaDesde?: string
   fechaHasta?: string
+  rutaId?: string
 }
 
 export const creditosAbonosAPI = {
@@ -2277,6 +2300,7 @@ export const creditosAbonosAPI = {
     if (filtros?.estado) queryParams.append('estado', filtros.estado)
     if (filtros?.fechaDesde) queryParams.append('fechaDesde', filtros.fechaDesde)
     if (filtros?.fechaHasta) queryParams.append('fechaHasta', filtros.fechaHasta)
+    if (filtros?.rutaId) queryParams.append('rutaId', filtros.rutaId)
 
     const queryString = queryParams.toString()
     const url = `/creditos-abonos/pagos${queryString ? `?${queryString}` : ''}`
@@ -2333,9 +2357,10 @@ export const creditosAbonosAPI = {
   },
 
   // Resumen de Cartera
-  getResumenCartera: async (clienteId?: string): Promise<ResumenCartera> => {
+  getResumenCartera: async (filtros?: { clienteId?: string; rutaId?: string }): Promise<ResumenCartera> => {
     const queryParams = new URLSearchParams()
-    if (clienteId) queryParams.append('clienteId', clienteId)
+    if (filtros?.clienteId) queryParams.append('clienteId', filtros.clienteId)
+    if (filtros?.rutaId) queryParams.append('rutaId', filtros.rutaId)
 
     const queryString = queryParams.toString()
     const url = `/creditos-abonos/resumen-cartera${queryString ? `?${queryString}` : ''}`
@@ -2350,13 +2375,15 @@ export const creditosAbonosAPI = {
     return response.json()
   },
 
-  // Clientes con Crédito
-  getClientesCredito: async (filtros?: ClientesFilters): Promise<ClienteCredito[]> => {
+  // Clientes con Crédito (paginado; solo primera ruta por defecto)
+  getClientesCredito: async (filtros?: ClientesFilters & { page?: number; pageSize?: number }): Promise<{ clientes: ClienteCredito[]; total: number }> => {
     const queryParams = new URLSearchParams()
     if (filtros?.nombre) queryParams.append('nombre', filtros.nombre)
     if (filtros?.rutaId) queryParams.append('rutaId', filtros.rutaId)
     if (filtros?.estadoCliente) queryParams.append('estadoCliente', filtros.estadoCliente)
     if (filtros?.sedeId) queryParams.append('sedeId', filtros.sedeId)
+    if (filtros?.page != null) queryParams.append('page', String(filtros.page))
+    if (filtros?.pageSize != null) queryParams.append('pageSize', String(filtros.pageSize))
 
     const queryString = queryParams.toString()
     const url = `/creditos-abonos/clientes-credito${queryString ? `?${queryString}` : ''}`
@@ -2371,10 +2398,13 @@ export const creditosAbonosAPI = {
     return response.json()
   },
 
-  // Historial de Límites
-  getHistorialLimites: async (clienteId?: string): Promise<HistorialLimiteCredito[]> => {
+  // Historial de Límites (paginado; solo primera ruta por defecto)
+  getHistorialLimites: async (filtros?: { clienteId?: string; rutaId?: string; page?: number; pageSize?: number }): Promise<{ historial: HistorialLimiteCredito[]; total: number }> => {
     const queryParams = new URLSearchParams()
-    if (clienteId) queryParams.append('clienteId', clienteId)
+    if (filtros?.clienteId) queryParams.append('clienteId', filtros.clienteId)
+    if (filtros?.rutaId) queryParams.append('rutaId', filtros.rutaId)
+    if (filtros?.page != null) queryParams.append('page', String(filtros.page))
+    if (filtros?.pageSize != null) queryParams.append('pageSize', String(filtros.pageSize))
 
     const queryString = queryParams.toString()
     const url = `/creditos-abonos/historial-limites${queryString ? `?${queryString}` : ''}`

@@ -1422,7 +1422,7 @@ export default function VentasPage() {
       <head>
         <meta charset="UTF-8">
         <style>
-          @media print { @page { margin: 0; } body { margin: 0; } }
+          @media print { @page { margin: 0; size: 80mm auto; } body { margin: 0; max-width: 80mm; width: 80mm; } }
           body { font-family: Arial, sans-serif; max-width: 80mm; width: 80mm; margin: 0 auto; padding: 10px 8px; font-size: 11px; color: #000; box-sizing: border-box; }
           * { box-sizing: border-box; }
           .header { text-align: center; margin-bottom: 10px; }
@@ -5378,12 +5378,13 @@ export default function VentasPage() {
               <LinearProgress sx={{ width: '100%' }} />
             </Box>
           ) : htmlTicket ? (
-            <Box sx={{ maxHeight: '70vh', overflow: 'auto' }}>
+            <Box sx={{ maxHeight: '70vh', overflow: 'auto', display: 'flex', justifyContent: 'center' }}>
               <iframe
-                title='Vista previa del ticket'
+                title='Vista previa del ticket (80 mm)'
                 srcDoc={htmlTicket}
                 style={{
-                  width: '100%',
+                  width: '80mm',
+                  maxWidth: '100%',
                   minHeight: '500px',
                   border: '1px solid #e0e0e0',
                   borderRadius: 4

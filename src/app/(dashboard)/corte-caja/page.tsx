@@ -97,6 +97,20 @@ import {
 
 import { ventasAPI, CorteRepartidor } from '@/lib/api'
 
+const TIMEZONE_MEXICO = 'America/Mexico_City'
+
+/** Fecha de hoy YYYY-MM-DD en Ciudad de México */
+function getHoyMexico(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: TIMEZONE_MEXICO })
+}
+
+/** Indica si una fecha ISO cae en el día "hoy" en Ciudad de México */
+function esHoyMexico(fechaIso: string | Date): boolean {
+  const d = typeof fechaIso === 'string' ? new Date(fechaIso) : fechaIso
+  const diaMexico = d.toLocaleDateString('en-CA', { timeZone: TIMEZONE_MEXICO })
+  return diaMexico === getHoyMexico()
+}
+
 // Tipos de datos
 interface RepartidorCorte {
   id: string
@@ -282,10 +296,15 @@ export default function CorteCajaPage() {
   const [repartidoresCorte, setRepartidoresCorte] = useState<RepartidorCorte[]>([])
   const [depositosBancarios, setDepositosBancarios] = useState<DepositoBancario[]>([])
   const [historialCaja, setHistorialCaja] = useState<AperturaCierreCaja[]>([])
+  const [historialCortesList, setHistorialCortesList] = useState<(RepartidorCorte & { fechaCorte: string })[]>([])
+  const [historialFechaDesde, setHistorialFechaDesde] = useState<string>('')
+  const [historialFechaHasta, setHistorialFechaHasta] = useState<string>('')
+  const [historialTipo, setHistorialTipo] = useState<'todos' | 'pipas' | 'cilindros'>('todos')
+  const [historialLoading, setHistorialLoading] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const [vistaActual, setVistaActual] = useState<
-    'dashboard' | 'validacion' | 'admin' | 'apertura-cierre' | 'historial' | 'depositos'
+    'dashboard' | 'validacion' | 'admin' | 'historial' | 'depositos'
   >('dashboard')
 
   useEffect(() => {
@@ -314,7 +333,7 @@ export default function CorteCajaPage() {
         nombre: `${c.repartidor?.nombres} ${c.repartidor?.apellidoPaterno}`,
         ruta: 'Ruta 001', // El backend debería devolver la ruta
         tipo: c.repartidor?.tipoRepartidor || 'pipas',
-        horaEntrega: new Date(c.fecha).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }),
+        horaEntrega: new Date(c.fecha).toLocaleTimeString('es-MX', { timeZone: TIMEZONE_MEXICO, hour: '2-digit', minute: '2-digit' }),
         totalDia: c.totalVentas + c.totalAbonos,
         estado: c.estado === 'pendiente' ? 'recibido' : c.estado,
         ventas: {
@@ -338,7 +357,9 @@ export default function CorteCajaPage() {
         }
       }))
 
-      setRepartidoresCorte(transformedCortes)
+      // Solo mostrar en el dashboard los cortes del día de hoy (horario Ciudad de México)
+      const cortesHoy = transformedCortes.filter((_, i) => esHoyMexico(allCortes[i].fecha))
+      setRepartidoresCorte(cortesHoy)
 
       // Transformar depósitos
       const allDepositos: DepositoBancario[] = []
@@ -366,6 +387,51 @@ export default function CorteCajaPage() {
       setLoading(false)
     }
   }
+
+  const fetchHistorialCortes = async () => {
+    if (!historialFechaDesde || !historialFechaHasta) return
+    try {
+      setHistorialLoading(true)
+      const allCortes: any[] = await ventasAPI.getAllCortes()
+      const desde = new Date(historialFechaDesde)
+      const hasta = new Date(historialFechaHasta)
+      hasta.setHours(23, 59, 59, 999)
+      const transformed: (RepartidorCorte & { fechaCorte: string })[] = allCortes
+        .filter((c: any) => {
+          const fecha = new Date(c.fecha)
+          if (fecha < desde || fecha > hasta) return false
+          if (historialTipo === 'pipas') return (c.repartidor?.tipoRepartidor || 'pipas') === 'pipas'
+          if (historialTipo === 'cilindros') return (c.repartidor?.tipoRepartidor || 'pipas') === 'cilindros'
+          return true
+        })
+        .map((c: any) => ({
+          id: c.id,
+          fechaCorte: c.fecha,
+          nombre: `${c.repartidor?.nombres} ${c.repartidor?.apellidoPaterno}`,
+          ruta: 'Ruta 001',
+          tipo: c.repartidor?.tipoRepartidor || 'pipas',
+          horaEntrega: new Date(c.fecha).toLocaleTimeString('es-MX', { timeZone: TIMEZONE_MEXICO, hour: '2-digit', minute: '2-digit' }),
+          totalDia: c.totalVentas + c.totalAbonos,
+          estado: c.estado === 'pendiente' ? 'recibido' : c.estado,
+          ventas: { montoTotal: c.totalVentas, litrosServicios: 0 },
+          abonos: { montoTotal: c.totalAbonos, cantidad: 0 },
+          efectivo: {
+            metodo: c.depositos?.length > 0 ? 'depositado-cajero' : 'entregado-planta',
+            montoDepositado: c.depositos?.reduce((sum: number, d: any) => sum + d.monto, 0) || 0,
+            billetesRechazados: c.depositos?.reduce((sum: number, d: any) => sum + d.billetesRechazados, 0) || 0,
+            monedasEntregadas: c.depositos?.reduce((sum: number, d: any) => sum + d.monedas, 0) || 0
+          },
+          formasPago: { terminal: { monto: 0, operaciones: [] }, transferencias: { monto: 0, operaciones: [] }, cheques: { monto: 0, operaciones: [] } }
+        }))
+      setHistorialCortesList(transformed)
+    } catch (error) {
+      console.error('Error fetching historial cortes:', error)
+      setHistorialCortesList([])
+    } finally {
+      setHistorialLoading(false)
+    }
+  }
+
   const [repartidorSeleccionado, setRepartidorSeleccionado] = useState<RepartidorCorte | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
   const [tipoDialogo, setTipoDialogo] = useState<
@@ -567,18 +633,11 @@ export default function CorteCajaPage() {
             Validación Individual
           </Button> */}
           <Button
-            variant={vistaActual === 'apertura-cierre' ? 'contained' : 'outlined'}
-            onClick={() => setVistaActual('apertura-cierre')}
-            startIcon={<AccountBalanceWalletIcon />}
-          >
-            Apertura/Cierre Caja
-          </Button>
-          <Button
             variant={vistaActual === 'historial' ? 'contained' : 'outlined'}
             onClick={() => setVistaActual('historial')}
             startIcon={<HistoryIcon />}
           >
-            Historial Caja
+            Historial de Cortes
           </Button>
           <Button
             variant={vistaActual === 'depositos' ? 'contained' : 'outlined'}
@@ -604,15 +663,24 @@ export default function CorteCajaPage() {
           <Card sx={{ mb: 3, bgcolor: 'primary.main', color: 'white' }}>
             <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
               <Typography variant='h4' gutterBottom sx={{ color: 'white' }}>
-                CORTES ENTREGADOS - PENDIENTES VALIDACIÓN
+                CORTES DEL DÍA DE HOY - PENDIENTES VALIDACIÓN
               </Typography>
               <Typography variant='h6' sx={{ color: 'white' }}>
                 Fecha:{' '}
                 {new Date().toLocaleDateString('es-MX', {
+                  timeZone: TIMEZONE_MEXICO,
                   weekday: 'long',
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric'
+                })}
+                {' · '}
+                Hora Ciudad de México:{' '}
+                {new Date().toLocaleTimeString('es-MX', {
+                  timeZone: TIMEZONE_MEXICO,
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit'
                 })}
               </Typography>
             </CardContent>
@@ -1002,218 +1070,144 @@ export default function CorteCajaPage() {
         </Box>
       )}
 
-      {/* Vista de Apertura/Cierre de Caja */}
-      {vistaActual === 'apertura-cierre' && (
+      {/* Vista Historial de Cortes */}
+      {vistaActual === 'historial' && (
         <Box>
-          {/* Estado Actual de la Caja */}
-          <Card sx={{ mb: 3, bgcolor: cajaAbierta ? 'success.main' : 'error.main', color: 'white' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant='h5' gutterBottom>
-                    Estado Actual de la Caja
-                  </Typography>
-                  <Typography variant='h3'>{cajaAbierta ? 'CAJA ABIERTA' : 'CAJA CERRADA'}</Typography>
-                  <Typography variant='body1'>
-                    {cajaAbierta ? 'La caja está operativa' : 'La caja no está operativa'}
-                  </Typography>
-                </Box>
-                <Box sx={{ textAlign: 'right' }}>
-                  <Typography variant='h6' gutterBottom>
-                    Fecha: {new Date().toLocaleDateString('es-MX')}
-                  </Typography>
-                  <Typography variant='h6'>
-                    Hora: {new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
+          <Typography variant='h6' gutterBottom>
+            Historial de Cortes
+          </Typography>
+          <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
+            Seleccione un rango de fechas y el tipo de servicio para consultar los cortes.
+          </Typography>
 
-          {/* Botones de Acción */}
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardContent sx={{ textAlign: 'center' }}>
-                  <AccountBalanceWalletIcon sx={{ fontSize: 60, color: 'success.main', mb: 2 }} />
-                  <Typography variant='h6' gutterBottom>
-                    Apertura de Caja
-                  </Typography>
-                  <Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
-                    Iniciar operaciones del día con el monto inicial
-                  </Typography>
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Grid container spacing={2} alignItems='center'>
+                <Grid item xs={12} sm={6} md={3}>
+                  <TextField
+                    fullWidth
+                    label='Fecha desde'
+                    type='date'
+                    value={historialFechaDesde}
+                    onChange={e => setHistorialFechaDesde(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    inputProps={{ max: historialFechaHasta || undefined }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <TextField
+                    fullWidth
+                    label='Fecha hasta'
+                    type='date'
+                    value={historialFechaHasta}
+                    onChange={e => setHistorialFechaHasta(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    inputProps={{ min: historialFechaDesde || undefined }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <FormControl fullWidth size='medium'>
+                    <InputLabel>Tipo</InputLabel>
+                    <Select
+                      value={historialTipo}
+                      label='Tipo'
+                      onChange={e => setHistorialTipo(e.target.value as 'todos' | 'pipas' | 'cilindros')}
+                    >
+                      <MenuItem value='todos'>Todos</MenuItem>
+                      <MenuItem value='pipas'>Pipas</MenuItem>
+                      <MenuItem value='cilindros'>Cilindros</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
                   <Button
                     variant='contained'
-                    color='success'
-                    size='large'
-                    onClick={() => abrirDialogoCaja('apertura')}
-                    disabled={cajaAbierta}
-                    startIcon={<AddIcon />}
+                    onClick={fetchHistorialCortes}
+                    disabled={!historialFechaDesde || !historialFechaHasta || historialLoading}
+                    startIcon={historialLoading ? undefined : <SearchIcon />}
                   >
-                    {cajaAbierta ? 'Caja ya está abierta' : 'Abrir Caja'}
+                    {historialLoading ? 'Buscando...' : 'Buscar'}
                   </Button>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardContent sx={{ textAlign: 'center' }}>
-                  <AccountBalanceWalletIcon sx={{ fontSize: 60, color: 'error.main', mb: 2 }} />
-                  <Typography variant='h6' gutterBottom>
-                    Cierre de Caja
-                  </Typography>
-                  <Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
-                    Finalizar operaciones del día y realizar arqueo
-                  </Typography>
-                  <Button
-                    variant='contained'
-                    color='error'
-                    size='large'
-                    onClick={() => abrirDialogoCaja('cierre')}
-                    disabled={!cajaAbierta}
-                    startIcon={<CloseIcon />}
-                  >
-                    {!cajaAbierta ? 'Caja ya está cerrada' : 'Cerrar Caja'}
-                  </Button>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-
-          {/* Resumen del Día */}
-          <Card>
-            <CardContent>
-              <Typography variant='h6' gutterBottom>
-                Resumen del Día
-              </Typography>
-
-              <Grid container spacing={3}>
-                <Grid item xs={12} sm={6} md={3}>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant='body2' color='text.secondary' gutterBottom>
-                      Cortes Entregados
-                    </Typography>
-                    <Typography variant='h4' color='primary'>
-                      {repartidoresCorte.length}
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant='body2' color='text.secondary' gutterBottom>
-                      Cortes Validados
-                    </Typography>
-                    <Typography variant='h4' color='success.main'>
-                      {repartidoresCorte.filter(r => r.estado === 'validado').length}
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant='body2' color='text.secondary' gutterBottom>
-                      Cortes Pendientes
-                    </Typography>
-                    <Typography variant='h4' color='warning.main'>
-                      {repartidoresCorte.filter(r => r.estado === 'pendiente').length}
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant='body2' color='text.secondary' gutterBottom>
-                      Total del Día
-                    </Typography>
-                    <Typography variant='h4' color='primary'>
-                      ${repartidoresCorte.reduce((sum, r) => sum + r.totalDia, 0).toLocaleString()}
-                    </Typography>
-                  </Box>
                 </Grid>
               </Grid>
             </CardContent>
           </Card>
-        </Box>
-      )}
 
-      {/* Vista de Historial de Caja */}
-      {vistaActual === 'historial' && (
-        <Box>
-          <Typography variant='h6' gutterBottom>
-            Historial de Aperturas y Cierres de Caja
-          </Typography>
+          {historialLoading && <LinearProgress sx={{ mb: 2 }} />}
 
           <Card>
             <CardContent>
-              <TableContainer component={Paper} variant='outlined'>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Fecha</TableCell>
-                      <TableCell>Hora</TableCell>
-                      <TableCell>Tipo</TableCell>
-                      <TableCell>Usuario</TableCell>
-                      <TableCell align='right'>Monto</TableCell>
-                      <TableCell>Observaciones</TableCell>
-                      <TableCell align='center'>Estado</TableCell>
-                      <TableCell align='center'>Cortes</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {historialCaja.map(operacion => (
-                      <TableRow key={operacion.id} hover>
-                        <TableCell>{new Date(operacion.fecha).toLocaleDateString('es-MX')}</TableCell>
-                        <TableCell>{operacion.hora}</TableCell>
-                        <TableCell>
-                          <Chip
-                            label={operacion.tipo.toUpperCase()}
-                            color={operacion.tipo === 'apertura' ? 'success' : 'error'}
-                            size='small'
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Avatar sx={{ width: 30, height: 30 }}>{operacion.usuario.charAt(0)}</Avatar>
-                            <Typography variant='body2'>{operacion.usuario}</Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell align='right'>
-                          <Typography variant='h6' color='primary'>
-                            ${(operacion.montoInicial || operacion.montoFinal || 0).toLocaleString()}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='body2' color='text.secondary'>
-                            {operacion.observaciones}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align='center'>
-                          <Chip
-                            label={operacion.estado.toUpperCase()}
-                            color={
-                              operacion.estado === 'activo'
-                                ? 'success'
-                                : operacion.estado === 'cerrado'
-                                  ? 'default'
-                                  : 'warning'
-                            }
-                            size='small'
-                          />
-                        </TableCell>
-                        <TableCell align='center'>
-                          <Box sx={{ textAlign: 'center' }}>
-                            <Typography variant='body2' color='success.main'>
-                              {operacion.cortesValidados} validados
-                            </Typography>
-                            <Typography variant='body2' color='warning.main'>
-                              {operacion.cortesPendientes} pendientes
-                            </Typography>
-                          </Box>
-                        </TableCell>
+              {historialCortesList.length === 0 && !historialLoading ? (
+                <Typography color='text.secondary' align='center' sx={{ py: 4 }}>
+                  {historialFechaDesde && historialFechaHasta
+                    ? 'No hay cortes en el rango seleccionado. Seleccione fechas y pulse Buscar.'
+                    : 'Seleccione un rango de fechas y pulse Buscar para ver el historial de cortes.'}
+                </Typography>
+              ) : (
+                <TableContainer component={Paper} variant='outlined'>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Fecha</TableCell>
+                        <TableCell>Hora</TableCell>
+                        <TableCell>Repartidor</TableCell>
+                        <TableCell>Tipo</TableCell>
+                        <TableCell align='right'>Total Día</TableCell>
+                        <TableCell align='center'>Estado</TableCell>
+                        <TableCell align='center'>Acción</TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                    </TableHead>
+                    <TableBody>
+                      {historialCortesList.map(corte => (
+                        <TableRow key={corte.id} hover>
+                          <TableCell>
+                            {new Date(corte.fechaCorte).toLocaleDateString('es-MX', { timeZone: TIMEZONE_MEXICO })}
+                          </TableCell>
+                          <TableCell>{corte.horaEntrega}</TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Avatar sx={{ width: 32, height: 32 }}>{corte.nombre.charAt(0)}</Avatar>
+                              <Typography variant='body2' fontWeight='medium'>
+                                {corte.nombre}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={corte.tipo === 'pipas' ? 'PIPAS' : 'CILINDROS'}
+                              color={corte.tipo === 'pipas' ? 'primary' : 'secondary'}
+                              size='small'
+                              variant='outlined'
+                            />
+                          </TableCell>
+                          <TableCell align='right'>
+                            <Typography variant='body1' fontWeight='bold' color='primary'>
+                              ${corte.totalDia.toLocaleString()}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align='center'>
+                            <Chip
+                              label={corte.estado.toUpperCase()}
+                              color={getEstadoColor(corte.estado) as any}
+                              size='small'
+                            />
+                          </TableCell>
+                          <TableCell align='center'>
+                            <Button
+                              variant='outlined'
+                              size='small'
+                              onClick={() => abrirValidacion(corte)}
+                              startIcon={<VisibilityIcon />}
+                            >
+                              Ver detalle
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
             </CardContent>
           </Card>
         </Box>

@@ -37,6 +37,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   IconButton,
   Tooltip,
   Dialog,
@@ -160,7 +161,7 @@ interface PagoPendienteAutorizacion {
 }
 
 export default function CreditosAbonosPage() {
-  const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'alertas' | 'reportes' | 'pagos-pendientes' | 'historial-pagos'>('dashboard')
+  const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'pagos-pendientes' | 'historial-pagos'>('dashboard')
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteCredito | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
   const [tipoDialogo, setTipoDialogo] = useState<'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono'>('modificar-limite')
@@ -212,43 +213,81 @@ export default function CreditosAbonosPage() {
   const [usuarioRegistroNombre, setUsuarioRegistroNombre] = useState<string>('')
   const [usuarioAutorizacionNombre, setUsuarioAutorizacionNombre] = useState<string>('')
 
+  const [pageClientes, setPageClientes] = useState(0)
+  const [rowsPerPageClientes, setRowsPerPageClientes] = useState(10)
+  const [totalClientes, setTotalClientes] = useState(0)
+  const [pageHistorial, setPageHistorial] = useState(0)
+  const [rowsPerPageHistorial, setRowsPerPageHistorial] = useState(10)
+  const [totalHistorial, setTotalHistorial] = useState(0)
+
+  // Buscador y filtro de ruta propios de la sección Límites Individuales por Cliente
+  const [filtroNombreLimites, setFiltroNombreLimites] = useState('')
+
+  // Buscador y filtro por ruta en Pagos Pendientes e Historial de Pagos
+  const [filtroBusquedaPagosPendientes, setFiltroBusquedaPagosPendientes] = useState('')
+  const [filtroBusquedaHistorialPagos, setFiltroBusquedaHistorialPagos] = useState('')
+
+  // Paginación client-side: Pagos Pendientes e Historial de Pagos
+  const [pagePagosPendientes, setPagePagosPendientes] = useState(0)
+  const [rowsPerPagePagosPendientes, setRowsPerPagePagosPendientes] = useState(10)
+  const [pageHistorialPagos, setPageHistorialPagos] = useState(0)
+  const [rowsPerPageHistorialPagos, setRowsPerPageHistorialPagos] = useState(10)
+
   // Cargar datos iniciales
   useEffect(() => {
     loadInitialData()
   }, [])
 
+  // Flujo obligatorio: primero obtener todas las rutas de la sede, luego con la primera ruta traer clientes
   useEffect(() => {
-    if (sedeId !== null) {
-      // Recargar rutas cuando cambia la sede
-      const cargarRutas = async () => {
-        try {
+    const cargarRutas = async (): Promise<Ruta[]> => {
+      try {
+        if (sedeId) {
           const rutasData = await rutasAPI.getAll({ sedeId })
           setRutas(rutasData)
-        } catch (err) {
-          console.error('Error al cargar rutas:', err)
-          // Si falla, intentar cargar todas las rutas
+          return rutasData
+        }
+        const rutasData = await rutasAPI.getAll()
+        setRutas(rutasData)
+        return rutasData
+      } catch (err) {
+        console.error('Error al cargar rutas:', err)
+        if (sedeId) {
           try {
             const rutasData = await rutasAPI.getAll()
             setRutas(rutasData)
+            return rutasData
           } catch (err2) {
             console.error('Error al cargar todas las rutas:', err2)
+            return []
           }
         }
+        return []
       }
-      cargarRutas()
-      cargarDatos()
-    } else {
-      // Si no hay sede seleccionada, cargar todas las rutas
-      const cargarRutas = async () => {
-        try {
-          const rutasData = await rutasAPI.getAll()
-          setRutas(rutasData)
-        } catch (err) {
-          console.error('Error al cargar rutas:', err)
-        }
-      }
-      cargarRutas()
     }
+    cargarRutas().then((rutasData) => {
+      if (rutasData && rutasData.length > 0) {
+        cargarDatos(rutasData)
+      } else {
+        setClientesCredito([])
+        setTotalClientes(0)
+        setHistorialLimites([])
+        setTotalHistorial(0)
+        setResumenCredito({
+          carteraTotal: 0,
+          notasPendientes: 0,
+          carteraVencida: 0,
+          notasVencidas: 0,
+          porcentajeVencida: 0,
+          carteraPorVencer: 0,
+          notasPorVencer: 0,
+          porcentajePorVencer: 0
+        })
+        setPagosPendientesAutorizacion([])
+        setHistorialPagos([])
+        setLoading(false)
+      }
+    })
   }, [sedeId])
 
   const loadInitialData = async () => {
@@ -272,34 +311,8 @@ export default function CreditosAbonosPage() {
         initialSedeId = user.sede || null
       }
       
+      // El useEffect que depende de sedeId se encargará de cargar rutas de la sede y luego clientes (primera ruta)
       setSedeId(initialSedeId)
-      
-      // Cargar rutas con el filtro de sede
-      if (initialSedeId) {
-        try {
-          const rutasData = await rutasAPI.getAll({ sedeId: initialSedeId })
-          setRutas(rutasData)
-        } catch (err) {
-          console.error('Error al cargar rutas:', err)
-          // Si falla, intentar cargar todas las rutas
-          try {
-            const rutasData = await rutasAPI.getAll()
-            setRutas(rutasData)
-          } catch (err2) {
-            console.error('Error al cargar todas las rutas:', err2)
-            setRutas([])
-          }
-        }
-      } else {
-        // Si no hay sede, cargar todas las rutas
-        try {
-          const rutasData = await rutasAPI.getAll()
-          setRutas(rutasData)
-        } catch (err) {
-          console.error('Error al cargar rutas:', err)
-          setRutas([])
-        }
-      }
     } catch (err: any) {
       setError(err.message || 'Error al cargar datos iniciales')
       console.error('Error loading initial data:', err)
@@ -308,11 +321,17 @@ export default function CreditosAbonosPage() {
     }
   }
 
-  const cargarDatos = async () => {
+  const cargarDatos = async (
+    rutasRecienCargadas?: Ruta[],
+    overrides?: { pageClientes?: number; pageHistorial?: number; rowsPerPageClientes?: number; rowsPerPageHistorial?: number }
+  ) => {
     try {
       setLoading(true)
       setError(null)
-      
+
+      const listaRutas = rutasRecienCargadas ?? rutas
+      const primeraRutaId = listaRutas.length > 0 ? listaRutas[0].id : undefined
+
       const filtrosAPI: any = {}
       if (sedeId) {
         filtrosAPI.sedeId = sedeId
@@ -321,24 +340,38 @@ export default function CreditosAbonosPage() {
         filtrosAPI.nombre = filtros.nombre
       }
       if (filtros.ruta) {
-        const rutaEncontrada = rutas.find(r => r.nombre === filtros.ruta)
+        const rutaEncontrada = listaRutas.find(r => r.nombre === filtros.ruta)
         if (rutaEncontrada) {
           filtrosAPI.rutaId = rutaEncontrada.id
         }
+      }
+      if (!filtrosAPI.rutaId && primeraRutaId) {
+        filtrosAPI.rutaId = primeraRutaId
       }
       if (filtros.estado) {
         filtrosAPI.estadoCliente = filtros.estado
       }
 
-      const [resumen, clientes, pagos, historial] = await Promise.all([
-        creditosAbonosAPI.getResumenCartera(),
-        creditosAbonosAPI.getClientesCredito(filtrosAPI),
-        creditosAbonosAPI.getAllPagos({ estado: 'pendiente' }),
-        creditosAbonosAPI.getAllPagos()
+      const rutaIdParaCarga = filtrosAPI.rutaId
+      const pageC = overrides?.pageClientes ?? pageClientes
+      const pageH = overrides?.pageHistorial ?? pageHistorial
+      const rppClientes = overrides?.rowsPerPageClientes ?? rowsPerPageClientes
+      const rppHistorial = overrides?.rowsPerPageHistorial ?? rowsPerPageHistorial
+
+      const [resumen, clientesResp, pagos, historial] = await Promise.all([
+        creditosAbonosAPI.getResumenCartera(rutaIdParaCarga ? { rutaId: rutaIdParaCarga } : undefined),
+        creditosAbonosAPI.getClientesCredito({
+          ...filtrosAPI,
+          page: pageC + 1,
+          pageSize: rppClientes
+        }),
+        creditosAbonosAPI.getAllPagos({ estado: 'pendiente', ...(rutaIdParaCarga && { rutaId: rutaIdParaCarga }) }),
+        creditosAbonosAPI.getAllPagos(rutaIdParaCarga ? { rutaId: rutaIdParaCarga } : undefined)
       ])
 
       setResumenCredito(resumen)
-      setClientesCredito(clientes)
+      setClientesCredito(clientesResp.clientes)
+      setTotalClientes(clientesResp.total)
       
       // Convertir pagos pendientes al formato esperado
       // Obtener nombres de usuarios únicos
@@ -384,18 +417,27 @@ export default function CreditosAbonosPage() {
       })
       setPagosPendientesAutorizacion(pagosPendientes)
       setHistorialPagos(historial)
+      setPagePagosPendientes(0)
+      setPageHistorialPagos(0)
 
-      // Cargar historial de límites
-      const historialLimitesData = await creditosAbonosAPI.getHistorialLimites()
-      setHistorialLimites(historialLimitesData.map(h => ({
-        id: h.id,
-        cliente: h.cliente ? `${h.cliente.nombre} ${h.cliente.apellidoPaterno} ${h.cliente.apellidoMaterno}` : 'N/A',
-        usuario: h.usuario ? `${h.usuario.nombres} ${h.usuario.apellidoPaterno}` : 'N/A',
-        fecha: h.fechaCreacion,
-        limiteAnterior: h.limiteAnterior,
-        limiteNuevo: h.limiteNuevo,
-        motivo: h.motivo
-      })))
+      // Cargar historial de límites (paginado; misma ruta que el resto)
+      const historialLimitesResp = await creditosAbonosAPI.getHistorialLimites(
+        rutaIdParaCarga
+          ? { rutaId: rutaIdParaCarga, page: pageH + 1, pageSize: rppHistorial }
+          : { page: pageH + 1, pageSize: rppHistorial }
+      )
+      setHistorialLimites(
+        historialLimitesResp.historial.map(h => ({
+          id: h.id,
+          cliente: h.cliente ? `${h.cliente.nombre} ${h.cliente.apellidoPaterno} ${h.cliente.apellidoMaterno}` : 'N/A',
+          usuario: h.usuario ? `${h.usuario.nombres} ${h.usuario.apellidoPaterno}` : 'N/A',
+          fecha: h.fechaCreacion,
+          limiteAnterior: h.limiteAnterior,
+          limiteNuevo: h.limiteNuevo,
+          motivo: h.motivo
+        }))
+      )
+      setTotalHistorial(historialLimitesResp.total)
     } catch (err: any) {
       setError(err.message || 'Error al cargar datos')
       console.error('Error cargando datos:', err)
@@ -746,11 +788,46 @@ export default function CreditosAbonosPage() {
     return [...new Set([...rutasDeAPI, ...rutasDeClientes])].filter(r => r && r !== 'Sin ruta')
   }, [clientesCredito, rutas])
 
-  // Recargar datos cuando cambien los filtros
+  // Clientes filtrados por nombre dentro de Límites Individuales por Cliente (solo esta sección)
+  const clientesCreditoFiltradosLimites = useMemo(() => {
+    if (!filtroNombreLimites.trim()) return clientesCredito
+    const busqueda = filtroNombreLimites.toLowerCase().trim()
+    return clientesCredito.filter(c => c.nombre.toLowerCase().includes(busqueda))
+  }, [clientesCredito, filtroNombreLimites])
+
+  // Pagos pendientes filtrados por buscador (cliente, nota)
+  const pagosPendientesFiltrados = useMemo(() => {
+    if (!filtroBusquedaPagosPendientes.trim()) return pagosPendientesAutorizacion
+    const busqueda = filtroBusquedaPagosPendientes.toLowerCase().trim()
+    return pagosPendientesAutorizacion.filter(
+      p =>
+        (p.cliente && p.cliente.toLowerCase().includes(busqueda)) ||
+        (p.nota && p.nota.toLowerCase().includes(busqueda)) ||
+        (p.registradoPorNombre && p.registradoPorNombre.toLowerCase().includes(busqueda))
+    )
+  }, [pagosPendientesAutorizacion, filtroBusquedaPagosPendientes])
+
+  // Historial de pagos filtrado por buscador (cliente, nota)
+  const historialPagosFiltrado = useMemo(() => {
+    if (!filtroBusquedaHistorialPagos.trim()) return historialPagos
+    const busqueda = filtroBusquedaHistorialPagos.toLowerCase().trim()
+    return historialPagos.filter(p => {
+      const pago = p as any
+      const cliente = pago.cliente
+      const nombreCliente = cliente
+        ? `${cliente.nombre || ''} ${cliente.apellidoPaterno || ''} ${cliente.apellidoMaterno || ''}`.trim()
+        : ''
+      const nota = pago.notaCredito?.numeroNota || 'Abono general'
+      return nombreCliente.toLowerCase().includes(busqueda) || nota.toLowerCase().includes(busqueda)
+    })
+  }, [historialPagos, filtroBusquedaHistorialPagos])
+
+  // Recargar datos cuando cambien los filtros (volver a página 1)
   useEffect(() => {
-    if (sedeId !== null) {
-      cargarDatos()
-    }
+    if (rutas.length === 0) return
+    setPageClientes(0)
+    setPageHistorial(0)
+    cargarDatos(undefined, { pageClientes: 0, pageHistorial: 0 })
   }, [filtros.nombre, filtros.ruta, filtros.estado])
 
   return (
@@ -820,20 +897,6 @@ export default function CreditosAbonosPage() {
             startIcon={<CreditCardIcon />}
           >
             Control de Límites
-          </Button>
-          <Button
-            variant={vistaActual === 'alertas' ? 'contained' : 'outlined'}
-            onClick={() => setVistaActual('alertas')}
-            startIcon={<NotificationsIcon />}
-          >
-            Centro de Alertas
-          </Button>
-          <Button
-            variant={vistaActual === 'reportes' ? 'contained' : 'outlined'}
-            onClick={() => setVistaActual('reportes')}
-            startIcon={<DescriptionIcon />}
-          >
-            Reportes Financieros
           </Button>
           <Button
             variant={vistaActual === 'pagos-pendientes' ? 'contained' : 'outlined'}
@@ -1043,7 +1106,7 @@ export default function CreditosAbonosPage() {
           <Card>
             <CardContent>
               <Typography variant='h6' gutterBottom>
-                Lista de Clientes ({clientesFiltrados.length})
+                Lista de Clientes (solo primera ruta)
               </Typography>
               
               <TableContainer component={Paper} variant='outlined'>
@@ -1138,6 +1201,25 @@ export default function CreditosAbonosPage() {
                     ))}
                   </TableBody>
                 </Table>
+                <TablePagination
+                  component='div'
+                  count={totalClientes}
+                  page={pageClientes}
+                  onPageChange={(_, newPage) => {
+                    setPageClientes(newPage)
+                    cargarDatos(undefined, { pageClientes: newPage })
+                  }}
+                  rowsPerPage={rowsPerPageClientes}
+                  onRowsPerPageChange={(e) => {
+                    const newRpp = parseInt(e.target.value, 10)
+                    setRowsPerPageClientes(newRpp)
+                    setPageClientes(0)
+                    cargarDatos(undefined, { pageClientes: 0, rowsPerPageClientes: newRpp })
+                  }}
+                  rowsPerPageOptions={[5, 10, 25, 50]}
+                  labelRowsPerPage='Filas por página'
+                  labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+                />
               </TableContainer>
             </CardContent>
           </Card>
@@ -1386,8 +1468,12 @@ export default function CreditosAbonosPage() {
                   <Box sx={{ display: 'flex', gap: 2 }}>
                     <FormControl fullWidth>
                       <InputLabel>Ruta Específica</InputLabel>
-                      <Select label='Ruta Específica'>
-                        <MenuItem value=''>Seleccionar ruta</MenuItem>
+                      <Select
+                        label='Ruta Específica'
+                        value={filtros.ruta}
+                        onChange={(e) => manejarCambioFiltros('ruta', e.target.value)}
+                      >
+                        <MenuItem value=''>Primera ruta (por defecto)</MenuItem>
                         {rutasUnicas.map((ruta) => (
                           <MenuItem key={ruta} value={ruta}>
                             {ruta}
@@ -1421,6 +1507,39 @@ export default function CreditosAbonosPage() {
               <Typography variant='h6' gutterBottom>
                 Límites Individuales por Cliente
               </Typography>
+
+              {/* Filtros propios de esta sección: buscador y ruta (no usan el filtro de arriba) */}
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+                <TextField
+                  size='small'
+                  placeholder='Buscar por nombre'
+                  value={filtroNombreLimites}
+                  onChange={(e) => setFiltroNombreLimites(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position='start'>
+                        <SearchIcon color='action' />
+                      </InputAdornment>
+                    )
+                  }}
+                  sx={{ minWidth: 220 }}
+                />
+                <FormControl size='small' sx={{ minWidth: 200 }}>
+                  <InputLabel>Ruta</InputLabel>
+                  <Select
+                    label='Ruta'
+                    value={filtros.ruta}
+                    onChange={(e) => manejarCambioFiltros('ruta', e.target.value)}
+                  >
+                    <MenuItem value=''>Primera ruta (por defecto)</MenuItem>
+                    {rutasUnicas.map((ruta) => (
+                      <MenuItem key={ruta} value={ruta}>
+                        {ruta}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
               
               <TableContainer component={Paper} variant='outlined'>
                 <Table>
@@ -1434,7 +1553,7 @@ export default function CreditosAbonosPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {clientesCredito.map((cliente) => (
+                    {clientesCreditoFiltradosLimites.map((cliente) => (
                       <TableRow key={cliente.id}>
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -1496,6 +1615,25 @@ export default function CreditosAbonosPage() {
                   </TableBody>
                 </Table>
               </TableContainer>
+              <TablePagination
+                component='div'
+                count={totalClientes}
+                page={pageClientes}
+                onPageChange={(_, newPage) => {
+                  setPageClientes(newPage)
+                  cargarDatos(undefined, { pageClientes: newPage })
+                }}
+                rowsPerPage={rowsPerPageClientes}
+                onRowsPerPageChange={(e) => {
+                  const newRpp = parseInt(e.target.value, 10)
+                  setRowsPerPageClientes(newRpp)
+                  setPageClientes(0)
+                  cargarDatos(undefined, { pageClientes: 0, rowsPerPageClientes: newRpp })
+                }}
+                rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                labelRowsPerPage='Filas por página'
+                labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+              />
             </CardContent>
           </Card>
 
@@ -1503,7 +1641,7 @@ export default function CreditosAbonosPage() {
           <Card>
             <CardContent>
               <Typography variant='h6' gutterBottom>
-                Historial de Cambios de Límites
+                Historial de Cambios de Límites (solo primera ruta)
               </Typography>
               
               <List>
@@ -1539,199 +1677,27 @@ export default function CreditosAbonosPage() {
                   </ListItem>
                 ))}
               </List>
+              <TablePagination
+                component='div'
+                count={totalHistorial}
+                page={pageHistorial}
+                onPageChange={(_, newPage) => {
+                  setPageHistorial(newPage)
+                  cargarDatos(undefined, { pageHistorial: newPage })
+                }}
+                rowsPerPage={rowsPerPageHistorial}
+                onRowsPerPageChange={(e) => {
+                  const newRpp = parseInt(e.target.value, 10)
+                  setRowsPerPageHistorial(newRpp)
+                  setPageHistorial(0)
+                  cargarDatos(undefined, { pageHistorial: 0, rowsPerPageHistorial: newRpp })
+                }}
+                rowsPerPageOptions={[5, 10, 25, 50]}
+                labelRowsPerPage='Filas por página'
+                labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+              />
             </CardContent>
           </Card>
-        </Box>
-      )}
-
-      {/* Centro de Alertas y Notificaciones */}
-      {vistaActual === 'alertas' && (
-        <Box>
-          <Typography variant='h6' gutterBottom>
-            Centro de Alertas y Notificaciones
-          </Typography>
-          
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-            <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
-              <Tab 
-                label={
-                  <Badge badgeContent={alertasCredito.filter(a => a.tipo === 'critica').length} color='error'>
-                    Críticas
-                  </Badge>
-                } 
-              />
-              <Tab 
-                label={
-                  <Badge badgeContent={alertasCredito.filter(a => a.tipo === 'importante').length} color='warning'>
-                    Importantes
-                  </Badge>
-                } 
-              />
-              <Tab 
-                label={
-                  <Badge badgeContent={alertasCredito.filter(a => a.tipo === 'automatica').length} color='info'>
-                    Automáticas
-                  </Badge>
-                } 
-              />
-            </Tabs>
-          </Box>
-
-          <Grid container spacing={3}>
-            {alertasCredito
-              .filter(alerta => {
-                if (tabValue === 0) return alerta.tipo === 'critica'
-                if (tabValue === 1) return alerta.tipo === 'importante'
-                if (tabValue === 2) return alerta.tipo === 'automatica'
-                return false
-              })
-              .map((alerta) => (
-                <Grid item xs={12} md={6} key={alerta.id}>
-                  <Card>
-                    <CardContent>
-                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-                        <Box sx={{ color: `${getAlertaColor(alerta.tipo)}.main` }}>
-                          {getAlertaIcon(alerta.tipo)}
-                        </Box>
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant='h6' gutterBottom>
-                            {alerta.titulo}
-                          </Typography>
-                          <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
-                            {alerta.descripcion}
-                          </Typography>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant='caption' color='text.secondary'>
-                              {formatearFecha(alerta.fecha)}
-                            </Typography>
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                              <Button size='small' variant='outlined'>
-                                Ver Detalles
-                              </Button>
-                              {alerta.tipo === 'critica' && (
-                                <Button size='small' variant='contained' color='error'>
-                                  Resolver
-                                </Button>
-                              )}
-                            </Box>
-                          </Box>
-                        </Box>
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-          </Grid>
-        </Box>
-      )}
-
-      {/* Sección de Reportes Financieros */}
-      {vistaActual === 'reportes' && (
-        <Box>
-          <Typography variant='h6' gutterBottom>
-            Reportes de Cartera
-          </Typography>
-          
-          <Grid container spacing={3}>
-            {/* Reportes Ejecutivos */}
-            <Grid item xs={12} md={4}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent>
-                  <Box sx={{ textAlign: 'center', mb: 2 }}>
-                    <AssessmentIcon color='primary' sx={{ fontSize: 40 }} />
-                    <Typography variant='h6' gutterBottom>
-                      Reportes Ejecutivos
-                    </Typography>
-                  </Box>
-                  
-                  <List>
-                    <ListItem button>
-                      <ListItemText primary='Antigüedad de Cartera (30, 60, 90+ días)' />
-                      <DownloadIcon />
-                    </ListItem>
-                    <ListItem button>
-                      <ListItemText primary='Top 10 Mejores Pagadores' />
-                      <DownloadIcon />
-                    </ListItem>
-                    <ListItem button>
-                      <ListItemText primary='Top 10 Peores Pagadores' />
-                      <DownloadIcon />
-                    </ListItem>
-                    <ListItem button>
-                      <ListItemText primary='Análisis de Riesgo' />
-                      <DownloadIcon />
-                    </ListItem>
-                  </List>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Reportes Operativos */}
-            <Grid item xs={12} md={4}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent>
-                  <Box sx={{ textAlign: 'center', mb: 2 }}>
-                    <PersonIcon color='secondary' sx={{ fontSize: 40 }} />
-                    <Typography variant='h6' gutterBottom>
-                      Reportes Operativos
-                    </Typography>
-                  </Box>
-                  
-                  <List>
-                    <ListItem button>
-                      <ListItemText primary='Clientes para Visita de Cobranza (por Ruta)' />
-                      <DownloadIcon />
-                    </ListItem>
-                    <ListItem button>
-                      <ListItemText primary='Recordatorios por Enviar' />
-                      <DownloadIcon />
-                    </ListItem>
-                    <ListItem button>
-                      <ListItemText primary='Transferencias Pendientes Confirmación' />
-                      <DownloadIcon />
-                    </ListItem>
-                    <ListItem button>
-                      <ListItemText primary='Clientes con Límite Excedido' />
-                      <DownloadIcon />
-                    </ListItem>
-                  </List>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Reportes Estratégicos */}
-            <Grid item xs={12} md={4}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent>
-                  <Box sx={{ textAlign: 'center', mb: 2 }}>
-                    <TrendingUpIcon color='success' sx={{ fontSize: 40 }} />
-                    <Typography variant='h6' gutterBottom>
-                      Reportes Estratégicos
-                    </Typography>
-                  </Box>
-                  
-                  <List>
-                    <ListItem button>
-                      <ListItemText primary='Comparativo Cartera vs Ventas' />
-                      <DownloadIcon />
-                    </ListItem>
-                    <ListItem button>
-                      <ListItemText primary='Eficiencia de Cobranza por Repartidor' />
-                      <DownloadIcon />
-                    </ListItem>
-                    <ListItem button>
-                      <ListItemText primary='Análisis de Tendencias de Pago' />
-                      <DownloadIcon />
-                    </ListItem>
-                    <ListItem button>
-                      <ListItemText primary='Proyección de Flujo de Caja' />
-                      <DownloadIcon />
-                    </ListItem>
-                  </List>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
         </Box>
       )}
 
@@ -1744,6 +1710,41 @@ export default function CreditosAbonosPage() {
           
           <Card>
             <CardContent>
+              {/* Buscador y filtro por ruta dentro de la tabla */}
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+                <TextField
+                  size='small'
+                  placeholder='Buscar por cliente, nota o registrado por'
+                  value={filtroBusquedaPagosPendientes}
+                  onChange={(e) => {
+                    setFiltroBusquedaPagosPendientes(e.target.value)
+                    setPagePagosPendientes(0)
+                  }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position='start'>
+                        <SearchIcon color='action' />
+                      </InputAdornment>
+                    )
+                  }}
+                  sx={{ minWidth: 280 }}
+                />
+                <FormControl size='small' sx={{ minWidth: 200 }}>
+                  <InputLabel>Ruta</InputLabel>
+                  <Select
+                    label='Ruta'
+                    value={filtros.ruta}
+                    onChange={(e) => manejarCambioFiltros('ruta', e.target.value)}
+                  >
+                    <MenuItem value=''>Primera ruta (por defecto)</MenuItem>
+                    {rutasUnicas.map((ruta) => (
+                      <MenuItem key={ruta} value={ruta}>
+                        {ruta}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
               <TableContainer component={Paper} variant='outlined'>
                 <Table>
                   <TableHead>
@@ -1758,7 +1759,12 @@ export default function CreditosAbonosPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {pagosPendientesAutorizacion.map((pago) => (
+                    {pagosPendientesFiltrados
+                      .slice(
+                        pagePagosPendientes * rowsPerPagePagosPendientes,
+                        pagePagosPendientes * rowsPerPagePagosPendientes + rowsPerPagePagosPendientes
+                      )
+                      .map((pago) => (
                       <TableRow key={pago.id} hover>
                         <TableCell>
                           <Typography variant='subtitle2' fontWeight='bold'>
@@ -1847,6 +1853,20 @@ export default function CreditosAbonosPage() {
                   </TableBody>
                 </Table>
               </TableContainer>
+              <TablePagination
+                component='div'
+                count={pagosPendientesFiltrados.length}
+                page={pagePagosPendientes}
+                onPageChange={(_, newPage) => setPagePagosPendientes(newPage)}
+                rowsPerPage={rowsPerPagePagosPendientes}
+                onRowsPerPageChange={(e) => {
+                  setRowsPerPagePagosPendientes(parseInt(e.target.value, 10))
+                  setPagePagosPendientes(0)
+                }}
+                rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                labelRowsPerPage='Filas por página'
+                labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+              />
             </CardContent>
           </Card>
         </Box>
@@ -1861,6 +1881,41 @@ export default function CreditosAbonosPage() {
           
           <Card>
             <CardContent>
+              {/* Buscador y filtro por ruta dentro de la tabla */}
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+                <TextField
+                  size='small'
+                  placeholder='Buscar por cliente o nota'
+                  value={filtroBusquedaHistorialPagos}
+                  onChange={(e) => {
+                    setFiltroBusquedaHistorialPagos(e.target.value)
+                    setPageHistorialPagos(0)
+                  }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position='start'>
+                        <SearchIcon color='action' />
+                      </InputAdornment>
+                    )
+                  }}
+                  sx={{ minWidth: 260 }}
+                />
+                <FormControl size='small' sx={{ minWidth: 200 }}>
+                  <InputLabel>Ruta</InputLabel>
+                  <Select
+                    label='Ruta'
+                    value={filtros.ruta}
+                    onChange={(e) => manejarCambioFiltros('ruta', e.target.value)}
+                  >
+                    <MenuItem value=''>Primera ruta (por defecto)</MenuItem>
+                    {rutasUnicas.map((ruta) => (
+                      <MenuItem key={ruta} value={ruta}>
+                        {ruta}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
               <TableContainer component={Paper} variant='outlined'>
                 <Table>
                   <TableHead>
@@ -1876,7 +1931,12 @@ export default function CreditosAbonosPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {historialPagos.map((pago) => (
+                    {historialPagosFiltrado
+                      .slice(
+                        pageHistorialPagos * rowsPerPageHistorialPagos,
+                        pageHistorialPagos * rowsPerPageHistorialPagos + rowsPerPageHistorialPagos
+                      )
+                      .map((pago) => (
                       <TableRow key={pago.id} hover>
                         <TableCell>
                           <Box>
@@ -1940,6 +2000,20 @@ export default function CreditosAbonosPage() {
                   </TableBody>
                 </Table>
               </TableContainer>
+              <TablePagination
+                component='div'
+                count={historialPagosFiltrado.length}
+                page={pageHistorialPagos}
+                onPageChange={(_, newPage) => setPageHistorialPagos(newPage)}
+                rowsPerPage={rowsPerPageHistorialPagos}
+                onRowsPerPageChange={(e) => {
+                  setRowsPerPageHistorialPagos(parseInt(e.target.value, 10))
+                  setPageHistorialPagos(0)
+                }}
+                rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                labelRowsPerPage='Filas por página'
+                labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+              />
             </CardContent>
           </Card>
         </Box>
