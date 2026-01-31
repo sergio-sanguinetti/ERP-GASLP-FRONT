@@ -188,6 +188,17 @@ export default function VentasPage() {
   const [htmlTicket, setHtmlTicket] = useState('')
   const [loadingTicket, setLoadingTicket] = useState(false)
 
+  // Estado para carga de clientes en modal de pedido: buscar en BD o por sede/ruta
+  const [modoCargaCliente, setModoCargaCliente] = useState<'buscar' | 'por-ruta'>('buscar')
+  const [sedeIdModal, setSedeIdModal] = useState<string | null>(null)
+  const [rutaIdModal, setRutaIdModal] = useState<string | null>(null)
+  const [rutasModal, setRutasModal] = useState<Ruta[]>([])
+  const [clientesPorRuta, setClientesPorRuta] = useState<Cliente[]>([])
+  const [busquedaClienteTerm, setBusquedaClienteTerm] = useState('')
+  const [clientesBusqueda, setClientesBusqueda] = useState<Cliente[]>([])
+  const [loadingClientesBusqueda, setLoadingClientesBusqueda] = useState(false)
+  const [loadingClientesPorRuta, setLoadingClientesPorRuta] = useState(false)
+
   const [formularioPedido, setFormularioPedido] = useState({
     clienteId: '',
     tipoServicio: 'pipas' as 'pipas' | 'cilindros',
@@ -312,6 +323,30 @@ export default function VentasPage() {
       loadRutas()
     }
   }, [mostrarCrearCliente, usuario, sedeId])
+
+  // Búsqueda de clientes en BD (debounce) cuando el usuario escribe en el modal de pedido
+  useEffect(() => {
+    if (modoCargaCliente !== 'buscar' || !dialogoAbierto || tipoDialogo !== 'pedido') return
+    if (!busquedaClienteTerm.trim()) {
+      setClientesBusqueda([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      setLoadingClientesBusqueda(true)
+      try {
+        const data = await clientesAPI.getAll({
+          estadoCliente: 'activo',
+          nombre: busquedaClienteTerm.trim()
+        })
+        setClientesBusqueda(data)
+      } catch (err) {
+        setClientesBusqueda([])
+      } finally {
+        setLoadingClientesBusqueda(false)
+      }
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [busquedaClienteTerm, modoCargaCliente, dialogoAbierto, tipoDialogo])
 
   // Actualizar precio por litro cuando cambie la configuración
   useEffect(() => {
@@ -505,6 +540,41 @@ export default function VentasPage() {
       setClientes(clientesFiltrados)
     } catch (err: any) {
       console.error('Error loading clientes:', err)
+    }
+  }
+
+  const loadRutasModal = async (sedeIdValue: string | null): Promise<Ruta[]> => {
+    try {
+      const params: any = { activa: 'true' }
+      if (sedeIdValue) params.sedeId = sedeIdValue
+      let lista = await rutasAPI.getAll(params)
+      if (lista.length === 0) lista = await rutasAPI.getAll({})
+      if (sedeIdValue && lista.length > 0) {
+        lista = lista.filter(r => r.sedeId === sedeIdValue || r.sede?.id === sedeIdValue)
+      }
+      setRutasModal(lista)
+      return lista
+    } catch (err: any) {
+      console.error('Error loading rutas modal:', err)
+      setRutasModal([])
+      return []
+    }
+  }
+
+  const loadClientesPorRuta = async (rutaIdValue: string | null) => {
+    if (!rutaIdValue) {
+      setClientesPorRuta([])
+      return
+    }
+    setLoadingClientesPorRuta(true)
+    try {
+      const data = await clientesAPI.getAll({ estadoCliente: 'activo', rutaId: rutaIdValue })
+      setClientesPorRuta(data)
+    } catch (err: any) {
+      console.error('Error loading clientes por ruta:', err)
+      setClientesPorRuta([])
+    } finally {
+      setLoadingClientesPorRuta(false)
     }
   }
 
@@ -757,6 +827,20 @@ export default function VentasPage() {
       // Resetear cliente buscado y modo edición
       setClienteBuscado(null)
       setPedidoEditando(null)
+      // Modo de carga de cliente: buscar o por sede/ruta
+      setModoCargaCliente('buscar')
+      setSedeIdModal(sedeId)
+      setBusquedaClienteTerm('')
+      setClientesBusqueda([])
+      setRutaIdModal(null)
+      setClientesPorRuta([])
+      // Cargar rutas de la sede para el selector "por sede y ruta"
+      const rutasSede = await loadRutasModal(sedeId)
+      const primeraRutaId = rutasSede[0]?.id ?? null
+      setRutaIdModal(primeraRutaId)
+      if (primeraRutaId) {
+        loadClientesPorRuta(primeraRutaId)
+      }
       console.log('Categorías disponibles:', categoriasProducto.length)
       console.log('Productos disponibles:', productos.length)
     }
@@ -790,7 +874,13 @@ export default function VentasPage() {
           descripcion: pp.producto?.descripcion
         }))
       })
-      setClienteBuscado(pedidoCompleto.cliente ?? null)
+      const cliente = pedidoCompleto.cliente ?? null
+      setClienteBuscado(cliente)
+      if (cliente) {
+        const nombreCompleto = `${cliente.nombre} ${cliente.apellidoPaterno} ${cliente.apellidoMaterno || ''}`.trim()
+        const direccion = `${cliente.calle} ${cliente.numeroExterior}, ${cliente.colonia}`.trim()
+        setBusquedaClienteTerm(`${nombreCompleto} - ${direccion}`)
+      }
       setPedidoEditando(pedidoCompleto)
     } catch (err: any) {
       alert('Error al cargar el pedido: ' + (err.message || 'Error desconocido'))
@@ -857,6 +947,14 @@ export default function VentasPage() {
       descuentoPorLitro: 0
     })
     setDescuentoEditando(null)
+    setClienteBuscado(null)
+    setModoCargaCliente('buscar')
+    setSedeIdModal(null)
+    setRutaIdModal(null)
+    setRutasModal([])
+    setClientesPorRuta([])
+    setBusquedaClienteTerm('')
+    setClientesBusqueda([])
   }
 
   const abrirDialogoEliminar = (pedido: Pedido) => {
@@ -4017,72 +4115,225 @@ export default function VentasPage() {
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
+            {/* Cómo cargar el cliente: buscar en BD o por sede y ruta */}
             <Grid item xs={12}>
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                <Autocomplete
-                  fullWidth
-                  options={clientes}
-                  value={clienteBuscado}
-                  onChange={(event, newValue) => {
-                    setClienteBuscado(newValue)
-                    manejarCambioFormulario('clienteId', newValue?.id || '')
+              <Typography variant='subtitle2' color='text.secondary' sx={{ mb: 1 }}>
+                Cargar cliente
+              </Typography>
+              <FormControl component='fieldset'>
+                <RadioGroup
+                  row
+                  value={modoCargaCliente}
+                  onChange={(e) => {
+                    setModoCargaCliente(e.target.value as 'buscar' | 'por-ruta')
+                    setClienteBuscado(null)
+                    manejarCambioFormulario('clienteId', '')
+                    if (e.target.value === 'por-ruta' && sedeIdModal && !rutasModal.length) {
+                      loadRutasModal(sedeIdModal).then(rutasSede => {
+                        const primeraRutaId = rutasSede[0]?.id ?? null
+                        setRutaIdModal(primeraRutaId)
+                        if (primeraRutaId) loadClientesPorRuta(primeraRutaId)
+                      })
+                    }
                   }}
-                  getOptionLabel={(option) => {
-                    const nombreCompleto = `${option.nombre} ${option.apellidoPaterno} ${option.apellidoMaterno || ''}`.trim()
-                    const direccion = `${option.calle} ${option.numeroExterior}, ${option.colonia}`.trim()
-                    return `${nombreCompleto} - ${direccion}`
-                  }}
-                  filterOptions={(options, { inputValue }) => {
-                    const searchTerm = inputValue.toLowerCase()
-                    return options.filter(option => {
-                      const nombreCompleto = `${option.nombre} ${option.apellidoPaterno} ${option.apellidoMaterno || ''}`.toLowerCase()
-                      const direccion = `${option.calle} ${option.numeroExterior} ${option.colonia}`.toLowerCase()
-                      return nombreCompleto.includes(searchTerm) || direccion.includes(searchTerm)
-                    })
-                  }}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label='Cliente *'
-                      placeholder='Buscar por nombre o dirección...'
-                      InputProps={{
-                        ...params.InputProps,
-                        startAdornment: (
-                          <>
-                            <InputAdornment position='start'>
-                              <SearchIcon />
-                            </InputAdornment>
-                            {params.InputProps.startAdornment}
-                          </>
-                        )
-                      }}
-                    />
-                  )}
-                  renderOption={(props, option) => (
-                    <Box component='li' {...props}>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                        <Typography variant='body2' fontWeight='bold'>
-                          {option.nombre} {option.apellidoPaterno} {option.apellidoMaterno || ''}
-                        </Typography>
-                        <Typography variant='caption' color='text.secondary'>
-                          <LocationOnIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.5 }} />
-                          {option.calle} {option.numeroExterior}, {option.colonia}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  )}
-                  noOptionsText='No se encontraron clientes'
-                />
-                <Button
-                  variant='outlined'
-                  startIcon={<AddIcon />}
-                  onClick={() => setMostrarCrearCliente(true)}
-                  sx={{ minWidth: 'auto', whiteSpace: 'nowrap' }}
                 >
-                  Nuevo
-                </Button>
-              </Box>
+                  <FormControlLabel value='buscar' control={<Radio />} label='Buscar por nombre (en BD)' />
+                  <FormControlLabel value='por-ruta' control={<Radio />} label='Por sede y ruta' />
+                </RadioGroup>
+              </FormControl>
             </Grid>
+
+            {modoCargaCliente === 'buscar' && (
+              <Grid item xs={12}>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                  <Autocomplete
+                    fullWidth
+                    options={clientesBusqueda}
+                    value={clienteBuscado}
+                    inputValue={busquedaClienteTerm}
+                    onInputChange={(_, value) => setBusquedaClienteTerm(value)}
+                    onChange={(event, newValue) => {
+                      setClienteBuscado(newValue)
+                      manejarCambioFormulario('clienteId', newValue?.id || '')
+                    }}
+                    getOptionLabel={(option) => {
+                      const nombreCompleto = `${option.nombre} ${option.apellidoPaterno} ${option.apellidoMaterno || ''}`.trim()
+                      const direccion = `${option.calle} ${option.numeroExterior}, ${option.colonia}`.trim()
+                      return `${nombreCompleto} - ${direccion}`
+                    }}
+                    loading={loadingClientesBusqueda}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label='Cliente *'
+                        placeholder='Buscar por nombre...'
+                        InputProps={{
+                          ...params.InputProps,
+                          startAdornment: (
+                            <>
+                              <InputAdornment position='start'>
+                                <SearchIcon />
+                              </InputAdornment>
+                              {params.InputProps.startAdornment}
+                            </>
+                          )
+                        }}
+                      />
+                    )}
+                    renderOption={(props, option) => (
+                      <Box component='li' {...props}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                          <Typography variant='body2' fontWeight='bold'>
+                            {option.nombre} {option.apellidoPaterno} {option.apellidoMaterno || ''}
+                          </Typography>
+                          <Typography variant='caption' color='text.secondary'>
+                            <LocationOnIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.5 }} />
+                            {option.calle} {option.numeroExterior}, {option.colonia}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    )}
+                    noOptionsText={busquedaClienteTerm.trim() ? (loadingClientesBusqueda ? 'Buscando...' : 'No se encontraron clientes') : 'Escriba para buscar en la BD'}
+                  />
+                  <Button
+                    variant='outlined'
+                    startIcon={<AddIcon />}
+                    onClick={() => setMostrarCrearCliente(true)}
+                    sx={{ minWidth: 'auto', whiteSpace: 'nowrap' }}
+                  >
+                    Nuevo
+                  </Button>
+                </Box>
+              </Grid>
+            )}
+
+            {modoCargaCliente === 'por-ruta' && (
+              <>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth size='small'>
+                    <InputLabel>Sede</InputLabel>
+                    <Select
+                      value={sedeIdModal || ''}
+                      label='Sede'
+                      onChange={async (e) => {
+                        const id = e.target.value as string
+                        setSedeIdModal(id || null)
+                        setRutaIdModal(null)
+                        setClientesPorRuta([])
+                        const rutasSede = await loadRutasModal(id || null)
+                        const primeraRutaId = rutasSede[0]?.id ?? null
+                        setRutaIdModal(primeraRutaId)
+                        if (primeraRutaId) loadClientesPorRuta(primeraRutaId)
+                      }}
+                    >
+                      {sedes.map(s => (
+                        <MenuItem key={s.id} value={s.id}>{s.nombre}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth size='small'>
+                    <InputLabel>Ruta</InputLabel>
+                    <Select
+                      value={rutaIdModal || ''}
+                      label='Ruta'
+                      onChange={(e) => {
+                        const id = e.target.value as string
+                        setRutaIdModal(id || null)
+                        if (id) loadClientesPorRuta(id)
+                        else setClientesPorRuta([])
+                        setClienteBuscado(null)
+                        manejarCambioFormulario('clienteId', '')
+                      }}
+                    >
+                      {rutasModal.map(r => (
+                        <MenuItem key={r.id} value={r.id}>{r.nombre}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                    <Autocomplete
+                      fullWidth
+                      size='small'
+                      options={clientesPorRuta}
+                      value={clienteBuscado && clientesPorRuta.some(c => c.id === clienteBuscado.id) ? clienteBuscado : null}
+                      onChange={(event, newValue) => {
+                        setClienteBuscado(newValue)
+                        manejarCambioFormulario('clienteId', newValue?.id || '')
+                      }}
+                      getOptionLabel={(option) => {
+                        const nombreCompleto = `${option.nombre} ${option.apellidoPaterno} ${option.apellidoMaterno || ''}`.trim()
+                        const direccion = `${option.calle} ${option.numeroExterior}, ${option.colonia}`.trim()
+                        return `${nombreCompleto} - ${direccion}`
+                      }}
+                      filterOptions={(options, { inputValue }) => {
+                        const searchTerm = inputValue.toLowerCase()
+                        return options.filter(option => {
+                          const nombreCompleto = `${option.nombre} ${option.apellidoPaterno} ${option.apellidoMaterno || ''}`.toLowerCase()
+                          const direccion = `${option.calle} ${option.numeroExterior} ${option.colonia}`.toLowerCase()
+                          return nombreCompleto.includes(searchTerm) || direccion.includes(searchTerm)
+                        })
+                      }}
+                      loading={loadingClientesPorRuta}
+                      disabled={!rutaIdModal}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label='Cliente *'
+                          placeholder='Buscar por nombre o dirección...'
+                          required
+                          InputProps={{
+                            ...params.InputProps,
+                            startAdornment: (
+                              <>
+                                <InputAdornment position='start'>
+                                  <SearchIcon />
+                                </InputAdornment>
+                                {params.InputProps.startAdornment}
+                              </>
+                            )
+                          }}
+                        />
+                      )}
+                      renderOption={(props, option) => (
+                        <Box component='li' {...props}>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                            <Typography variant='body2' fontWeight='bold'>
+                              {option.nombre} {option.apellidoPaterno} {option.apellidoMaterno || ''}
+                            </Typography>
+                            <Typography variant='caption' color='text.secondary'>
+                              <LocationOnIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.5 }} />
+                              {option.calle} {option.numeroExterior}, {option.colonia}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      )}
+                      noOptionsText={loadingClientesPorRuta ? 'Cargando...' : 'No hay clientes en esta ruta'}
+                    />
+                    <Button
+                      variant='outlined'
+                      startIcon={<AddIcon />}
+                      onClick={() => setMostrarCrearCliente(true)}
+                      sx={{ minWidth: 'auto', whiteSpace: 'nowrap' }}
+                    >
+                      Nuevo
+                    </Button>
+                  </Box>
+                </Grid>
+              </>
+            )}
+
+            {/* Si estamos editando, mostrar cliente seleccionado cuando no coincide con el modo actual (por si se cambió de modo) */}
+            {pedidoEditando && clienteBuscado && modoCargaCliente === 'por-ruta' && !clientesPorRuta.some(c => c.id === clienteBuscado.id) && (
+              <Grid item xs={12}>
+                <Typography variant='caption' color='text.secondary'>
+                  Cliente actual: {clienteBuscado.nombre} {clienteBuscado.apellidoPaterno} {clienteBuscado.apellidoMaterno || ''}
+                </Typography>
+              </Grid>
+            )}
 
             <Grid item xs={12}>
               <FormControl fullWidth required>
