@@ -1053,7 +1053,9 @@ export default function VentasPage() {
         return
       }
 
-      if (formularioPedido.productos.length === 0) {
+      // Si es tipo PIPA y método "Sin especificar", el repartidor llenará el pedido en la app (no requiere productos aquí)
+      const sinEspecificar = formularioPedido.tipoServicio === 'pipas' && calculoPipas.tipoCalculo === 'ninguno'
+      if (formularioPedido.productos.length === 0 && !sinEspecificar) {
         alert('Debe agregar al menos un producto al pedido')
         return
       }
