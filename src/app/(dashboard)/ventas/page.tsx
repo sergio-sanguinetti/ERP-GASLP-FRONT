@@ -2790,15 +2790,17 @@ export default function VentasPage() {
                                 <VisibilityIcon />
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title='Editar pedido'>
-                              <IconButton
-                                size='small'
-                                color='primary'
-                                onClick={() => abrirDialogoEditarPedido(pedido)}
-                              >
-                                <EditIcon />
-                              </IconButton>
-                            </Tooltip>
+                            {pedido.estado !== 'entregado' && (
+                              <Tooltip title='Editar pedido'>
+                                <IconButton
+                                  size='small'
+                                  color='primary'
+                                  onClick={() => abrirDialogoEditarPedido(pedido)}
+                                >
+                                  <EditIcon />
+                                </IconButton>
+                              </Tooltip>
+                            )}
 
                             {pedido.estado === 'pendiente' && (
                               <Tooltip title='Cerrar Venta (Registrar Pago)'>
@@ -4104,6 +4106,16 @@ export default function VentasPage() {
           )}
         </DialogContent>
         <DialogActions>
+          {pedidoSeleccionado && pedidoSeleccionado.estado !== 'entregado' && (
+            <Button
+              variant='contained'
+              color='primary'
+              startIcon={<EditIcon />}
+              onClick={() => pedidoSeleccionado && abrirDialogoEditarPedido(pedidoSeleccionado)}
+            >
+              Editar pedido
+            </Button>
+          )}
           <Button onClick={cerrarDialogo}>Cerrar</Button>
         </DialogActions>
       </Dialog>

@@ -233,6 +233,9 @@ export default function CreditosAbonosPage() {
   const [pageHistorialPagos, setPageHistorialPagos] = useState(0)
   const [rowsPerPageHistorialPagos, setRowsPerPageHistorialPagos] = useState(10)
 
+  // Mapa ID usuario -> nombre para mostrar en historial de pagos (Registrado por / Autorizado por)
+  const [usuariosNombresMapHistorial, setUsuariosNombresMapHistorial] = useState<Map<string, string>>(new Map())
+
   // Cargar datos iniciales
   useEffect(() => {
     loadInitialData()
@@ -417,6 +420,27 @@ export default function CreditosAbonosPage() {
       })
       setPagosPendientesAutorizacion(pagosPendientes)
       setHistorialPagos(historial)
+
+      // Resolver IDs de usuario a nombres para historial de pagos (Registrado por / Autorizado por)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      const idsHistorial = new Set<string>()
+      historial.forEach((p: PagoAPI) => {
+        if (p.usuarioRegistro && uuidRegex.test(p.usuarioRegistro)) idsHistorial.add(p.usuarioRegistro)
+        if (p.usuarioAutorizacion && uuidRegex.test(p.usuarioAutorizacion)) idsHistorial.add(p.usuarioAutorizacion)
+      })
+      const mapNombres = new Map<string, string>()
+      await Promise.all(
+        Array.from(idsHistorial).map(async (userId) => {
+          try {
+            const u = await usuariosAPI.getById(userId)
+            mapNombres.set(userId, `${u.nombres || ''} ${u.apellidoPaterno || ''}`.trim() || u.correo || userId)
+          } catch {
+            mapNombres.set(userId, userId)
+          }
+        })
+      )
+      setUsuariosNombresMapHistorial(mapNombres)
+
       setPagePagosPendientes(0)
       setPageHistorialPagos(0)
 
@@ -652,12 +676,17 @@ export default function CreditosAbonosPage() {
         banco: fp.banco
       }))
 
+      const nombreUsuarioRegistro = usuario
+        ? `${usuario.nombres || ''} ${usuario.apellidoPaterno || ''}`.trim() || usuario.correo
+        : ''
+
       await creditosAbonosAPI.createPago({
         clienteId: clienteSeleccionado.id,
         notaCreditoId: notaSeleccionada?.id,
         montoTotal: montoTotalPago,
         tipo: notaSeleccionada ? 'nota_especifica' : 'abono_general',
         observaciones: observacionesPago,
+        usuarioRegistro: nombreUsuarioRegistro,
         formasPago: formasPagoData
       })
 
@@ -1977,12 +2006,16 @@ export default function CreditosAbonosPage() {
                         </TableCell>
                         <TableCell>
                           <Typography variant='body2'>
-                            {pago.usuarioRegistro}
+                            {pago.usuarioRegistro
+                              ? (usuariosNombresMapHistorial.get(pago.usuarioRegistro) || pago.usuarioRegistro)
+                              : '-'}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant='body2'>
-                            {pago.usuarioAutorizacion || '-'}
+                            {pago.usuarioAutorizacion
+                              ? (usuariosNombresMapHistorial.get(pago.usuarioAutorizacion) || pago.usuarioAutorizacion)
+                              : '-'}
                           </Typography>
                         </TableCell>
                         <TableCell align='center'>

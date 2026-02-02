@@ -2158,6 +2158,7 @@ export interface CreatePagoRequest {
   fechaPago?: string
   horaPago?: string
   observaciones?: string
+  usuarioRegistro?: string
   estado?: 'pendiente' | 'autorizado' | 'rechazado' | 'cancelado'
   formasPago: Array<{
     formaPagoId: string
