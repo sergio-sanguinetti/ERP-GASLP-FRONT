@@ -724,20 +724,26 @@ export default function ClientesPage() {
       const sedesData = await sedesAPI.getAll()
       setSedes(sedesData)
 
-      // Si es super administrador, permitir seleccionar sede
-      // Si no, usar la sede del usuario
-      if (user.rol === 'superAdministrador') {
-        // Por defecto, usar la primera sede o la del usuario si existe
-        setSedeId(user.sede || sedesData[0]?.id || null)
-        setSedeSeleccionada(user.sede || sedesData[0]?.id || null)
-      } else {
-        setSedeId(user.sede || null)
-        setSedeSeleccionada(user.sede || null)
+      // Resolver sede: puede venir como ID (UUID) o como nombre
+      let sedeUsuarioId: string | null = null
+      if (user.sede) {
+        const sedeEncontrada = sedesData.find(
+          s => s.id === user.sede || s.nombre === user.sede || (typeof user.sede === 'string' && s.nombre.toUpperCase() === user.sede.toUpperCase())
+        )
+        sedeUsuarioId = sedeEncontrada?.id ?? null
       }
+
+      // Solo superAdministrador puede elegir sede; Administrador y Gestor solo ven su sede asignada
+      const nuevaSedeId = user.rol === 'superAdministrador'
+        ? (sedeUsuarioId || sedesData[0]?.id || null)
+        : sedeUsuarioId
+      setSedeId(nuevaSedeId)
+      setSedeSeleccionada(nuevaSedeId)
+      // Mantener loader hasta que cargarDatos termine; si no hay sede, terminar aquí
+      if (!nuevaSedeId) setLoading(false)
     } catch (err: any) {
       setError(err.message || 'Error al cargar datos iniciales')
       console.error('Error loading initial data:', err)
-    } finally {
       setLoading(false)
     }
   }
@@ -1455,9 +1461,10 @@ export default function ClientesPage() {
             </Select>
           </FormControl>
         )}
+        {/* Administrador y Gestor: solo muestran el nombre de su sede (sin selector) */}
         {!esSuperAdministrador && sedeId && (
           <Chip
-            label={`Sede: ${sedes.find(s => s.id === sedeId)?.nombre || 'N/A'}`}
+            label={sedes.find(s => s.id === sedeId)?.nombre ?? 'N/A'}
             color='primary'
             variant='outlined'
           />
@@ -1470,12 +1477,24 @@ export default function ClientesPage() {
         </Alert>
       )}
 
-      {loading && clientes.length === 0 ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-          <CircularProgress />
+      {loading ? (
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: 320,
+            py: 6,
+            gap: 2
+          }}
+        >
+          <CircularProgress size={48} />
+          <Typography color='text.secondary'>Cargando clientes...</Typography>
         </Box>
       ) : null}
 
+      {!loading && (
       <Card sx={{ mb: 3, position: 'relative' }}>
         {loadingSede && (
           <Box
@@ -1713,6 +1732,7 @@ export default function ClientesPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Modal Importar CSV */}
       <Dialog open={dialogoAbierto && tipoDialogo === 'importar'} onClose={cerrarDialogo} maxWidth='sm' fullWidth>

@@ -1707,9 +1707,10 @@ export default function VentasPage() {
             </Select>
           </FormControl>
         )}
+        {/* Administrador y Gestor: solo muestran el nombre de su sede (sin selector) */}
         {!esSuperAdministrador && sedeId && vistaActual !== 'catalogo' && (
           <Chip
-            label={`Sede: ${sedes.find(s => s.id === sedeId)?.nombre || 'N/A'}`}
+            label={sedes.find(s => s.id === sedeId)?.nombre ?? 'N/A'}
             color='primary'
             variant='outlined'
           />

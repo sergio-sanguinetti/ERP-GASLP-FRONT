@@ -307,6 +307,9 @@ export default function CorteCajaPage() {
     'dashboard' | 'validacion' | 'admin' | 'historial' | 'depositos'
   >('dashboard')
 
+  /** Tab dentro del dashboard: cortes por abono vs cortes por ventas */
+  const [tabCortesTipo, setTabCortesTipo] = useState<'abono' | 'ventas'>('ventas')
+
   useEffect(() => {
     fetchData()
   }, [])
@@ -660,7 +663,7 @@ export default function CorteCajaPage() {
       {vistaActual === 'dashboard' && (
         <Box>
           {/* Encabezado Principal */}
-          <Card sx={{ mb: 3, bgcolor: 'primary.main', color: 'white' }}>
+          <Card sx={{ mb: 2, bgcolor: 'primary.main', color: 'white' }}>
             <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
               <Typography variant='h4' gutterBottom sx={{ color: 'white' }}>
                 CORTES DEL DÍA DE HOY - PENDIENTES VALIDACIÓN
@@ -686,6 +689,16 @@ export default function CorteCajaPage() {
             </CardContent>
           </Card>
 
+          {/* Tabs: Cortes Abono / Cortes Ventas */}
+          <Tabs
+            value={tabCortesTipo}
+            onChange={(_, v) => setTabCortesTipo(v)}
+            sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
+          >
+            <Tab label='Cortes Ventas' value='ventas' />
+            <Tab label='Cortes Abono' value='abono' />
+          </Tabs>
+
           <Grid container spacing={3}>
             {/* Sección Repartidores Pipas */}
             <Grid item xs={12} md={6}>
@@ -694,7 +707,7 @@ export default function CorteCajaPage() {
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
                     <LocalShippingIcon color='primary' sx={{ mr: 1, fontSize: 30 }} />
                     <Typography variant='h5' color='primary'>
-                      REPARTIDORES PIPAS
+                      REPARTIDORES PIPAS {tabCortesTipo === 'ventas' ? '(VENTAS)' : '(ABONOS)'}
                     </Typography>
                   </Box>
 
@@ -705,7 +718,7 @@ export default function CorteCajaPage() {
                           <TableCell>Repartidor</TableCell>
                           <TableCell>Ruta</TableCell>
                           <TableCell>Hora Entrega</TableCell>
-                          <TableCell align='right'>Total Día</TableCell>
+                          <TableCell align='right'>{tabCortesTipo === 'ventas' ? 'Ventas' : 'Abonos'}</TableCell>
                           <TableCell align='center'>Estado</TableCell>
                           <TableCell align='center'>Acción</TableCell>
                         </TableRow>
@@ -729,7 +742,7 @@ export default function CorteCajaPage() {
                             </TableCell>
                             <TableCell align='right'>
                               <Typography variant='h6' color='primary'>
-                                ${repartidor.totalDia.toLocaleString()}
+                                ${(tabCortesTipo === 'ventas' ? repartidor.ventas.montoTotal : repartidor.abonos.montoTotal).toLocaleString()}
                               </Typography>
                             </TableCell>
                             <TableCell align='center'>
@@ -765,7 +778,7 @@ export default function CorteCajaPage() {
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
                     <GasMeterIcon color='secondary' sx={{ mr: 1, fontSize: 30 }} />
                     <Typography variant='h5' color='secondary'>
-                      REPARTIDORES CILINDROS
+                      REPARTIDORES CILINDROS {tabCortesTipo === 'ventas' ? '(VENTAS)' : '(ABONOS)'}
                     </Typography>
                   </Box>
 
@@ -776,7 +789,7 @@ export default function CorteCajaPage() {
                           <TableCell>Repartidor</TableCell>
                           <TableCell>Ruta</TableCell>
                           <TableCell>Hora Entrega</TableCell>
-                          <TableCell align='right'>Total Día</TableCell>
+                          <TableCell align='right'>{tabCortesTipo === 'ventas' ? 'Ventas' : 'Abonos'}</TableCell>
                           <TableCell align='center'>Estado</TableCell>
                           <TableCell align='center'>Acción</TableCell>
                         </TableRow>
@@ -800,7 +813,7 @@ export default function CorteCajaPage() {
                             </TableCell>
                             <TableCell align='right'>
                               <Typography variant='h6' color='primary'>
-                                ${repartidor.totalDia.toLocaleString()}
+                                ${(tabCortesTipo === 'ventas' ? repartidor.ventas.montoTotal : repartidor.abonos.montoTotal).toLocaleString()}
                               </Typography>
                             </TableCell>
                             <TableCell align='center'>

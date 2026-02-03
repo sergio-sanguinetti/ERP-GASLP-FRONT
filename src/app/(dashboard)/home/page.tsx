@@ -1,7 +1,7 @@
 'use client'
 
 // React Imports
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 // MUI Imports
 import {
@@ -9,52 +9,80 @@ import {
   Typography,
   Card,
   CardContent,
-  IconButton
+  IconButton,
+  CircularProgress
 } from '@mui/material'
 
 // Icon Imports
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 
-// Imágenes de la galería
-const galleryImages = [
-  {
-    id: 1,
-    src: '/images/camion_2.jpg',
-    alt: 'Flota de camiones de distribución',
-    title: 'Flota de Camiones'
-  },
-  {
-    id: 2,
-    src: '/images/camion_gas.jpg',
-    alt: 'Camión de gas licuado',
-    title: 'Camión de Gas'
-  },
-  {
-    id: 3,
-    src: '/images/depositos.jpg',
-    alt: 'Almacenamiento de combustibles',
-    title: 'Depósitos'
-  },
-  {
-    id: 4,
-    src: '/images/estacion_gas.jpg',
-    alt: 'Estación de servicio',
-    title: 'Estación de Gas'
-  }
+// Context & API
+import { useAuth } from '@/contexts/AuthContext'
+import { newsletterAPI, type NewsletterItem } from '@/lib/api'
+
+// Imágenes de respaldo cuando no hay newsletter o falla la carga
+const defaultGalleryImages = [
+  { id: '1', src: '/images/camion_2.jpg', alt: 'Flota de camiones de distribución', title: 'Flota de Camiones' },
+  { id: '2', src: '/images/camion_gas.jpg', alt: 'Camión de gas licuado', title: 'Camión de Gas' },
+  { id: '3', src: '/images/depositos.jpg', alt: 'Almacenamiento de combustibles', title: 'Depósitos' },
+  { id: '4', src: '/images/estacion_gas.jpg', alt: 'Estación de servicio', title: 'Estación de Gas' }
 ]
 
+function newsletterToGalleryItem(item: NewsletterItem): { id: string; src: string; alt: string; title: string } {
+  return {
+    id: item.id,
+    src: item.imageUrl || '/images/portada.webp',
+    alt: item.description || item.title || 'Newsletter',
+    title: item.title || item.description || 'Imagen'
+  }
+}
+
 export default function Page() {
+  const { user } = useAuth()
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [newsletterItems, setNewsletterItems] = useState<NewsletterItem[]>([])
+  const [newsletterLoading, setNewsletterLoading] = useState(true)
+
+  const displayName = useMemo(() => {
+    if (!user) return 'Usuario'
+    const parts = [user.nombres, user.apellidoPaterno, user.apellidoMaterno].filter(Boolean)
+    return parts.join(' ').trim() || user.email || 'Usuario'
+  }, [user])
+
+  const galleryImages = useMemo(() => {
+    const fromNewsletter = newsletterItems
+      .filter((item) => item.type === 'image' && item.activo && item.imageUrl)
+      .map(newsletterToGalleryItem)
+    return fromNewsletter.length > 0 ? fromNewsletter : defaultGalleryImages
+  }, [newsletterItems])
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      setNewsletterLoading(true)
+      try {
+        const data = await newsletterAPI.getAll({ type: 'image', activo: true })
+        if (!cancelled) setNewsletterItems(data || [])
+      } catch {
+        if (!cancelled) setNewsletterItems([])
+      } finally {
+        if (!cancelled) setNewsletterLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
 
   // Auto-play del carousel
   useEffect(() => {
+    if (galleryImages.length <= 1) return
     const interval = setInterval(() => {
       setCurrentIndex((prevIndex) => (prevIndex + 1) % galleryImages.length)
-    }, 5000) // Cambia cada 5 segundos
+    }, 5000)
 
     return () => clearInterval(interval)
-  }, [])
+  }, [galleryImages.length])
 
   const handlePrevious = () => {
     setCurrentIndex((prevIndex) =>
@@ -76,7 +104,7 @@ export default function Page() {
       <Card sx={{ mb: 4 }}>
         <CardContent>
           <Typography variant="h4" component="h1" gutterBottom fontWeight="bold">
-            Bienvenido Juan
+            Bienvenido, {displayName}
           </Typography>
           <Typography variant="body1" color="text.secondary">
             Sistema de gestión PROMETEO.LP
@@ -84,11 +112,11 @@ export default function Page() {
         </CardContent>
       </Card>
 
-      {/* Carousel de Imágenes */}
+      {/* Carousel de Imágenes (conectado al Newsletter) */}
       <Card>
         <CardContent>
           <Typography variant="h5" component="h2" gutterBottom sx={{ mb: 3 }}>
-            Galería
+            {newsletterLoading ? 'Cargando galería…' : 'Galería'}
           </Typography>
           <Box
             sx={{
@@ -236,6 +264,11 @@ export default function Page() {
               </Box>
             </Box>
           </Box>
+          {newsletterLoading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+              <CircularProgress size={24} />
+            </Box>
+          )}
         </CardContent>
       </Card>
     </Box>

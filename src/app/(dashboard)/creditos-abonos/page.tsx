@@ -306,14 +306,21 @@ export default function CreditosAbonosPage() {
       
       setSedes(sedesData)
       setFormasPagoDisponibles(formasPagoData)
-      
-      let initialSedeId: string | null = null
-      if (user.rol === 'superAdministrador') {
-        initialSedeId = user.sede || sedesData[0]?.id || null
-      } else {
-        initialSedeId = user.sede || null
+
+      // Resolver sede: puede venir como ID (UUID) o como nombre
+      let sedeUsuarioId: string | null = null
+      if (user.sede) {
+        const sedeEncontrada = sedesData.find(
+          s => s.id === user.sede || s.nombre === user.sede || (typeof user.sede === 'string' && s.nombre.toUpperCase() === user.sede.toUpperCase())
+        )
+        sedeUsuarioId = sedeEncontrada?.id ?? null
       }
-      
+
+      // Solo superAdministrador puede elegir sede; Administrador y Gestor solo ven su sede asignada
+      const initialSedeId = user.rol === 'superAdministrador'
+        ? (sedeUsuarioId || sedesData[0]?.id || null)
+        : sedeUsuarioId
+
       // El useEffect que depende de sedeId se encargará de cargar rutas de la sede y luego clientes (primera ruta)
       setSedeId(initialSedeId)
     } catch (err: any) {
@@ -866,8 +873,8 @@ export default function CreditosAbonosPage() {
           Gestión de Créditos y Abonos
         </Typography>
         
-        {/* Selector de Sede */}
-        {usuario && (usuario.rol === 'superAdministrador' || sedes.length > 1) && (
+        {/* Selector de Sede solo para superAdministrador; Administrador y Gestor solo ven el nombre de su sede */}
+        {usuario?.rol === 'superAdministrador' && (
           <FormControl sx={{ minWidth: 250 }}>
             <InputLabel>Sede</InputLabel>
             <Select
@@ -882,6 +889,13 @@ export default function CreditosAbonosPage() {
               ))}
             </Select>
           </FormControl>
+        )}
+        {usuario && usuario.rol !== 'superAdministrador' && sedeId && (
+          <Chip
+            label={sedes.find(s => s.id === sedeId)?.nombre ?? 'N/A'}
+            color='primary'
+            variant='outlined'
+          />
         )}
       </Box>
 
