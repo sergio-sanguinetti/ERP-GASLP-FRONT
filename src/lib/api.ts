@@ -2091,6 +2091,25 @@ export const ventasAPI = {
 
     return response.json()
   },
+
+  /** Valida un corte (aprobar/rechazar). */
+  validarCorte: async (
+    corteId: string,
+    body: { estado: string; observaciones?: string; validaciones?: Record<string, unknown> }
+  ): Promise<any> => {
+    const response = await fetchWithAuth(`/cortes-caja/${corteId}/validate`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al validar el corte')
+    }
+
+    return response.json()
+  }
 }
 
 // API de Créditos y Abonos

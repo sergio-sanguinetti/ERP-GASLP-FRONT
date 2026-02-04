@@ -112,11 +112,14 @@ function esHoyMexico(fechaIso: string | Date): boolean {
 }
 
 // Tipos de datos
+type TipoCorte = 'venta_dia' | 'abono'
+
 interface RepartidorCorte {
   id: string
   nombre: string
   ruta: string
   tipo: 'pipas' | 'cilindros'
+  tipoCorte?: TipoCorte
   horaEntrega: string
   totalDia: number
   estado: 'recibido' | 'validado' | 'pendiente'
@@ -139,6 +142,8 @@ interface RepartidorCorte {
     transferencias: { monto: number; operaciones: OperacionTransferencia[] }
     cheques: { monto: number; operaciones: OperacionCheque[] }
   }
+  /** Resumen de montos por forma de pago (venta o abono según tipoCorte). Claves: efectivo, transferencia, tarjeta, cheque, credito, otros */
+  resumenFormasPago?: Record<string, number>
   reporteFisico?: {
     totalServicios: number
     totalLitros: number
@@ -293,7 +298,12 @@ export default function CorteCajaPage() {
     granTotalOperacion: 0,
     efectivoConsolidado: 0
   })
-  const [repartidoresCorte, setRepartidoresCorte] = useState<RepartidorCorte[]>([])
+  const [cortesHoyList, setCortesHoyList] = useState<(RepartidorCorte & { tipoCorte: TipoCorte })[]>([])
+  /** Tab dentro del dashboard: cortes por abono vs cortes por ventas */
+  const [tabCortesTipo, setTabCortesTipo] = useState<'abono' | 'ventas'>('ventas')
+  const repartidoresCorte = cortesHoyList.filter(
+    r => (r.tipoCorte === 'venta_dia') === (tabCortesTipo === 'ventas')
+  )
   const [depositosBancarios, setDepositosBancarios] = useState<DepositoBancario[]>([])
   const [historialCaja, setHistorialCaja] = useState<AperturaCierreCaja[]>([])
   const [historialCortesList, setHistorialCortesList] = useState<(RepartidorCorte & { fechaCorte: string })[]>([])
@@ -306,9 +316,6 @@ export default function CorteCajaPage() {
   const [vistaActual, setVistaActual] = useState<
     'dashboard' | 'validacion' | 'admin' | 'historial' | 'depositos'
   >('dashboard')
-
-  /** Tab dentro del dashboard: cortes por abono vs cortes por ventas */
-  const [tabCortesTipo, setTabCortesTipo] = useState<'abono' | 'ventas'>('ventas')
 
   useEffect(() => {
     fetchData()
@@ -330,39 +337,53 @@ export default function CorteCajaPage() {
         efectivoConsolidado: pipas.totalAbonos + cilindros.totalAbonos
       })
 
-      // Transformar cortes del backend al formato del frontend
-      const transformedCortes: RepartidorCorte[] = allCortes.map((c: any) => ({
-        id: c.id,
-        nombre: `${c.repartidor?.nombres} ${c.repartidor?.apellidoPaterno}`,
-        ruta: 'Ruta 001', // El backend debería devolver la ruta
-        tipo: c.repartidor?.tipoRepartidor || 'pipas',
-        horaEntrega: new Date(c.fecha).toLocaleTimeString('es-MX', { timeZone: TIMEZONE_MEXICO, hour: '2-digit', minute: '2-digit' }),
-        totalDia: c.totalVentas + c.totalAbonos,
-        estado: c.estado === 'pendiente' ? 'recibido' : c.estado,
-        ventas: {
-          montoTotal: c.totalVentas,
-          litrosServicios: 0
-        },
-        abonos: {
-          montoTotal: c.totalAbonos,
-          cantidad: 0
-        },
-        efectivo: {
-          metodo: c.depositos?.length > 0 ? 'depositado-cajero' : 'entregado-planta',
-          montoDepositado: c.depositos?.reduce((sum: number, d: any) => sum + d.monto, 0) || 0,
-          billetesRechazados: c.depositos?.reduce((sum: number, d: any) => sum + d.billetesRechazados, 0) || 0,
-          monedasEntregadas: c.depositos?.reduce((sum: number, d: any) => sum + d.monedas, 0) || 0
-        },
-        formasPago: {
-          terminal: { monto: 0, operaciones: [] },
-          transferencias: { monto: 0, operaciones: [] },
-          cheques: { monto: 0, operaciones: [] }
-        }
-      }))
+      const tipoCorteVal = (t: string) => (t === 'abono' ? 'abono' : 'venta_dia') as TipoCorte
+      const sumDep = (depositos: any[], key: string) => {
+        if (!depositos?.length) return 0
+        const sum = depositos.reduce((s: number, d: any) => s + (Number(d[key] ?? d.total ?? d.monto) || 0), 0)
+        return Math.round(sum * 100) / 100
+      }
 
-      // Solo mostrar en el dashboard los cortes del día de hoy (horario Ciudad de México)
+      // Transformar cortes del backend e incluir tipo de corte (venta_dia | abono) y resumen formas de pago
+      const transformedCortes: (RepartidorCorte & { tipoCorte: TipoCorte })[] = allCortes.map((c: any) => {
+        const tipoCorte = tipoCorteVal(c.tipo ?? 'venta_dia')
+        const resumenFormasPago =
+          tipoCorte === 'venta_dia' ? c.resumenFormasPagoVenta : c.resumenFormasPagoAbono
+        return {
+          id: c.id,
+          nombre: `${c.repartidor?.nombres} ${c.repartidor?.apellidoPaterno}`,
+          ruta: 'Ruta 001',
+          tipo: c.repartidor?.tipoRepartidor || 'pipas',
+          tipoCorte,
+          horaEntrega: new Date(c.fecha).toLocaleTimeString('es-MX', { timeZone: TIMEZONE_MEXICO, hour: '2-digit', minute: '2-digit' }),
+          totalDia: (Number(c.totalVentas) || 0) + (Number(c.totalAbonos) || 0),
+          estado: c.estado === 'pendiente' ? 'recibido' : c.estado,
+          ventas: {
+            montoTotal: Number(c.totalVentas) || 0,
+            litrosServicios: 0
+          },
+          abonos: {
+            montoTotal: Number(c.totalAbonos) || 0,
+            cantidad: 0
+          },
+          efectivo: {
+            metodo: c.depositos?.length > 0 ? 'depositado-cajero' : 'entregado-planta',
+            montoDepositado: sumDep(c.depositos, 'total') || sumDep(c.depositos, 'monto') || 0,
+            billetesRechazados: sumDep(c.depositos, 'billetesRechazados') || 0,
+            monedasEntregadas: sumDep(c.depositos, 'monedas') || 0
+          },
+          formasPago: {
+            terminal: { monto: 0, operaciones: [] },
+            transferencias: { monto: 0, operaciones: [] },
+            cheques: { monto: 0, operaciones: [] }
+          },
+          resumenFormasPago: resumenFormasPago && typeof resumenFormasPago === 'object' ? resumenFormasPago : undefined
+        }
+      })
+
+      // Solo cortes de hoy (Ciudad de México); guardar todos con tipo para filtrar por tab
       const cortesHoy = transformedCortes.filter((_, i) => esHoyMexico(allCortes[i].fecha))
-      setRepartidoresCorte(cortesHoy)
+      setCortesHoyList(cortesHoy)
 
       // Transformar depósitos
       const allDepositos: DepositoBancario[] = []
@@ -438,7 +459,7 @@ export default function CorteCajaPage() {
   const [repartidorSeleccionado, setRepartidorSeleccionado] = useState<RepartidorCorte | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
   const [tipoDialogo, setTipoDialogo] = useState<
-    'validacion' | 'observaciones' | 'apertura' | 'cierre' | 'validar-deposito'
+    'validacion' | 'resumen' | 'observaciones' | 'apertura' | 'cierre' | 'validar-deposito'
   >('validacion')
   const [modoAuxiliar, setModoAuxiliar] = useState(false)
   const [pasoActual, setPasoActual] = useState(0)
@@ -477,6 +498,12 @@ export default function CorteCajaPage() {
     setPasoActual(0)
   }
 
+  const abrirResumen = (repartidor: RepartidorCorte) => {
+    setRepartidorSeleccionado(repartidor)
+    setTipoDialogo('resumen')
+    setDialogoAbierto(true)
+  }
+
   const abrirValidacionDeposito = (deposito: DepositoBancario) => {
     setDepositoSeleccionado(deposito)
     setTipoDialogo('validar-deposito')
@@ -508,6 +535,7 @@ export default function CorteCajaPage() {
   }
 
   const procesarAperturaCierre = () => {
+    if (tipoDialogo !== 'apertura' && tipoDialogo !== 'cierre') return
     const nuevaOperacion: AperturaCierreCaja = {
       id: Date.now().toString(),
       fecha: new Date().toISOString().split('T')[0],
@@ -609,6 +637,16 @@ export default function CorteCajaPage() {
 
   const repartidoresPipas = repartidoresCorte.filter(r => r.tipo === 'pipas')
   const repartidoresCilindros = repartidoresCorte.filter(r => r.tipo === 'cilindros')
+
+  const cortesPipasTab = cortesHoyList.filter(r => r.tipo === 'pipas' && (r.tipoCorte === 'venta_dia') === (tabCortesTipo === 'ventas'))
+  const cortesCilindrosTab = cortesHoyList.filter(r => r.tipo === 'cilindros' && (r.tipoCorte === 'venta_dia') === (tabCortesTipo === 'ventas'))
+  const resumenTab = {
+    cortesEntregados: cortesPipasTab.length + cortesCilindrosTab.length,
+    cortesValidados: cortesPipasTab.filter(r => r.estado === 'validado').length + cortesCilindrosTab.filter(r => r.estado === 'validado').length,
+    cortesPendientes: cortesPipasTab.filter(r => r.estado !== 'validado').length + cortesCilindrosTab.filter(r => r.estado !== 'validado').length,
+    totalVentas: tabCortesTipo === 'ventas' ? cortesPipasTab.reduce((s, r) => s + r.ventas.montoTotal, 0) + cortesCilindrosTab.reduce((s, r) => s + r.ventas.montoTotal, 0) : 0,
+    totalAbonos: tabCortesTipo === 'abono' ? cortesPipasTab.reduce((s, r) => s + r.abonos.montoTotal, 0) + cortesCilindrosTab.reduce((s, r) => s + r.abonos.montoTotal, 0) : 0
+  }
 
   return (
     <Box sx={{ p: 3 }}>
@@ -753,14 +791,36 @@ export default function CorteCajaPage() {
                               />
                             </TableCell>
                             <TableCell align='center'>
-                              <Button
-                                variant='outlined'
-                                size='small'
-                                onClick={() => abrirValidacion(repartidor)}
-                                startIcon={<VisibilityIcon />}
-                              >
-                                VER DETALLE
-                              </Button>
+                              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
+                                <Button
+                                  variant='outlined'
+                                  size='small'
+                                  onClick={() => abrirResumen(repartidor)}
+                                  startIcon={<VisibilityIcon />}
+                                >
+                                  VER DETALLE
+                                </Button>
+                                {repartidor.estado === 'validado' ? (
+                                  <Button
+                                    variant='outlined'
+                                    size='small'
+                                    color='primary'
+                                    onClick={() => abrirValidacion(repartidor)}
+                                    startIcon={<EditIcon />}
+                                  >
+                                    EDITAR
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant='contained'
+                                    size='small'
+                                    onClick={() => abrirValidacion(repartidor)}
+                                    startIcon={<CheckIcon />}
+                                  >
+                                    VALIDAR
+                                  </Button>
+                                )}
+                              </Box>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -824,14 +884,36 @@ export default function CorteCajaPage() {
                               />
                             </TableCell>
                             <TableCell align='center'>
-                              <Button
-                                variant='outlined'
-                                size='small'
-                                onClick={() => abrirValidacion(repartidor)}
-                                startIcon={<VisibilityIcon />}
-                              >
-                                VER DETALLE
-                              </Button>
+                              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
+                                <Button
+                                  variant='outlined'
+                                  size='small'
+                                  onClick={() => abrirResumen(repartidor)}
+                                  startIcon={<VisibilityIcon />}
+                                >
+                                  VER DETALLE
+                                </Button>
+                                {repartidor.estado === 'validado' ? (
+                                  <Button
+                                    variant='outlined'
+                                    size='small'
+                                    color='primary'
+                                    onClick={() => abrirValidacion(repartidor)}
+                                    startIcon={<EditIcon />}
+                                  >
+                                    EDITAR
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant='contained'
+                                    size='small'
+                                    onClick={() => abrirValidacion(repartidor)}
+                                    startIcon={<CheckIcon />}
+                                  >
+                                    VALIDAR
+                                  </Button>
+                                )}
+                              </Box>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -873,16 +955,10 @@ export default function CorteCajaPage() {
                   <Grid container spacing={2} sx={{ mb: 3 }}>
                     <Grid item xs={6}>
                       <Typography variant='body2' color='text.secondary'>
-                        Rutas Programadas
-                      </Typography>
-                      <Typography variant='h6'>{resumenCortes.pipas.rutasProgramadas}</Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant='body2' color='text.secondary'>
                         Cortes Entregados
                       </Typography>
                       <Typography variant='h6' color='success.main'>
-                        {resumenCortes.pipas.cortesEntregados}
+                        {cortesPipasTab.length}
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
@@ -890,7 +966,7 @@ export default function CorteCajaPage() {
                         Cortes Validados
                       </Typography>
                       <Typography variant='h6' color='primary'>
-                        {resumenCortes.pipas.cortesValidados}
+                        {cortesPipasTab.filter(r => r.estado === 'validado').length}
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
@@ -898,7 +974,7 @@ export default function CorteCajaPage() {
                         Cortes Pendientes
                       </Typography>
                       <Typography variant='h6' color='warning.main'>
-                        {resumenCortes.pipas.cortesPendientes}
+                        {cortesPipasTab.filter(r => r.estado !== 'validado').length}
                       </Typography>
                     </Grid>
                   </Grid>
@@ -906,22 +982,26 @@ export default function CorteCajaPage() {
                   <Divider sx={{ my: 2 }} />
 
                   <Grid container spacing={2}>
-                    <Grid item xs={6}>
-                      <Typography variant='body2' color='text.secondary'>
-                        Total Ventas
-                      </Typography>
-                      <Typography variant='h6' color='primary'>
-                        ${resumenCortes.pipas.totalVentas.toLocaleString()}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant='body2' color='text.secondary'>
-                        Total Abonos
-                      </Typography>
-                      <Typography variant='h6' color='success.main'>
-                        ${resumenCortes.pipas.totalAbonos.toLocaleString()}
-                      </Typography>
-                    </Grid>
+                    {tabCortesTipo === 'ventas' && (
+                      <Grid item xs={12}>
+                        <Typography variant='body2' color='text.secondary'>
+                          Total Ventas
+                        </Typography>
+                        <Typography variant='h6' color='primary'>
+                          ${cortesPipasTab.reduce((s, r) => s + r.ventas.montoTotal, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Typography>
+                      </Grid>
+                    )}
+                    {tabCortesTipo === 'abono' && (
+                      <Grid item xs={12}>
+                        <Typography variant='body2' color='text.secondary'>
+                          Total Abonos
+                        </Typography>
+                        <Typography variant='h6' color='success.main'>
+                          ${cortesPipasTab.reduce((s, r) => s + r.abonos.montoTotal, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Typography>
+                      </Grid>
+                    )}
                   </Grid>
                 </CardContent>
               </Card>
@@ -941,16 +1021,10 @@ export default function CorteCajaPage() {
                   <Grid container spacing={2} sx={{ mb: 3 }}>
                     <Grid item xs={6}>
                       <Typography variant='body2' color='text.secondary'>
-                        Rutas Programadas
-                      </Typography>
-                      <Typography variant='h6'>{resumenCortes.cilindros.rutasProgramadas}</Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant='body2' color='text.secondary'>
                         Cortes Entregados
                       </Typography>
                       <Typography variant='h6' color='success.main'>
-                        {resumenCortes.cilindros.cortesEntregados}
+                        {cortesCilindrosTab.length}
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
@@ -958,7 +1032,7 @@ export default function CorteCajaPage() {
                         Cortes Validados
                       </Typography>
                       <Typography variant='h6' color='primary'>
-                        {resumenCortes.cilindros.cortesValidados}
+                        {cortesCilindrosTab.filter(r => r.estado === 'validado').length}
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
@@ -966,7 +1040,7 @@ export default function CorteCajaPage() {
                         Cortes Pendientes
                       </Typography>
                       <Typography variant='h6' color='warning.main'>
-                        {resumenCortes.cilindros.cortesPendientes}
+                        {cortesCilindrosTab.filter(r => r.estado !== 'validado').length}
                       </Typography>
                     </Grid>
                   </Grid>
@@ -974,43 +1048,49 @@ export default function CorteCajaPage() {
                   <Divider sx={{ my: 2 }} />
 
                   <Grid container spacing={2}>
-                    <Grid item xs={6}>
-                      <Typography variant='body2' color='text.secondary'>
-                        Total Ventas
-                      </Typography>
-                      <Typography variant='h6' color='primary'>
-                        ${resumenCortes.cilindros.totalVentas.toLocaleString()}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant='body2' color='text.secondary'>
-                        Total Abonos
-                      </Typography>
-                      <Typography variant='h6' color='success.main'>
-                        ${resumenCortes.cilindros.totalAbonos.toLocaleString()}
-                      </Typography>
-                    </Grid>
+                    {tabCortesTipo === 'ventas' && (
+                      <Grid item xs={12}>
+                        <Typography variant='body2' color='text.secondary'>
+                          Total Ventas
+                        </Typography>
+                        <Typography variant='h6' color='primary'>
+                          ${cortesCilindrosTab.reduce((s, r) => s + r.ventas.montoTotal, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Typography>
+                      </Grid>
+                    )}
+                    {tabCortesTipo === 'abono' && (
+                      <Grid item xs={12}>
+                        <Typography variant='body2' color='text.secondary'>
+                          Total Abonos
+                        </Typography>
+                        <Typography variant='h6' color='success.main'>
+                          ${cortesCilindrosTab.reduce((s, r) => s + r.abonos.montoTotal, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Typography>
+                      </Grid>
+                    )}
                   </Grid>
                 </CardContent>
               </Card>
             </Grid>
 
-            {/* Gran Total Operación */}
+            {/* Gran Total Operación (según tab) */}
             <Grid item xs={12}>
               <Card sx={{ bgcolor: 'primary.main', color: 'white' }}>
                 <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box>
                       <Typography variant='h6' gutterBottom sx={{ color: 'white' }}>
-                        GRAN TOTAL OPERACIÓN
+                        {tabCortesTipo === 'ventas' ? 'TOTAL VENTAS (CORTES VENTA DÍA)' : 'TOTAL ABONOS (CORTES ABONO)'}
                       </Typography>
-                      <Typography variant='h3' sx={{ color: 'white' }}>${resumenCortes.granTotalOperacion.toLocaleString()}</Typography>
+                      <Typography variant='h3' sx={{ color: 'white' }}>
+                        ${(tabCortesTipo === 'ventas' ? resumenTab.totalVentas : resumenTab.totalAbonos).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Typography>
                     </Box>
                     <Box sx={{ textAlign: 'right' }}>
                       <Typography variant='h6' gutterBottom sx={{ color: 'white' }}>
-                        EFECTIVO CONSOLIDADO
+                        Cortes en esta pestaña
                       </Typography>
-                      <Typography variant='h4' sx={{ color: 'white' }}>${resumenCortes.efectivoConsolidado.toLocaleString()}</Typography>
+                      <Typography variant='h4' sx={{ color: 'white' }}>{resumenTab.cortesEntregados}</Typography>
                     </Box>
                   </Box>
                 </CardContent>
@@ -1206,14 +1286,36 @@ export default function CorteCajaPage() {
                             />
                           </TableCell>
                           <TableCell align='center'>
-                            <Button
-                              variant='outlined'
-                              size='small'
-                              onClick={() => abrirValidacion(corte)}
-                              startIcon={<VisibilityIcon />}
-                            >
-                              Ver detalle
-                            </Button>
+                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
+                              <Button
+                                variant='outlined'
+                                size='small'
+                                onClick={() => abrirResumen(corte)}
+                                startIcon={<VisibilityIcon />}
+                              >
+                                VER DETALLE
+                              </Button>
+                              {corte.estado === 'validado' ? (
+                                <Button
+                                  variant='outlined'
+                                  size='small'
+                                  color='primary'
+                                  onClick={() => abrirValidacion(corte)}
+                                  startIcon={<EditIcon />}
+                                >
+                                  EDITAR
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant='contained'
+                                  size='small'
+                                  onClick={() => abrirValidacion(corte)}
+                                  startIcon={<CheckIcon />}
+                                >
+                                  VALIDAR
+                                </Button>
+                              )}
+                            </Box>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1433,65 +1535,147 @@ export default function CorteCajaPage() {
         </Box>
       )}
 
-      {/* Modal de Validación Individual */}
+      {/* Modal Validación / Resumen */}
       <Dialog open={dialogoAbierto} onClose={cerrarDialogo} maxWidth='lg' fullWidth>
         <DialogTitle>
           {repartidorSeleccionado && (
             <Box>
               <Typography variant='h6'>
-                VALIDACIÓN CORTE - {repartidorSeleccionado.nombre.toUpperCase()} - {repartidorSeleccionado.ruta} -{' '}
-                {repartidorSeleccionado.tipo.toUpperCase()}
+                {tipoDialogo === 'resumen'
+                  ? `RESUMEN CORTE - ${repartidorSeleccionado.nombre.toUpperCase()} - ${repartidorSeleccionado.ruta} - ${repartidorSeleccionado.tipo.toUpperCase()}`
+                  : `VALIDACIÓN CORTE - ${repartidorSeleccionado.nombre.toUpperCase()} - ${repartidorSeleccionado.ruta} - ${repartidorSeleccionado.tipo.toUpperCase()}`
+                }
               </Typography>
             </Box>
           )}
         </DialogTitle>
         <DialogContent>
-          {repartidorSeleccionado && (
+          {repartidorSeleccionado && tipoDialogo === 'resumen' && (
+            <Box>
+              <Grid container spacing={3}>
+                {repartidorSeleccionado.tipoCorte === 'venta_dia' && (
+                  <Grid item xs={12} md={6}>
+                    <Card variant='outlined'>
+                      <CardContent>
+                        <Typography variant='h6' gutterBottom>Resumen de Ventas</Typography>
+                        <Typography variant='h4' color='primary'>
+                          ${Number(repartidorSeleccionado.ventas.montoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Typography>
+                        <Typography variant='body2' color='text.secondary'>
+                          {repartidorSeleccionado.ventas.litrosServicios} {repartidorSeleccionado.tipo === 'pipas' ? 'litros' : 'servicios'}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
+                {repartidorSeleccionado.tipoCorte === 'abono' && (
+                  <Grid item xs={12} md={6}>
+                    <Card variant='outlined'>
+                      <CardContent>
+                        <Typography variant='h6' gutterBottom>Resumen de Abonos</Typography>
+                        <Typography variant='h4' color='success.main'>
+                          ${Number(repartidorSeleccionado.abonos.montoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Typography>
+                        <Typography variant='body2' color='text.secondary'>
+                          {repartidorSeleccionado.abonos.cantidad} abonos
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
+                <Grid item xs={12}>
+                  <Card sx={{ bgcolor: 'primary.main', color: 'white' }}>
+                    <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
+                      <Typography variant='h6' gutterBottom sx={{ color: 'white' }}>
+                        {repartidorSeleccionado.tipoCorte === 'venta_dia' ? 'TOTAL DÍA (VENTAS)' : 'TOTAL DÍA (ABONOS)'}
+                      </Typography>
+                      <Typography variant='h3' sx={{ color: 'white' }}>
+                        ${(repartidorSeleccionado.tipoCorte === 'venta_dia'
+                          ? Number(repartidorSeleccionado.ventas.montoTotal)
+                          : Number(repartidorSeleccionado.abonos.montoTotal)
+                        ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant='body2' color='text.secondary'>
+                    Efectivo: ${Number(repartidorSeleccionado.efectivo.montoDepositado).toFixed(2)} • Estado: {repartidorSeleccionado.estado.toUpperCase()}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+          {repartidorSeleccionado && tipoDialogo === 'resumen' && (
+            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+              <Button
+                variant='outlined'
+                color='primary'
+                startIcon={<EditIcon />}
+                onClick={() => {
+                  setTipoDialogo('validacion')
+                  setPasoActual(0)
+                }}
+              >
+                EDITAR
+              </Button>
+            </Box>
+          )}
+          {repartidorSeleccionado && tipoDialogo === 'validacion' && (
             <Box>
               <Stepper activeStep={pasoActual} orientation='vertical'>
-                {/* Paso 1: Resumen Recibido */}
+                {/* Paso 1: Resumen Recibido (solo ventas o solo abonos según tipo de corte) */}
                 <Step>
                   <StepLabel>Resumen Recibido</StepLabel>
                   <StepContent>
                     <Grid container spacing={3}>
-                      <Grid item xs={12} md={6}>
-                        <Card variant='outlined'>
-                          <CardContent>
-                            <Typography variant='h6' gutterBottom>
-                              Resumen de Ventas
-                            </Typography>
-                            <Typography variant='h4' color='primary'>
-                              ${repartidorSeleccionado.ventas.montoTotal.toLocaleString()}
-                            </Typography>
-                            <Typography variant='body2' color='text.secondary'>
-                              {repartidorSeleccionado.ventas.litrosServicios}{' '}
-                              {repartidorSeleccionado.tipo === 'pipas' ? 'litros' : 'servicios'}
-                            </Typography>
-                          </CardContent>
-                        </Card>
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <Card variant='outlined'>
-                          <CardContent>
-                            <Typography variant='h6' gutterBottom>
-                              Resumen de Abonos
-                            </Typography>
-                            <Typography variant='h4' color='success.main'>
-                              ${repartidorSeleccionado.abonos.montoTotal.toLocaleString()}
-                            </Typography>
-                            <Typography variant='body2' color='text.secondary'>
-                              {repartidorSeleccionado.abonos.cantidad} abonos
-                            </Typography>
-                          </CardContent>
-                        </Card>
-                      </Grid>
+                      {repartidorSeleccionado.tipoCorte === 'venta_dia' && (
+                        <Grid item xs={12} md={6}>
+                          <Card variant='outlined'>
+                            <CardContent>
+                              <Typography variant='h6' gutterBottom>
+                                Resumen de Ventas
+                              </Typography>
+                              <Typography variant='h4' color='primary'>
+                                ${Number(repartidorSeleccionado.ventas.montoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </Typography>
+                              <Typography variant='body2' color='text.secondary'>
+                                {repartidorSeleccionado.ventas.litrosServicios}{' '}
+                                {repartidorSeleccionado.tipo === 'pipas' ? 'litros' : 'servicios'}
+                              </Typography>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      )}
+                      {repartidorSeleccionado.tipoCorte === 'abono' && (
+                        <Grid item xs={12} md={6}>
+                          <Card variant='outlined'>
+                            <CardContent>
+                              <Typography variant='h6' gutterBottom>
+                                Resumen de Abonos
+                              </Typography>
+                              <Typography variant='h4' color='success.main'>
+                                ${Number(repartidorSeleccionado.abonos.montoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </Typography>
+                              <Typography variant='body2' color='text.secondary'>
+                                {repartidorSeleccionado.abonos.cantidad} abonos
+                              </Typography>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      )}
                       <Grid item xs={12}>
                         <Card sx={{ bgcolor: 'primary.main', color: 'white' }}>
                           <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
                             <Typography variant='h6' gutterBottom sx={{ color: 'white' }}>
-                              TOTAL DÍA
+                              {repartidorSeleccionado.tipoCorte === 'venta_dia' ? 'TOTAL DÍA (VENTAS)' : 'TOTAL DÍA (ABONOS)'}
                             </Typography>
-                            <Typography variant='h3' sx={{ color: 'white' }}>${repartidorSeleccionado.totalDia.toLocaleString()}</Typography>
+                            <Typography variant='h3' sx={{ color: 'white' }}>
+                              ${(repartidorSeleccionado.tipoCorte === 'venta_dia'
+                                ? Number(repartidorSeleccionado.ventas.montoTotal)
+                                : Number(repartidorSeleccionado.abonos.montoTotal)
+                              ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </Typography>
                           </CardContent>
                         </Card>
                       </Grid>
@@ -1528,30 +1712,33 @@ export default function CorteCajaPage() {
                             <TextField
                               fullWidth
                               label='Monto Depositado'
-                              value={repartidorSeleccionado.efectivo.montoDepositado}
+                              value={Number(repartidorSeleccionado.efectivo.montoDepositado).toFixed(2)}
                               InputProps={{
                                 startAdornment: <InputAdornment position='start'>$</InputAdornment>
                               }}
+                              inputProps={{ readOnly: true }}
                             />
                           </Grid>
                           <Grid item xs={12} md={4}>
                             <TextField
                               fullWidth
                               label='Billetes Rechazados'
-                              value={repartidorSeleccionado.efectivo.billetesRechazados}
+                              value={Number(repartidorSeleccionado.efectivo.billetesRechazados).toFixed(2)}
                               InputProps={{
                                 startAdornment: <InputAdornment position='start'>$</InputAdornment>
                               }}
+                              inputProps={{ readOnly: true }}
                             />
                           </Grid>
                           <Grid item xs={12} md={4}>
                             <TextField
                               fullWidth
                               label='Monedas Entregadas'
-                              value={repartidorSeleccionado.efectivo.monedasEntregadas}
+                              value={Number(repartidorSeleccionado.efectivo.monedasEntregadas).toFixed(2)}
                               InputProps={{
                                 startAdornment: <InputAdornment position='start'>$</InputAdornment>
                               }}
+                              inputProps={{ readOnly: true }}
                             />
                           </Grid>
                         </Grid>
@@ -1590,6 +1777,53 @@ export default function CorteCajaPage() {
                     <Typography variant='h6' gutterBottom>
                       Pendientes de Validar
                     </Typography>
+
+                    {/* Resumen de montos por forma de pago (ventas o abonos según tipo de corte) */}
+                    {repartidorSeleccionado.resumenFormasPago && (
+                      <Card variant='outlined' sx={{ mb: 3, bgcolor: 'action.hover' }}>
+                        <CardContent>
+                          <Typography variant='subtitle1' fontWeight='bold' gutterBottom color='primary'>
+                            Resumen por forma de pago — {repartidorSeleccionado.tipoCorte === 'venta_dia' ? 'Corte venta (pedidos)' : 'Corte abono'}
+                          </Typography>
+                          <TableContainer component={Paper} variant='outlined' sx={{ borderRadius: 1 }}>
+                            <Table size='small'>
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>Forma de pago</TableCell>
+                                  <TableCell align='right'>Monto</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {[
+                                  { key: 'efectivo', label: 'Efectivo' },
+                                  { key: 'transferencia', label: 'Transferencia' },
+                                  { key: 'tarjeta', label: 'Tarjeta / Terminal' },
+                                  { key: 'cheque', label: 'Cheque' },
+                                  { key: 'credito', label: 'Crédito' },
+                                  { key: 'otros', label: 'Otros' }
+                                ]
+                                  .filter(({ key }) => (repartidorSeleccionado.resumenFormasPago![key] ?? 0) > 0)
+                                  .map(({ key, label }) => (
+                                    <TableRow key={key}>
+                                      <TableCell>{label}</TableCell>
+                                      <TableCell align='right'>
+                                        ${(repartidorSeleccionado.resumenFormasPago![key] as number).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                          <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                            <Typography variant='body2' fontWeight='bold'>
+                              Total:{' '}
+                              $
+                              {Object.values(repartidorSeleccionado.resumenFormasPago).reduce((s, v) => s + (Number(v) || 0), 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                            </Typography>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    )}
 
                     {/* Pago Terminal */}
                     {repartidorSeleccionado.formasPago.terminal.monto > 0 && (
@@ -1884,7 +2118,6 @@ export default function CorteCajaPage() {
                               return
                             }
 
-                            // Validar el corte en el backend
                             await ventasAPI.validarCorte(repartidorSeleccionado.id, {
                               estado: estadoFinalCorte,
                               observaciones: observaciones,
@@ -1899,16 +2132,6 @@ export default function CorteCajaPage() {
                               }
                             })
 
-                            // Actualizar el estado local
-                            setRepartidoresCorte(prev => 
-                              prev.map(r => 
-                                r.id === repartidorSeleccionado.id 
-                                  ? { ...r, estado: estadoFinalCorte as 'recibido' | 'validado' | 'pendiente' }
-                                  : r
-                              )
-                            )
-
-                            // Cerrar el diálogo y recargar datos
                             cerrarDialogo()
                             await fetchData()
                           } catch (error: any) {
