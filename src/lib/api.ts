@@ -470,20 +470,12 @@ export const formasPagoAPI = {
     if (filtros?.activa) queryParams.append('activa', filtros.activa)
 
     const queryString = queryParams.toString()
-    const url = `${API_URL}/formas-pago${queryString ? `?${queryString}` : ''}`
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
-
+    const url = `/formas-pago${queryString ? `?${queryString}` : ''}`
+    const response = await fetchWithAuth(url)
     if (!response.ok) {
       const error = await response.json()
       throw new Error(error.message || 'Error al obtener formas de pago')
     }
-
     return response.json()
   },
 
@@ -2171,6 +2163,7 @@ export interface CreateNotaCreditoRequest {
 
 export interface CreatePagoRequest {
   clienteId: string
+  pedidoId?: string
   notaCreditoId?: string
   montoTotal: number
   tipo: 'nota_especifica' | 'abono_general'
@@ -2180,7 +2173,8 @@ export interface CreatePagoRequest {
   usuarioRegistro?: string
   estado?: 'pendiente' | 'autorizado' | 'rechazado' | 'cancelado'
   formasPago: Array<{
-    formaPagoId: string
+    formaPagoId?: string | null
+    tipo?: string
     monto: number
     referencia?: string
     banco?: string
@@ -2377,10 +2371,23 @@ export const creditosAbonosAPI = {
   },
 
   // Resumen de Cartera
-  getResumenCartera: async (filtros?: { clienteId?: string; rutaId?: string }): Promise<ResumenCartera> => {
+  getResumenCartera: async (filtros?: {
+    clienteId?: string
+    rutaId?: string
+    estadoCliente?: string
+    fechaDesde?: string
+    fechaHasta?: string
+    saldoMin?: number | string
+    saldoMax?: number | string
+  }): Promise<ResumenCartera> => {
     const queryParams = new URLSearchParams()
     if (filtros?.clienteId) queryParams.append('clienteId', filtros.clienteId)
     if (filtros?.rutaId) queryParams.append('rutaId', filtros.rutaId)
+    if (filtros?.estadoCliente) queryParams.append('estadoCliente', filtros.estadoCliente)
+    if (filtros?.fechaDesde) queryParams.append('fechaDesde', filtros.fechaDesde)
+    if (filtros?.fechaHasta) queryParams.append('fechaHasta', filtros.fechaHasta)
+    if (filtros?.saldoMin != null && filtros.saldoMin !== '') queryParams.append('saldoMin', String(filtros.saldoMin))
+    if (filtros?.saldoMax != null && filtros.saldoMax !== '') queryParams.append('saldoMax', String(filtros.saldoMax))
 
     const queryString = queryParams.toString()
     const url = `/creditos-abonos/resumen-cartera${queryString ? `?${queryString}` : ''}`
@@ -2396,12 +2403,14 @@ export const creditosAbonosAPI = {
   },
 
   // Clientes con Crédito (paginado; solo primera ruta por defecto)
-  getClientesCredito: async (filtros?: ClientesFilters & { page?: number; pageSize?: number }): Promise<{ clientes: ClienteCredito[]; total: number }> => {
+  getClientesCredito: async (filtros?: ClientesFilters & { page?: number; pageSize?: number; saldoMin?: number | string; saldoMax?: number | string }): Promise<{ clientes: ClienteCredito[]; total: number }> => {
     const queryParams = new URLSearchParams()
     if (filtros?.nombre) queryParams.append('nombre', filtros.nombre)
     if (filtros?.rutaId) queryParams.append('rutaId', filtros.rutaId)
     if (filtros?.estadoCliente) queryParams.append('estadoCliente', filtros.estadoCliente)
     if (filtros?.sedeId) queryParams.append('sedeId', filtros.sedeId)
+    if (filtros?.saldoMin != null && filtros.saldoMin !== '') queryParams.append('saldoMin', String(filtros.saldoMin))
+    if (filtros?.saldoMax != null && filtros.saldoMax !== '') queryParams.append('saldoMax', String(filtros.saldoMax))
     if (filtros?.page != null) queryParams.append('page', String(filtros.page))
     if (filtros?.pageSize != null) queryParams.append('pageSize', String(filtros.pageSize))
 

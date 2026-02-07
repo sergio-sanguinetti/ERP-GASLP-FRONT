@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { 
   creditosAbonosAPI, 
   clientesAPI, 
@@ -163,8 +163,9 @@ interface PagoPendienteAutorizacion {
 export default function CreditosAbonosPage() {
   const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'pagos-pendientes' | 'historial-pagos'>('dashboard')
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteCredito | null>(null)
+  const refFichaCliente = useRef<HTMLDivElement | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
-  const [tipoDialogo, setTipoDialogo] = useState<'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono'>('modificar-limite')
+  const [tipoDialogo, setTipoDialogo] = useState<'modificar-limite' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono'>('modificar-limite')
   const [notaSeleccionada, setNotaSeleccionada] = useState<NotaCredito | null>(null)
   const [formasPago, setFormasPago] = useState<Array<{ id: string; formaPagoId: string; metodo: string; monto: number; referencia?: string; banco?: string }>>([])
   const [montoTotalPago, setMontoTotalPago] = useState(0)
@@ -172,6 +173,7 @@ export default function CreditosAbonosPage() {
     nombre: '',
     ruta: '',
     estado: '',
+    deuda: '', // '' = todos, 'con-deuda' = solo con saldo > 0, 'sin-deuda' = al día
     saldoMin: '',
     saldoMax: '',
     diasVencimientoMin: '',
@@ -206,6 +208,7 @@ export default function CreditosAbonosPage() {
   const [saving, setSaving] = useState(false)
   const [nuevoLimite, setNuevoLimite] = useState(0)
   const [motivoLimite, setMotivoLimite] = useState('')
+  const [formatoEstadoCuenta, setFormatoEstadoCuenta] = useState<'pdf' | 'excel'>('pdf')
   const [observacionesPago, setObservacionesPago] = useState('')
   const [limitesEditados, setLimitesEditados] = useState<Record<string, { limite: number; motivo: string }>>({})
   const [modalDetallePago, setModalDetallePago] = useState(false)
@@ -226,6 +229,15 @@ export default function CreditosAbonosPage() {
   // Buscador y filtro por ruta en Pagos Pendientes e Historial de Pagos
   const [filtroBusquedaPagosPendientes, setFiltroBusquedaPagosPendientes] = useState('')
   const [filtroBusquedaHistorialPagos, setFiltroBusquedaHistorialPagos] = useState('')
+  // Filtros propios del Historial de Pagos: ruta (todas por defecto) y fechas (hoy por defecto)
+  const [filtroRutaHistorialPagos, setFiltroRutaHistorialPagos] = useState<string>('todas')
+  const [fechaDesdeHistorialPagos, setFechaDesdeHistorialPagos] = useState<string>(() => new Date().toISOString().slice(0, 10))
+  const [fechaHastaHistorialPagos, setFechaHastaHistorialPagos] = useState<string>(() => new Date().toISOString().slice(0, 10))
+
+  // Filtros del Dashboard (resumen cartera): ruta y fechas
+  const [filtroRutaDashboard, setFiltroRutaDashboard] = useState<string>('todas')
+  const [fechaDesdeDashboard, setFechaDesdeDashboard] = useState<string>('')
+  const [fechaHastaDashboard, setFechaHastaDashboard] = useState<string>('')
 
   // Paginación client-side: Pagos Pendientes e Historial de Pagos
   const [pagePagosPendientes, setPagePagosPendientes] = useState(0)
@@ -358,9 +370,14 @@ export default function CreditosAbonosPage() {
       if (!filtrosAPI.rutaId && primeraRutaId) {
         filtrosAPI.rutaId = primeraRutaId
       }
-      if (filtros.estado) {
+      // Solo enviar estadoCliente al API cuando es un valor del enum del backend (activo/suspendido/inactivo).
+      // Los valores buen-pagador, vencido, critico, bloqueado son estado de crédito y se filtran en cliente.
+      const estadoClienteValidos = ['activo', 'suspendido', 'inactivo']
+      if (filtros.estado && estadoClienteValidos.includes(filtros.estado)) {
         filtrosAPI.estadoCliente = filtros.estado
       }
+      if (filtros.saldoMin !== '') filtrosAPI.saldoMin = filtros.saldoMin
+      if (filtros.saldoMax !== '') filtrosAPI.saldoMax = filtros.saldoMax
 
       const rutaIdParaCarga = filtrosAPI.rutaId
       const pageC = overrides?.pageClientes ?? pageClientes
@@ -368,15 +385,36 @@ export default function CreditosAbonosPage() {
       const rppClientes = overrides?.rowsPerPageClientes ?? rowsPerPageClientes
       const rppHistorial = overrides?.rowsPerPageHistorial ?? rowsPerPageHistorial
 
+      // Resumen de cartera: filtros propios del Dashboard (ruta + fechas)
+      const resumenFiltros: Parameters<typeof creditosAbonosAPI.getResumenCartera>[0] = {}
+      if (filtroRutaDashboard && filtroRutaDashboard !== 'todas') {
+        const rutaDashboard = listaRutas.find(r => r.nombre === filtroRutaDashboard)
+        if (rutaDashboard) resumenFiltros.rutaId = rutaDashboard.id
+      }
+      if (fechaDesdeDashboard) resumenFiltros.fechaDesde = fechaDesdeDashboard
+      if (fechaHastaDashboard) resumenFiltros.fechaHasta = fechaHastaDashboard
+      if (filtrosAPI.estadoCliente) resumenFiltros.estadoCliente = filtrosAPI.estadoCliente
+      if (filtros.saldoMin !== '') resumenFiltros.saldoMin = filtros.saldoMin
+      if (filtros.saldoMax !== '') resumenFiltros.saldoMax = filtros.saldoMax
+
+      // Historial de pagos: filtros propios (ruta = todas por defecto, fechas = hoy por defecto)
+      const historialFiltros: { rutaId?: string; fechaDesde?: string; fechaHasta?: string } = {}
+      if (filtroRutaHistorialPagos && filtroRutaHistorialPagos !== 'todas') {
+        const rutaHistorial = listaRutas.find(r => r.nombre === filtroRutaHistorialPagos)
+        if (rutaHistorial) historialFiltros.rutaId = rutaHistorial.id
+      }
+      if (fechaDesdeHistorialPagos) historialFiltros.fechaDesde = fechaDesdeHistorialPagos
+      if (fechaHastaHistorialPagos) historialFiltros.fechaHasta = fechaHastaHistorialPagos
+
       const [resumen, clientesResp, pagos, historial] = await Promise.all([
-        creditosAbonosAPI.getResumenCartera(rutaIdParaCarga ? { rutaId: rutaIdParaCarga } : undefined),
+        creditosAbonosAPI.getResumenCartera(Object.keys(resumenFiltros).length > 0 ? resumenFiltros : undefined),
         creditosAbonosAPI.getClientesCredito({
           ...filtrosAPI,
           page: pageC + 1,
           pageSize: rppClientes
         }),
         creditosAbonosAPI.getAllPagos({ estado: 'pendiente', ...(rutaIdParaCarga && { rutaId: rutaIdParaCarga }) }),
-        creditosAbonosAPI.getAllPagos(rutaIdParaCarga ? { rutaId: rutaIdParaCarga } : undefined)
+        creditosAbonosAPI.getAllPagos(Object.keys(historialFiltros).length > 0 ? historialFiltros : undefined)
       ])
 
       setResumenCredito(resumen)
@@ -536,7 +574,17 @@ export default function CreditosAbonosPage() {
     }
   }
 
-  const abrirDialogo = (tipo: 'modificar-limite' | 'recordatorio' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono', cliente?: ClienteCredito, nota?: NotaCredito) => {
+  // Al seleccionar un cliente para ver detalle, hacer scroll al panel de la ficha
+  useEffect(() => {
+    if (clienteSeleccionado && vistaActual === 'clientes' && refFichaCliente.current) {
+      const el = refFichaCliente.current
+      requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    }
+  }, [clienteSeleccionado, vistaActual])
+
+  const abrirDialogo = (tipo: 'modificar-limite' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono', cliente?: ClienteCredito, nota?: NotaCredito) => {
     setTipoDialogo(tipo)
     setClienteSeleccionado(cliente || null)
     setNotaSeleccionada(nota || null)
@@ -592,6 +640,70 @@ export default function CreditosAbonosPage() {
       cerrarDialogo()
     } catch (err: any) {
       setError(err.message || 'Error al actualizar límite de crédito')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const guardarBloquearCredito = async () => {
+    if (!clienteSeleccionado) return
+    try {
+      setSaving(true)
+      setError(null)
+      await creditosAbonosAPI.updateLimiteCredito(
+        clienteSeleccionado.id,
+        0,
+        'Crédito bloqueado desde Gestión de Créditos'
+      )
+      setSuccessMessage(`Crédito bloqueado para ${clienteSeleccionado.nombre}`)
+      await cargarDatos()
+      cerrarDialogo()
+      setTimeout(() => setSuccessMessage(null), 4000)
+    } catch (err: any) {
+      setError(err.message || 'Error al bloquear crédito')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const generarEstadoCuenta = async () => {
+    if (!clienteSeleccionado) return
+    try {
+      setSaving(true)
+      setError(null)
+      const notas = clienteSeleccionado.notasPendientes ?? []
+      const fecha = new Date().toLocaleDateString('es-MX', { dateStyle: 'long' })
+      const html = `
+        <!DOCTYPE html><html><head><meta charset="utf-8"><title>Estado de Cuenta - ${clienteSeleccionado.nombre}</title>
+        <style>body{font-family:system-ui,sans-serif;margin:2rem;max-width:800px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:left}h1{font-size:1.25rem}.totales{font-weight:bold;margin-top:1rem}</style></head>
+        <body>
+          <h1>Estado de Cuenta</h1>
+          <p><strong>Cliente:</strong> ${clienteSeleccionado.nombre}</p>
+          <p><strong>Fecha:</strong> ${fecha}</p>
+          <p><strong>Límite de crédito:</strong> $${(clienteSeleccionado.limiteCredito ?? 0).toLocaleString()}</p>
+          <p><strong>Saldo actual:</strong> $${(clienteSeleccionado.saldoActual ?? 0).toLocaleString()}</p>
+          <p><strong>Crédito disponible:</strong> $${(clienteSeleccionado.creditoDisponible ?? 0).toLocaleString()}</p>
+          <h2>Notas pendientes</h2>
+          <table>
+            <thead><tr><th>Número</th><th>Fecha venta</th><th>Vencimiento</th><th>Importe</th><th>Estado</th></tr></thead>
+            <tbody>
+              ${notas.map((n: NotaCredito) => `<tr><td>${n.numeroNota ?? ''}</td><td>${formatearFecha(n.fechaVenta)}</td><td>${formatearFecha(n.fechaVencimiento)}</td><td>$${(n.importe ?? 0).toLocaleString()}</td><td>${n.estado ?? ''}</td></tr>`).join('')}
+            </tbody>
+          </table>
+          ${notas.length === 0 ? '<p>Sin notas pendientes.</p>' : ''}
+          <p class="totales">Total pendiente: $${(clienteSeleccionado.saldoActual ?? 0).toLocaleString()}</p>
+        </body></html>`
+      const ventana = window.open('', '_blank')
+      if (ventana) {
+        ventana.document.write(html)
+        ventana.document.close()
+        if (formatoEstadoCuenta === 'pdf') {
+          ventana.print()
+        }
+      }
+      cerrarDialogo()
+    } catch (err: any) {
+      setError(err.message || 'Error al generar estado de cuenta')
     } finally {
       setSaving(false)
     }
@@ -809,10 +921,15 @@ export default function CreditosAbonosPage() {
       const cumpleNombre = !filtros.nombre || cliente.nombre.toLowerCase().includes(filtros.nombre.toLowerCase())
       const cumpleRuta = !filtros.ruta || cliente.ruta === filtros.ruta
       const cumpleEstado = !filtros.estado || cliente.estado === filtros.estado
+      const tieneDeuda = (cliente.saldoActual ?? 0) > 0
+      const cumpleDeuda =
+        !filtros.deuda ||
+        (filtros.deuda === 'con-deuda' && tieneDeuda) ||
+        (filtros.deuda === 'sin-deuda' && !tieneDeuda)
       const cumpleSaldoMin = !filtros.saldoMin || cliente.saldoActual >= Number(filtros.saldoMin)
       const cumpleSaldoMax = !filtros.saldoMax || cliente.saldoActual <= Number(filtros.saldoMax)
-      
-      return cumpleNombre && cumpleRuta && cumpleEstado && cumpleSaldoMin && cumpleSaldoMax
+
+      return cumpleNombre && cumpleRuta && cumpleEstado && cumpleDeuda && cumpleSaldoMin && cumpleSaldoMax
     })
   }, [clientesCredito, filtros])
 
@@ -864,7 +981,7 @@ export default function CreditosAbonosPage() {
     setPageClientes(0)
     setPageHistorial(0)
     cargarDatos(undefined, { pageClientes: 0, pageHistorial: 0 })
-  }, [filtros.nombre, filtros.ruta, filtros.estado])
+  }, [filtros.nombre, filtros.ruta, filtros.estado, filtroRutaHistorialPagos, fechaDesdeHistorialPagos, fechaHastaHistorialPagos, filtroRutaDashboard, fechaDesdeDashboard, fechaHastaDashboard])
 
   return (
     <Box sx={{ p: 3 }}>
@@ -961,6 +1078,42 @@ export default function CreditosAbonosPage() {
       {/* Dashboard Principal */}
       {vistaActual === 'dashboard' && (
         <Box>
+          {/* Filtros del Dashboard: ruta y fechas */}
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', mb: 3 }}>
+            <FormControl size='small' sx={{ minWidth: 200 }}>
+              <InputLabel>Ruta</InputLabel>
+              <Select
+                label='Ruta'
+                value={filtroRutaDashboard}
+                onChange={(e) => setFiltroRutaDashboard(e.target.value)}
+              >
+                <MenuItem value='todas'>Todas las rutas</MenuItem>
+                {rutasUnicas.map((ruta) => (
+                  <MenuItem key={ruta} value={ruta}>
+                    {ruta}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              size='small'
+              label='Fecha desde'
+              type='date'
+              value={fechaDesdeDashboard}
+              onChange={(e) => setFechaDesdeDashboard(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ minWidth: 160 }}
+            />
+            <TextField
+              size='small'
+              label='Fecha hasta'
+              type='date'
+              value={fechaHastaDashboard}
+              onChange={(e) => setFechaHastaDashboard(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ minWidth: 160 }}
+            />
+          </Box>
           {/* Tarjetas de Resumen General */}
           <Grid container spacing={3} sx={{ mb: 4 }}>
             <Grid item xs={12} sm={6} md={4}>
@@ -1115,10 +1268,28 @@ export default function CreditosAbonosPage() {
                       label='Estado'
                     >
                       <MenuItem value=''>Todos los estados</MenuItem>
+                      <MenuItem value='activo'>Activo</MenuItem>
+                      <MenuItem value='suspendido'>Suspendido</MenuItem>
+                      <MenuItem value='inactivo'>Inactivo</MenuItem>
                       <MenuItem value='buen-pagador'>Buen Pagador</MenuItem>
                       <MenuItem value='vencido'>Vencido</MenuItem>
                       <MenuItem value='critico'>Crítico</MenuItem>
                       <MenuItem value='bloqueado'>Bloqueado</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12} sm={6} md={3}>
+                  <FormControl fullWidth>
+                    <InputLabel>Deuda</InputLabel>
+                    <Select
+                      value={filtros.deuda}
+                      onChange={(e) => manejarCambioFiltros('deuda', e.target.value)}
+                      label='Deuda'
+                    >
+                      <MenuItem value=''>Todos</MenuItem>
+                      <MenuItem value='con-deuda'>Con deuda</MenuItem>
+                      <MenuItem value='sin-deuda'>Sin deuda (al día)</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -1162,6 +1333,7 @@ export default function CreditosAbonosPage() {
                       <TableCell align='right'>Saldo Actual</TableCell>
                       <TableCell align='right'>Crédito Disponible</TableCell>
                       <TableCell>Estado</TableCell>
+                      <TableCell>Deuda</TableCell>
                       <TableCell align='center'>Acciones</TableCell>
                     </TableRow>
                   </TableHead>
@@ -1216,6 +1388,14 @@ export default function CreditosAbonosPage() {
                             size='small'
                           />
                         </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={(cliente.saldoActual ?? 0) > 0 ? 'Con deuda' : 'Al día'}
+                            color={((cliente.saldoActual ?? 0) > 0 ? 'warning' : 'success') as any}
+                            size='small'
+                            variant='outlined'
+                          />
+                        </TableCell>
                         <TableCell align='center'>
                           <Box sx={{ display: 'flex', gap: 0.5 }}>
                             <Tooltip title='Ver detalles'>
@@ -1226,11 +1406,6 @@ export default function CreditosAbonosPage() {
                             <Tooltip title='Modificar límite'>
                               <IconButton size='small' onClick={() => abrirDialogo('modificar-limite', cliente)}>
                                 <EditIcon />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title='Enviar recordatorio'>
-                              <IconButton size='small' onClick={() => abrirDialogo('recordatorio', cliente)}>
-                                <SendIcon />
                               </IconButton>
                             </Tooltip>
                             <Tooltip title='Registrar pago'>
@@ -1269,12 +1444,13 @@ export default function CreditosAbonosPage() {
 
           {/* Ficha Individual del Cliente */}
           {clienteSeleccionado && (
-            <Card sx={{ mt: 3 }}>
+            <Box ref={refFichaCliente} sx={{ mt: 3 }}>
+            <Card>
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Avatar sx={{ width: 50, height: 50 }}>
-                      {clienteSeleccionado.nombre.charAt(0)}
+                      {(clienteSeleccionado.nombre || ' ').charAt(0)}
                     </Avatar>
                     <Box>
                       <Typography variant='h6'>
@@ -1299,13 +1475,13 @@ export default function CreditosAbonosPage() {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                       <LocationOnIcon fontSize='small' color='action' />
                       <Typography variant='body2'>
-                        {clienteSeleccionado.direccion}
+                        {clienteSeleccionado.direccion ?? '—'}
                       </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <PhoneIcon fontSize='small' color='action' />
                       <Typography variant='body2'>
-                        {clienteSeleccionado.telefono}
+                        {clienteSeleccionado.telefono ?? '—'}
                       </Typography>
                     </Box>
                   </Grid>
@@ -1359,7 +1535,7 @@ export default function CreditosAbonosPage() {
                   Notas Pendientes
                 </Typography>
                 
-                {clienteSeleccionado.notasPendientes.length > 0 ? (
+                {(clienteSeleccionado.notasPendientes ?? []).length > 0 ? (
                   <TableContainer component={Paper} variant='outlined'>
                     <Table>
                       <TableHead>
@@ -1373,7 +1549,7 @@ export default function CreditosAbonosPage() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {clienteSeleccionado.notasPendientes.map((nota) => (
+                        {(clienteSeleccionado.notasPendientes ?? []).map((nota) => (
                           <TableRow key={nota.id}>
                             <TableCell>
                               <Typography variant='subtitle2' fontWeight='bold'>
@@ -1437,13 +1613,6 @@ export default function CreditosAbonosPage() {
                     Modificar Límite
                   </Button>
                   <Button
-                    variant='outlined'
-                    startIcon={<SendIcon />}
-                    onClick={() => abrirDialogo('recordatorio', clienteSeleccionado)}
-                  >
-                    Enviar Recordatorio
-                  </Button>
-                  <Button
                     variant='contained'
                     color='success'
                     startIcon={<PaymentIcon />}
@@ -1477,6 +1646,7 @@ export default function CreditosAbonosPage() {
                 </Box>
               </CardContent>
             </Card>
+            </Box>
           )}
         </Box>
       )}
@@ -1924,8 +2094,8 @@ export default function CreditosAbonosPage() {
           
           <Card>
             <CardContent>
-              {/* Buscador y filtro por ruta dentro de la tabla */}
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+              {/* Buscador, filtro por ruta (incl. Todas las rutas) y por fechas (por defecto hoy) */}
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2, alignItems: 'center' }}>
                 <TextField
                   size='small'
                   placeholder='Buscar por cliente o nota'
@@ -1947,10 +2117,13 @@ export default function CreditosAbonosPage() {
                   <InputLabel>Ruta</InputLabel>
                   <Select
                     label='Ruta'
-                    value={filtros.ruta}
-                    onChange={(e) => manejarCambioFiltros('ruta', e.target.value)}
+                    value={filtroRutaHistorialPagos}
+                    onChange={(e) => {
+                      setFiltroRutaHistorialPagos(e.target.value)
+                      setPageHistorialPagos(0)
+                    }}
                   >
-                    <MenuItem value=''>Primera ruta (por defecto)</MenuItem>
+                    <MenuItem value='todas'>Todas las rutas</MenuItem>
                     {rutasUnicas.map((ruta) => (
                       <MenuItem key={ruta} value={ruta}>
                         {ruta}
@@ -1958,6 +2131,30 @@ export default function CreditosAbonosPage() {
                     ))}
                   </Select>
                 </FormControl>
+                <TextField
+                  size='small'
+                  label='Fecha desde'
+                  type='date'
+                  value={fechaDesdeHistorialPagos}
+                  onChange={(e) => {
+                    setFechaDesdeHistorialPagos(e.target.value)
+                    setPageHistorialPagos(0)
+                  }}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ minWidth: 160 }}
+                />
+                <TextField
+                  size='small'
+                  label='Fecha hasta'
+                  type='date'
+                  value={fechaHastaHistorialPagos}
+                  onChange={(e) => {
+                    setFechaHastaHistorialPagos(e.target.value)
+                    setPageHistorialPagos(0)
+                  }}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ minWidth: 160 }}
+                />
               </Box>
               <TableContainer component={Paper} variant='outlined'>
                 <Table>
@@ -2008,14 +2205,17 @@ export default function CreditosAbonosPage() {
                         </TableCell>
                         <TableCell>
                           <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                            {pago.formasPago.map((forma, index) => (
-                              <Chip
-                                key={index}
-                                label={`${forma.metodo}: $${forma.monto.toLocaleString()}`}
-                                color={getMetodoPagoColor(forma.metodo) as any}
-                                size='small'
-                              />
-                            ))}
+                            {pago.formasPago.map((forma, index) => {
+                              const metodoLabel = forma.metodo ?? (forma as any).formaPago?.nombre ?? (forma as any).formaPago?.tipo ?? 'Otro'
+                              return (
+                                <Chip
+                                  key={index}
+                                  label={`${metodoLabel}: $${forma.monto.toLocaleString()}`}
+                                  color={getMetodoPagoColor(metodoLabel) as any}
+                                  size='small'
+                                />
+                              )
+                            })}
                           </Box>
                         </TableCell>
                         <TableCell>
@@ -2070,7 +2270,6 @@ export default function CreditosAbonosPage() {
       <Dialog open={dialogoAbierto} onClose={cerrarDialogo} maxWidth='sm' fullWidth>
         <DialogTitle>
           {tipoDialogo === 'modificar-limite' && 'Modificar Límite de Crédito'}
-          {tipoDialogo === 'recordatorio' && 'Enviar Recordatorio'}
           {tipoDialogo === 'bloquear' && 'Bloquear Crédito'}
           {tipoDialogo === 'estado-cuenta' && 'Generar Estado de Cuenta'}
           {tipoDialogo === 'registrar-pago' && 'Registrar Pago'}
@@ -2112,21 +2311,6 @@ export default function CreditosAbonosPage() {
                 </Box>
               )}
               
-              {tipoDialogo === 'recordatorio' && (
-                <Box>
-                  <Typography variant='body2' color='text.secondary' gutterBottom>
-                    Saldo actual: ${clienteSeleccionado.saldoActual.toLocaleString()}
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    label='Mensaje Personalizado'
-                    multiline
-                    rows={4}
-                    defaultValue='Estimado cliente, le recordamos que tiene un saldo pendiente de pago. Agradecemos su pronta atención.'
-                  />
-                </Box>
-              )}
-              
               {tipoDialogo === 'bloquear' && (
                 <Alert severity='warning' sx={{ mb: 2 }}>
                   <AlertTitle>Advertencia</AlertTitle>
@@ -2137,14 +2321,17 @@ export default function CreditosAbonosPage() {
               {tipoDialogo === 'estado-cuenta' && (
                 <Box>
                   <Typography variant='body2' color='text.secondary' gutterBottom>
-                    Se generará un estado de cuenta detallado para este cliente.
+                    Se generará un estado de cuenta detallado para este cliente (imprimir o ver en nueva pestaña).
                   </Typography>
                   <FormControl fullWidth sx={{ mt: 2 }}>
                     <InputLabel>Formato</InputLabel>
-                    <Select label='Formato'>
-                      <MenuItem value='pdf'>PDF</MenuItem>
-                      <MenuItem value='excel'>Excel</MenuItem>
-                      <MenuItem value='email'>Enviar por Email</MenuItem>
+                    <Select
+                      label='Formato'
+                      value={formatoEstadoCuenta}
+                      onChange={(e) => setFormatoEstadoCuenta(e.target.value as 'pdf' | 'excel')}
+                    >
+                      <MenuItem value='pdf'>PDF (imprimir)</MenuItem>
+                      <MenuItem value='excel'>Ver en pantalla</MenuItem>
                     </Select>
                   </FormControl>
                 </Box>
@@ -2282,6 +2469,10 @@ export default function CreditosAbonosPage() {
             onClick={() => {
               if (tipoDialogo === 'modificar-limite') {
                 guardarLimiteCredito()
+              } else if (tipoDialogo === 'bloquear') {
+                guardarBloquearCredito()
+              } else if (tipoDialogo === 'estado-cuenta') {
+                generarEstadoCuenta()
               } else if (tipoDialogo === 'registrar-pago' || tipoDialogo === 'registrar-abono') {
                 registrarPago()
               }
@@ -2291,7 +2482,6 @@ export default function CreditosAbonosPage() {
             {saving ? 'Guardando...' : (
               <>
                 {tipoDialogo === 'modificar-limite' && 'Actualizar Límite'}
-                {tipoDialogo === 'recordatorio' && 'Enviar Recordatorio'}
                 {tipoDialogo === 'bloquear' && 'Bloquear Crédito'}
                 {tipoDialogo === 'estado-cuenta' && 'Generar Estado'}
                 {tipoDialogo === 'registrar-pago' && 'Registrar Pago'}

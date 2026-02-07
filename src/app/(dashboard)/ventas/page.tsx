@@ -14,6 +14,8 @@ import {
   categoriasProductoAPI,
   rutasAPI,
   configuracionTicketsAPI,
+  formasPagoAPI,
+  creditosAbonosAPI,
   type Cliente,
   type Usuario,
   type Producto,
@@ -28,7 +30,8 @@ import {
   type Sede,
   type Ruta,
   type CreateClienteRequest,
-  type ConfiguracionTicket
+  type ConfiguracionTicket,
+  type FormaPago
 } from '@/lib/api'
 
 import {
@@ -170,9 +173,11 @@ export default function VentasPage() {
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState<Pedido | null>(null)
   const [pedidoEditando, setPedidoEditando] = useState<Pedido | null>(null)
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<CategoriaProducto | null>(null)
+  const getFechaHoy = () =>
+    new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
   const [filtrosPedidos, setFiltrosPedidos] = useState<FiltrosPedidos>({
-    fechaDesde: '',
-    fechaHasta: '',
+    fechaDesde: getFechaHoy(),
+    fechaHasta: getFechaHoy(),
     cliente: '',
     tipoCliente: '',
     zona: '',
@@ -187,6 +192,14 @@ export default function VentasPage() {
   const [dialogoTicketAbierto, setDialogoTicketAbierto] = useState(false)
   const [htmlTicket, setHtmlTicket] = useState('')
   const [loadingTicket, setLoadingTicket] = useState(false)
+
+  // Cerrar pedido desde panel: diálogo con formas de pago (como en la app)
+  const [pedidoACerrar, setPedidoACerrar] = useState<Pedido | null>(null)
+  const [formasPagoCerrar, setFormasPagoCerrar] = useState<FormaPago[]>([])
+  const [pagosCerrarPedido, setPagosCerrarPedido] = useState<Record<string, { monto: string; referencia?: string }>>({})
+  const [creditMontoCerrar, setCreditMontoCerrar] = useState('')
+  const [loadingCerrarPedido, setLoadingCerrarPedido] = useState(false)
+  const [errorCerrarPedido, setErrorCerrarPedido] = useState<string | null>(null)
 
   // Estado para carga de clientes en modal de pedido: buscar en BD o por sede/ruta
   const [modoCargaCliente, setModoCargaCliente] = useState<'buscar' | 'por-ruta'>('buscar')
@@ -666,17 +679,18 @@ export default function VentasPage() {
     }
   }
 
-  const loadPedidos = async () => {
+  const loadPedidos = async (overrideFiltros?: Partial<FiltrosPedidos>) => {
     try {
+      const f = overrideFiltros ?? filtrosPedidos
       console.log('Cargando pedidos con sedeId:', sedeId)
 
       const filtros: any = {
         sedeId: sedeId || undefined
       }
-      if (filtrosPedidos.fechaDesde) filtros.fechaDesde = filtrosPedidos.fechaDesde
-      if (filtrosPedidos.fechaHasta) filtros.fechaHasta = filtrosPedidos.fechaHasta
-      if (filtrosPedidos.estado) filtros.estado = filtrosPedidos.estado
-      if (filtrosPedidos.rutaId) filtros.rutaId = filtrosPedidos.rutaId
+      if (f.fechaDesde) filtros.fechaDesde = f.fechaDesde
+      if (f.fechaHasta) filtros.fechaHasta = f.fechaHasta
+      if (f.estado) filtros.estado = f.estado
+      if (f.rutaId) filtros.rutaId = f.rutaId
 
       console.log('Filtros enviados:', filtros)
 
@@ -965,6 +979,110 @@ export default function VentasPage() {
   const cerrarDialogoEliminar = () => {
     setDialogoEliminar(false)
     setPedidoAEliminar(null)
+  }
+
+  const abrirDialogoCerrarPedido = (pedido: Pedido) => {
+    setPedidoACerrar(pedido)
+    setPagosCerrarPedido({})
+    setCreditMontoCerrar('')
+    setErrorCerrarPedido(null)
+  }
+
+  const cerrarDialogoCerrarPedido = () => {
+    setPedidoACerrar(null)
+    setFormasPagoCerrar([])
+    setPagosCerrarPedido({})
+    setCreditMontoCerrar('')
+    setErrorCerrarPedido(null)
+  }
+
+  useEffect(() => {
+    if (!pedidoACerrar) return
+    let cancelled = false
+    const filtrarActivas = (list: FormaPago[]) =>
+      (list || []).filter((f) => f.tipo !== 'credito' && f.activa !== false)
+    const aplicar = (list: FormaPago[]) => {
+      if (cancelled) return
+      setFormasPagoCerrar(filtrarActivas(list))
+    }
+    formasPagoAPI.getAll({ activa: 'true' })
+      .then((list) => {
+        const activas = filtrarActivas(list || [])
+        if (cancelled) return
+        if (activas.length > 0) {
+          setFormasPagoCerrar(activas)
+        } else {
+          formasPagoAPI.getAll().then((all) => { aplicar(all || []) }).catch(() => { if (!cancelled) setFormasPagoCerrar([]) })
+        }
+      })
+      .catch(() => {
+        if (cancelled) return
+        formasPagoAPI.getAll().then((all) => aplicar(all || [])).catch((err) => {
+          if (!cancelled) {
+            setFormasPagoCerrar([])
+            console.warn('Error al cargar formas de pago para cerrar pedido:', err)
+          }
+        })
+      })
+    return () => { cancelled = true }
+  }, [pedidoACerrar])
+
+  const registrarPagoYCerrarPedido = async () => {
+    if (!pedidoACerrar || !usuario) return
+    const total = Number(pedidoACerrar.ventaTotal) || 0
+    const items: Array<{ formaPagoId?: string | null; tipo: string; monto: number; referencia?: string }> = []
+    let sum = 0
+    for (const [methodId, val] of Object.entries(pagosCerrarPedido)) {
+      const m = parseFloat(String(val.monto).replace(',', '.'))
+      if (!Number.isNaN(m) && m > 0) {
+        items.push({
+          formaPagoId: methodId,
+          tipo: 'metodo_pago',
+          monto: m,
+          referencia: val.referencia || undefined
+        })
+        sum += m
+      }
+    }
+    const creditMonto = parseFloat(String(creditMontoCerrar).replace(',', '.'))
+    if (!Number.isNaN(creditMonto) && creditMonto > 0) {
+      items.push({ formaPagoId: null as any, tipo: 'credito', monto: creditMonto })
+      sum += creditMonto
+    }
+    const diff = Math.abs(sum - total)
+    if (diff > 0.02) {
+      setErrorCerrarPedido(`El total ingresado ($${sum.toFixed(2)}) no coincide con el total del pedido ($${total.toFixed(2)}).`)
+      return
+    }
+    if (items.length === 0) {
+      setErrorCerrarPedido('Indica al menos una forma de pago y monto.')
+      return
+    }
+    setErrorCerrarPedido(null)
+    setLoadingCerrarPedido(true)
+    try {
+      await creditosAbonosAPI.createPago({
+        clienteId: pedidoACerrar.clienteId,
+        pedidoId: pedidoACerrar.id,
+        montoTotal: total,
+        tipo: 'nota_especifica',
+        estado: 'autorizado',
+        usuarioRegistro: usuario.id,
+        formasPago: items.map((it) =>
+          it.tipo === 'credito'
+            ? { formaPagoId: null, tipo: 'credito', monto: it.monto, referencia: it.referencia }
+            : { formaPagoId: it.formaPagoId!, tipo: 'metodo_pago', monto: it.monto, referencia: it.referencia }
+        )
+      })
+      setSuccessMessage('Pedido cerrado exitosamente.')
+      setTimeout(() => setSuccessMessage(null), 4000)
+      cerrarDialogoCerrarPedido()
+      loadPedidos()
+    } catch (err: any) {
+      setErrorCerrarPedido(err.message || 'Error al registrar el pago.')
+    } finally {
+      setLoadingCerrarPedido(false)
+    }
   }
 
   const eliminarPedido = async () => {
@@ -1627,8 +1745,9 @@ export default function VentasPage() {
   }
 
   const pedidosFiltrados = pedidos.filter(pedido => {
-    const cumpleFechaDesde = !filtrosPedidos.fechaDesde || pedido.fechaPedido >= filtrosPedidos.fechaDesde
-    const cumpleFechaHasta = !filtrosPedidos.fechaHasta || pedido.fechaPedido <= filtrosPedidos.fechaHasta
+    const fechaPedidoStr = pedido.fechaPedido ? String(pedido.fechaPedido).slice(0, 10) : ''
+    const cumpleFechaDesde = !filtrosPedidos.fechaDesde || fechaPedidoStr >= filtrosPedidos.fechaDesde
+    const cumpleFechaHasta = !filtrosPedidos.fechaHasta || fechaPedidoStr <= filtrosPedidos.fechaHasta
     const nombreCliente = pedido.cliente?.nombre || pedido.cliente?.apellidoPaterno || ''
     const cumpleCliente =
       !filtrosPedidos.cliente || nombreCliente.toLowerCase().includes(filtrosPedidos.cliente.toLowerCase())
@@ -2679,23 +2798,25 @@ export default function VentasPage() {
 
                 <Grid item xs={12} sm={6} md={3}>
                   <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button variant='contained' startIcon={<SearchIcon />} onClick={loadPedidos}>
+                    <Button variant='contained' startIcon={<SearchIcon />} onClick={() => loadPedidos()}>
                       Buscar
                     </Button>
                     <Button
                       variant='outlined'
                       onClick={() => {
-                        setFiltrosPedidos({
-                          fechaDesde: '',
-                          fechaHasta: '',
+                        const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
+                        const nuevosFiltros: FiltrosPedidos = {
+                          fechaDesde: hoy,
+                          fechaHasta: hoy,
                           cliente: '',
                           tipoCliente: '',
                           zona: '',
                           rutaId: '',
                           estado: '',
                           mostrarTodos: false
-                        })
-                        loadPedidos()
+                        }
+                        setFiltrosPedidos(nuevosFiltros)
+                        loadPedidos(nuevosFiltros)
                       }}
                     >
                       Limpiar
@@ -2808,12 +2929,7 @@ export default function VentasPage() {
                                 <IconButton
                                   size='small'
                                   color='primary'
-                                  onClick={() => {
-                                    // Redirigir a creditos-abonos con el pedido seleccionado
-                                    // O implementar el diálogo de pago aquí también
-                                    // Por simplicidad y consistencia, vamos a redirigir o abrir el diálogo si lo compartimos
-                                    window.location.href = `/creditos-abonos?pedidoId=${pedido.id}&clienteId=${pedido.clienteId}`
-                                  }}
+                                  onClick={() => abrirDialogoCerrarPedido(pedido)}
                                 >
                                   <CheckCircleIcon />
                                 </IconButton>
@@ -2855,6 +2971,86 @@ export default function VentasPage() {
               />
             </CardContent>
           </Card>
+
+          {/* Diálogo Cerrar pedido - Registrar pago (formas de pago como en la app) */}
+          <Dialog open={!!pedidoACerrar} onClose={cerrarDialogoCerrarPedido} maxWidth='sm' fullWidth>
+            <DialogTitle>Cerrar pedido - Registrar pago</DialogTitle>
+            <DialogContent>
+              {pedidoACerrar && (
+                <>
+                  <DialogContentText sx={{ mb: 2 }}>
+                    Pedido <strong>{pedidoACerrar.numeroPedido || pedidoACerrar.id}</strong>
+                    {' · '}
+                    Cliente: {pedidoACerrar.cliente ? `${(pedidoACerrar.cliente as any).nombre} ${(pedidoACerrar.cliente as any).apellidoPaterno || ''}`.trim() : pedidoACerrar.clienteId}
+                    {' · '}
+                    Total: <strong>${Number(pedidoACerrar.ventaTotal).toFixed(2)}</strong>
+                  </DialogContentText>
+                  <Typography variant='subtitle2' color='text.secondary' gutterBottom>
+                    Formas de pago (la suma debe coincidir con el total)
+                  </Typography>
+                  {formasPagoCerrar.map((fp) => (
+                    <Box key={fp.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1.5 }}>
+                      <Typography sx={{ minWidth: 140 }}>{fp.nombre || fp.tipo}</Typography>
+                      <TextField
+                        size='small'
+                        type='number'
+                        placeholder='Monto'
+                        value={pagosCerrarPedido[fp.id]?.monto ?? ''}
+                        onChange={(e) =>
+                          setPagosCerrarPedido((prev) => ({
+                            ...prev,
+                            [fp.id]: { ...prev[fp.id], monto: e.target.value }
+                          }))
+                        }
+                        inputProps={{ min: 0, step: 0.01 }}
+                        sx={{ width: 120 }}
+                      />
+                      <TextField
+                        size='small'
+                        placeholder='Folio/Ref.'
+                        value={pagosCerrarPedido[fp.id]?.referencia ?? ''}
+                        onChange={(e) =>
+                          setPagosCerrarPedido((prev) => ({
+                            ...prev,
+                            [fp.id]: { ...prev[fp.id], referencia: e.target.value }
+                          }))
+                        }
+                        sx={{ flex: 1, maxWidth: 140 }}
+                      />
+                    </Box>
+                  ))}
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2, mt: 2 }}>
+                    <Typography sx={{ minWidth: 140 }}>Crédito (opcional)</Typography>
+                    <TextField
+                      size='small'
+                      type='number'
+                      placeholder='Monto'
+                      value={creditMontoCerrar}
+                      onChange={(e) => setCreditMontoCerrar(e.target.value)}
+                      inputProps={{ min: 0, step: 0.01 }}
+                      sx={{ width: 120 }}
+                    />
+                  </Box>
+                  {errorCerrarPedido && (
+                    <Alert severity='error' sx={{ mt: 1 }} onClose={() => setErrorCerrarPedido(null)}>
+                      {errorCerrarPedido}
+                    </Alert>
+                  )}
+                </>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={cerrarDialogoCerrarPedido}>Cancelar</Button>
+              <Button
+                variant='contained'
+                onClick={registrarPagoYCerrarPedido}
+                disabled={loadingCerrarPedido}
+                startIcon={loadingCerrarPedido ? undefined : <CheckCircleIcon />}
+              >
+                {loadingCerrarPedido ? 'Registrando...' : 'Registrar pago y marcar como entregado'}
+              </Button>
+            </DialogActions>
+          </Dialog>
         </Box>
       )}
 
