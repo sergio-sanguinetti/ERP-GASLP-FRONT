@@ -1798,6 +1798,8 @@ export interface PedidoProducto {
   cantidad: number
   precio: number
   subtotal: number
+  descuento?: string | null
+  descuentoMonto?: number | null
 }
 
 export interface PagoPedido {

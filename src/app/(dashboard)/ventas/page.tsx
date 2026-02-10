@@ -1562,7 +1562,7 @@ export default function VentasPage() {
     const repartidorName = pedido.repartidor
       ? `${pedido.repartidor.nombres} ${pedido.repartidor.apellidoPaterno ?? ''} ${pedido.repartidor.apellidoMaterno ?? ''}`.trim()
       : 'Operador'
-    const folio = `F${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`
+    const folio = pedido.numeroPedido || `F${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`
     const formattedDate = new Date(pedido.fechaPedido).toLocaleString('es-MX', {
       day: '2-digit',
       month: '2-digit',
@@ -1575,15 +1575,24 @@ export default function VentasPage() {
     let productsHTML = ''
     if (pedido.productosPedido && pedido.productosPedido.length > 0) {
       productsHTML = pedido.productosPedido
-        .map(
-          (pp) =>
-            `<tr>
+        .map((pp) => {
+          const descuentoMonto = typeof pp.descuentoMonto === 'number' ? pp.descuentoMonto : 0
+          const hasDescuento = descuentoMonto > 0
+          const subtotal = (pp.subtotal ?? pp.cantidad * (pp.precio ?? 0)).toFixed(2)
+          let row = `<tr>
               <td style="text-align: left; padding: 2px; font-size: 9px;">${pp.producto?.nombre ?? 'Producto'}</td>
               <td style="text-align: center; padding: 2px; font-size: 9px;">${pp.cantidad}</td>
               <td style="text-align: right; padding: 2px; font-size: 9px;">$${(pp.precio ?? 0).toFixed(2)}</td>
-              <td style="text-align: right; padding: 2px; font-size: 9px;">$${(pp.subtotal ?? pp.cantidad * (pp.precio ?? 0)).toFixed(2)}</td>
+              <td style="text-align: right; padding: 2px; font-size: 9px;">$${subtotal}</td>
             </tr>`
-        )
+          if (hasDescuento) {
+            row += `<tr>
+              <td colspan="3" style="text-align: right; padding: 1px 2px; font-size: 8px; color: #666;">Descuento ${pp.descuento || ''}</td>
+              <td style="text-align: right; padding: 1px 2px; font-size: 8px; color: #666;">-$${descuentoMonto.toFixed(2)}</td>
+            </tr>`
+          }
+          return row
+        })
         .join('')
     } else {
       const label = pedido.tipoServicio === 'pipas' ? 'Litro de Gas LP' : 'Cilindro de Gas LP'
@@ -3855,12 +3864,15 @@ export default function VentasPage() {
                             <TableCell>Producto</TableCell>
                             <TableCell align='right'>Cantidad</TableCell>
                             <TableCell align='right'>Precio Unitario</TableCell>
+                            <TableCell align='right'>Descuento</TableCell>
                             <TableCell align='right'>Subtotal</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {pedidoSeleccionado.productosPedido.map((item, index) => {
                             const producto = item.producto
+                            const descuentoMonto = typeof item.descuentoMonto === 'number' ? item.descuentoMonto : 0
+                            const hasDescuento = descuentoMonto > 0
                             let nombreCategoria = ''
                             if (producto) {
                               const categoriaCodigo = producto.categoria?.codigo || categoriasProducto.find(c => c.id === producto.categoriaId)?.codigo
@@ -3896,6 +3908,15 @@ export default function VentasPage() {
                                   ${typeof item.precio === 'number' ? item.precio.toFixed(2) : item.precio.toLocaleString()}
                                 </TableCell>
                                 <TableCell align='right'>
+                                  {hasDescuento ? (
+                                    <Typography variant='body2' color='success.main'>
+                                      {item.descuento || ''} -${descuentoMonto.toFixed(2)}
+                                    </Typography>
+                                  ) : (
+                                    <Typography variant='caption' color='text.secondary'>—</Typography>
+                                  )}
+                                </TableCell>
+                                <TableCell align='right'>
                                   <Typography variant='body2' fontWeight='bold' color='primary'>
                                     ${typeof item.subtotal === 'number' ? item.subtotal.toFixed(2) : item.subtotal.toLocaleString()}
                                   </Typography>
@@ -3904,7 +3925,7 @@ export default function VentasPage() {
                             )
                           })}
                           <TableRow>
-                            <TableCell colSpan={3} align='right'>
+                            <TableCell colSpan={4} align='right'>
                               <Typography variant='h6' fontWeight='bold'>
                                 Total:
                               </Typography>

@@ -84,9 +84,12 @@ import {
   QrCode as QrCodeIcon,
   Print as PrintIcon,
   Download as DownloadIcon,
-  AccountBalance as AccountBalanceIcon
+  AccountBalance as AccountBalanceIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material'
 import MapLocationPicker from '@/components/MapLocationPicker'
+import { getClientesCache, setClientesCache, getClientesLastUpdate, formatRelativeTime } from '@/lib/clientesCache'
+import { normalizarParaBusqueda, coincideBusqueda } from '@/lib/searchUtils'
 
 // Tipos de datos
 interface Domicilio {
@@ -690,6 +693,8 @@ export default function ClientesPage() {
   const [rowsPerPage] = useState(10)
   const [searchTerm, setSearchTerm] = useState('')
   const [rutaFiltroId, setRutaFiltroId] = useState<string>('todas')
+  const [lastClientesUpdate, setLastClientesUpdate] = useState<string | null>(null)
+  const [refreshingClientes, setRefreshingClientes] = useState(false)
 
   const esSuperAdministrador = usuario?.rol === 'superAdministrador'
 
@@ -698,11 +703,20 @@ export default function ClientesPage() {
     loadInitialData()
   }, [])
 
-  // Recargar clientes cuando cambia la sede
+  // Recargar clientes cuando cambia la sede: mostrar caché primero (rápido), luego actualizar en segundo plano
   useEffect(() => {
-    if (sedeId !== null) {
-      cargarDatos()
+    if (sedeId === null) return
+    const cached = getClientesCache(sedeId)
+    const tieneCache = cached && Array.isArray(cached) && cached.length > 0
+    if (tieneCache) {
+      try {
+        setClientes(cached.map((c: any) => adaptarCliente(c)))
+      } catch (_) {
+        // Si falla la adaptación, se cargará desde red
+      }
+      setLastClientesUpdate(getClientesLastUpdate(sedeId))
     }
+    cargarDatos(!!tieneCache)
   }, [sedeId])
 
   // Ajustar la página si está fuera de rango
@@ -748,9 +762,10 @@ export default function ClientesPage() {
     }
   }
 
-  const cargarDatos = async () => {
+  const cargarDatos = async (background = false) => {
     try {
-      setLoading(true)
+      if (!background) setLoading(true)
+      else setRefreshingClientes(true)
       setError(null)
       const filtros: any = {}
       if (sedeId) {
@@ -768,14 +783,16 @@ export default function ClientesPage() {
       setZonas(zonasData)
       setZonasFiltradas(zonasData)
       setCiudades(ciudadesData)
-      // Resetear a la página 1 después de cargar
+      setClientesCache(sedeId, clientesData)
+      setLastClientesUpdate(getClientesLastUpdate(sedeId))
       setPage(1)
     } catch (err: any) {
-      setError(err.message || 'Error al cargar datos')
+      if (!background) setError(err.message || 'Error al cargar datos')
       console.error('Error cargando datos:', err)
     } finally {
       setLoading(false)
       setLoadingSede(false)
+      setRefreshingClientes(false)
     }
   }
   
@@ -1394,8 +1411,8 @@ export default function ClientesPage() {
     return `${cliente.nombre} ${cliente.apellidoPaterno} ${cliente.apellidoMaterno}`
   }
 
-  // Calcular clientes paginados (filtro por ruta + buscador global)
-  const normalizedSearch = searchTerm.trim().toLowerCase()
+  // Calcular clientes paginados (filtro por ruta + buscador global con coincidencia parcial sin acentos)
+  const normalizedSearch = normalizarParaBusqueda(searchTerm)
 
   const clientesPorRuta = rutaFiltroId === 'todas'
     ? clientes
@@ -1410,26 +1427,23 @@ export default function ClientesPage() {
 
   const filteredClientes = normalizedSearch
     ? clientesPorRuta.filter(cliente => {
-        const nombreCompleto = obtenerNombreCompleto(cliente).toLowerCase()
-        const email = (cliente.email || '').toLowerCase()
-        const telefono = (cliente.telefono || '').toLowerCase()
+        const nombreCompleto = obtenerNombreCompleto(cliente)
+        const email = cliente.email || ''
+        const telefono = cliente.telefono || ''
         const rutaNombre = (
           (cliente.ruta as any)?.nombre ||
           (cliente.ruta as any) ||
           ''
-        )
-          .toString()
-          .toLowerCase()
-        const estado = cliente.estadoCliente.toLowerCase()
-        const direccion = obtenerDireccionCompleta(cliente).toLowerCase()
-
+        ).toString()
+        const estado = cliente.estadoCliente || ''
+        const direccion = obtenerDireccionCompleta(cliente)
         return (
-          nombreCompleto.includes(normalizedSearch) ||
-          email.includes(normalizedSearch) ||
-          telefono.includes(normalizedSearch) ||
-          rutaNombre.includes(normalizedSearch) ||
-          estado.includes(normalizedSearch) ||
-          direccion.includes(normalizedSearch)
+          coincideBusqueda(nombreCompleto, normalizedSearch) ||
+          coincideBusqueda(email, normalizedSearch) ||
+          coincideBusqueda(telefono, normalizedSearch) ||
+          coincideBusqueda(rutaNombre, normalizedSearch) ||
+          coincideBusqueda(estado, normalizedSearch) ||
+          coincideBusqueda(direccion, normalizedSearch)
         )
       })
     : clientesPorRuta
@@ -1524,6 +1538,20 @@ export default function ClientesPage() {
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
             <Typography variant='h6'>Lista de Clientes</Typography>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+              {lastClientesUpdate && (
+                <Typography variant='caption' color='text.secondary' sx={{ mr: 1 }}>
+                  Última actualización: {formatRelativeTime(lastClientesUpdate)}
+                </Typography>
+              )}
+              <Button
+                variant='outlined'
+                size='small'
+                startIcon={refreshingClientes ? <CircularProgress size={16} /> : <RefreshIcon />}
+                disabled={refreshingClientes || !sedeId}
+                onClick={() => cargarDatos()}
+              >
+                Actualizar
+              </Button>
               <FormControl size='small' sx={{ minWidth: 200 }}>
                 <InputLabel>Ruta</InputLabel>
                 <Select
