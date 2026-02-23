@@ -692,7 +692,7 @@ export default function ClientesPage() {
   const [page, setPage] = useState(1)
   const [rowsPerPage] = useState(10)
   const [searchTerm, setSearchTerm] = useState('')
-  const [rutaFiltroId, setRutaFiltroId] = useState<string>('todas')
+  const [rutaFiltroId, setRutaFiltroId] = useState<string>('')
   const [lastClientesUpdate, setLastClientesUpdate] = useState<string | null>(null)
   const [refreshingClientes, setRefreshingClientes] = useState(false)
 
@@ -786,6 +786,24 @@ export default function ClientesPage() {
       setClientesCache(sedeId, clientesData)
       setLastClientesUpdate(getClientesLastUpdate(sedeId))
       setPage(1)
+      
+      setRutaFiltroId(prev => {
+        if (!prev) {
+          const rutasActivas = rutasData.filter(r => r.activa)
+          if (rutasActivas.length > 0) return rutasActivas[0].id
+          if (rutasData.length > 0) return rutasData[0].id
+          return 'todas'
+        }
+        
+        if (prev !== 'todas' && !rutasData.some(r => r.id === prev)) {
+          const rutasActivas = rutasData.filter(r => r.activa)
+          if (rutasActivas.length > 0) return rutasActivas[0].id
+          if (rutasData.length > 0) return rutasData[0].id
+          return 'todas'
+        }
+        
+        return prev
+      })
     } catch (err: any) {
       if (!background) setError(err.message || 'Error al cargar datos')
       console.error('Error cargando datos:', err)
@@ -845,7 +863,7 @@ export default function ClientesPage() {
   const handleSedeChange = async (nuevaSedeId: string) => {
     setSedeSeleccionada(nuevaSedeId)
     setLoadingSede(true)
-    setRutaFiltroId('todas')
+    setRutaFiltroId('')
     setSedeId(nuevaSedeId)
     // El useEffect se encargará de cargar los datos
   }
