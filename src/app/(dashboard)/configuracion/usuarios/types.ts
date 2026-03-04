@@ -3,8 +3,11 @@
 export type UserRole = 
   | 'superAdministrador'
   | 'administrador'
-  | 'gestor'
+  | 'oficina'
+  | 'planta'
+  | 'credito_cobranza'
   | 'repartidor'
+  | 'gestor' // Kept for retro-compatibility
 
 export type UserStatus = 'activo' | 'inactivo'
 export type TipoRepartidor = 'cilindros' | 'pipas'

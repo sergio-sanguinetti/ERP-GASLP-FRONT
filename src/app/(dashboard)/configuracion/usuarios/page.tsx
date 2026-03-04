@@ -8,7 +8,7 @@ import {
   Card,
   CardContent,
   CardHeader,
-  CardTitle,
+
   Button,
   Table,
   TableBody,
@@ -73,7 +73,7 @@ const UsuariosPage = () => {
       setLoading(true)
       setError('')
       const data = await usuariosAPI.getAll()
-      setUsers(data)
+      setUsers(data as unknown as User[])
       // Resetear a la página 1 después de cargar
       setPage(1)
     } catch (err: any) {
@@ -165,6 +165,12 @@ const UsuariosPage = () => {
         return 'error'
       case 'administrador':
         return 'warning'
+      case 'oficina':
+        return 'primary'
+      case 'planta':
+        return 'secondary'
+      case 'credito_cobranza':
+        return 'info'
       case 'gestor':
         return 'info'
       case 'repartidor':

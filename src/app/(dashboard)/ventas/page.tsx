@@ -2852,6 +2852,7 @@ export default function VentasPage() {
                     <TableRow>
                       <TableCell>ID del Pedido</TableCell>
                       <TableCell>Ruta</TableCell>
+                      <TableCell>Operador</TableCell>
                       <TableCell>Cliente</TableCell>
                       <TableCell>Fecha y Hora</TableCell>
                       <TableCell align='center'>Estado</TableCell>
@@ -2869,6 +2870,13 @@ export default function VentasPage() {
                         </TableCell>
                         <TableCell>
                           <Typography variant='body2'>{pedido.ruta?.nombre || 'N/A'}</Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant='body2'>
+                            {pedido.repartidor
+                              ? `${pedido.repartidor.nombres} ${pedido.repartidor.apellidoPaterno} ${pedido.repartidor.apellidoMaterno || ''}`.trim()
+                              : 'Sin asignar'}
+                          </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant='subtitle2' fontWeight='bold'>

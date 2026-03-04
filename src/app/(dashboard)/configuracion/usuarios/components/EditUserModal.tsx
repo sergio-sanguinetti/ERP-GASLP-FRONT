@@ -27,7 +27,7 @@ import { sedesAPI, type Sede } from '@lib/api'
 interface EditUserModalProps {
   open: boolean
   onClose: () => void
-  onEditUser: (user: User) => Promise<void>
+  onEditUser: (user: User & { password?: string }) => Promise<void>
   user: User | null
 }
 
@@ -45,7 +45,7 @@ const EditUserModal = ({ open, onClose, onEditUser, user }: EditUserModalProps) 
     sede: ''
   })
 
-  const [errors, setErrors] = useState<Partial<EditUserData>>({})
+  const [errors, setErrors] = useState<Partial<Record<keyof EditUserData, string>>>({})
   const [loading, setLoading] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [sedes, setSedes] = useState<Sede[]>([])
@@ -94,7 +94,7 @@ const EditUserModal = ({ open, onClose, onEditUser, user }: EditUserModalProps) 
   }
 
   const validateForm = (): boolean => {
-    const newErrors: Partial<EditUserData> = {}
+    const newErrors: Partial<Record<keyof EditUserData, string>> = {}
 
     if (!formData.nombres?.trim()) {
       newErrors.nombres = 'Los nombres son requeridos'
@@ -267,8 +267,11 @@ const EditUserModal = ({ open, onClose, onEditUser, user }: EditUserModalProps) 
                 >
                   <MenuItem value="superAdministrador">Super Administrador</MenuItem>
                   <MenuItem value="administrador">Administrador</MenuItem>
-                  <MenuItem value="gestor">Gestor</MenuItem>
+                  <MenuItem value="oficina">Oficina</MenuItem>
+                  <MenuItem value="planta">Planta</MenuItem>
+                  <MenuItem value="credito_cobranza">Crédito y Cobranza</MenuItem>
                   <MenuItem value="repartidor">Repartidor</MenuItem>
+                  <MenuItem value="gestor">Gestor</MenuItem>
                 </Select>
               </FormControl>
             </Grid>

@@ -261,8 +261,11 @@ const CreateUserModal = ({ open, onClose, onCreateUser }: CreateUserModalProps) 
                 >
                   <MenuItem value="superAdministrador">Super Administrador</MenuItem>
                   <MenuItem value="administrador">Administrador</MenuItem>
-                  <MenuItem value="gestor">Gestor</MenuItem>
+                  <MenuItem value="oficina">Oficina</MenuItem>
+                  <MenuItem value="planta">Planta</MenuItem>
+                  <MenuItem value="credito_cobranza">Crédito y Cobranza</MenuItem>
                   <MenuItem value="repartidor">Repartidor</MenuItem>
+                  <MenuItem value="gestor">Gestor</MenuItem>
                 </Select>
               </FormControl>
             </Grid>

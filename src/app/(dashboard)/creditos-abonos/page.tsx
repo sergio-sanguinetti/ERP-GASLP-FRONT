@@ -784,6 +784,18 @@ export default function CreditosAbonosPage() {
   const registrarPago = async () => {
     if (!clienteSeleccionado || formasPago.length === 0 || montoTotalPago <= 0) return
 
+    // Validar referencias
+    const metodosRequierenFolio = ['transferencia', 'cheque', 'deposito', 'terminal']
+    for (const fp of formasPago) {
+      if (metodosRequierenFolio.includes(fp.metodo)) {
+        if (!fp.referencia || fp.referencia.trim() === '') {
+          const nombreMetodo = formasPagoDisponibles.find(f => f.tipo === fp.metodo)?.nombre || fp.metodo
+          setError(`El campo "Folio / Referencia" es obligatorio para el método de pago: ${nombreMetodo}`)
+          return
+        }
+      }
+    }
+
     try {
       setSaving(true)
       setError(null)
@@ -918,10 +930,13 @@ export default function CreditosAbonosPage() {
 
   const clientesFiltrados = useMemo(() => {
     return clientesCredito.filter(cliente => {
+      // Solo deben aparecer los clientes con crédito utilizado (saldo pendiente mayor a 0)
+      if ((cliente.saldoActual ?? 0) <= 0) return false
+
       const cumpleNombre = !filtros.nombre || cliente.nombre.toLowerCase().includes(filtros.nombre.toLowerCase())
       const cumpleRuta = !filtros.ruta || cliente.ruta === filtros.ruta
       const cumpleEstado = !filtros.estado || cliente.estado === filtros.estado
-      const tieneDeuda = (cliente.saldoActual ?? 0) > 0
+      const tieneDeuda = true // Como el saldo siempre es mayor a 0 por la condición anterior
       const cumpleDeuda =
         !filtros.deuda ||
         (filtros.deuda === 'con-deuda' && tieneDeuda) ||
@@ -2366,7 +2381,9 @@ export default function CreditosAbonosPage() {
                                 onChange={(e) => actualizarFormaPago(forma.id, 'metodo', e.target.value)}
                                 label='Método'
                               >
-                                {formasPagoDisponibles.map(fp => (
+                                {formasPagoDisponibles
+                                  .filter(fp => fp.tipo !== 'credito')
+                                  .map(fp => (
                                   <MenuItem key={fp.id} value={fp.tipo}>
                                     {fp.nombre}
                                   </MenuItem>
@@ -2386,17 +2403,18 @@ export default function CreditosAbonosPage() {
                               }}
                             />
                           </Grid>
-                          {(forma.metodo === 'transferencia' || forma.metodo === 'cheque') && (
+                          {['transferencia', 'cheque', 'deposito', 'terminal'].includes(forma.metodo) && (
                             <Grid item xs={12} sm={3}>
                               <TextField
                                 fullWidth
-                                label='Referencia'
+                                label='Folio / Referencia *'
                                 value={forma.referencia || ''}
                                 onChange={(e) => actualizarFormaPago(forma.id, 'referencia', e.target.value)}
+                                error={!forma.referencia || forma.referencia.trim() === ''}
                               />
                             </Grid>
                           )}
-                          {(forma.metodo === 'transferencia' || forma.metodo === 'cheque') && (
+                          {['transferencia', 'cheque', 'deposito'].includes(forma.metodo) && (
                             <Grid item xs={12} sm={2}>
                               <TextField
                                 fullWidth
