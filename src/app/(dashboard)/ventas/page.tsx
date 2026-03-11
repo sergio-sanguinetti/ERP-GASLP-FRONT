@@ -110,6 +110,7 @@ interface FiltrosPedidos {
   tipoCliente: string
   zona: string
   rutaId: string
+  repartidorId: string
   estado: string
   mostrarTodos: boolean
 }
@@ -182,6 +183,7 @@ export default function VentasPage() {
     tipoCliente: '',
     zona: '',
     rutaId: '',
+    repartidorId: '',
     estado: '',
     mostrarTodos: false
   })
@@ -691,6 +693,7 @@ export default function VentasPage() {
       if (f.fechaHasta) filtros.fechaHasta = f.fechaHasta
       if (f.estado) filtros.estado = f.estado
       if (f.rutaId) filtros.rutaId = f.rutaId
+      if (f.repartidorId) filtros.repartidorId = f.repartidorId
 
       console.log('Filtros enviados:', filtros)
 
@@ -2778,6 +2781,24 @@ export default function VentasPage() {
 
                 <Grid item xs={12} sm={6} md={3}>
                   <FormControl fullWidth>
+                    <InputLabel>Operador</InputLabel>
+                    <Select
+                      value={filtrosPedidos.repartidorId}
+                      onChange={e => manejarCambioFiltros('repartidorId', e.target.value)}
+                      label='Operador'
+                    >
+                      <MenuItem value=''>Cualquier operador</MenuItem>
+                      {repartidores.map(repartidor => (
+                        <MenuItem key={repartidor.id} value={repartidor.id}>
+                          {`${repartidor.nombres} ${repartidor.apellidoPaterno} ${repartidor.apellidoMaterno || ''}`.trim()}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12} sm={6} md={3}>
+                  <FormControl fullWidth>
                     <InputLabel>Estado</InputLabel>
                     <Select
                       value={filtrosPedidos.estado}
@@ -2821,6 +2842,7 @@ export default function VentasPage() {
                           tipoCliente: '',
                           zona: '',
                           rutaId: '',
+                          repartidorId: '',
                           estado: '',
                           mostrarTodos: false
                         }

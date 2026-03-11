@@ -696,28 +696,20 @@ export default function ClientesPage() {
   const [lastClientesUpdate, setLastClientesUpdate] = useState<string | null>(null)
   const [refreshingClientes, setRefreshingClientes] = useState(false)
 
+  // Modal de selección de ruta
+  const [modalSeleccionRuta, setModalSeleccionRuta] = useState(false)
+  const [rutaSeleccionadaModal, setRutaSeleccionadaModal] = useState<string>('')
+  const [rutasModal, setRutasModal] = useState<Ruta[]>([])
+  const [loadingRutasModal, setLoadingRutasModal] = useState(false)
+  const [sedeNombreModal, setSedeNombreModal] = useState<string>('')
+  const [busquedaRuta, setBusquedaRuta] = useState<string>('')
+
   const esSuperAdministrador = usuario?.rol === 'superAdministrador'
 
   // Cargar datos iniciales
   useEffect(() => {
     loadInitialData()
   }, [])
-
-  // Recargar clientes cuando cambia la sede: mostrar caché primero (rápido), luego actualizar en segundo plano
-  useEffect(() => {
-    if (sedeId === null) return
-    const cached = getClientesCache(sedeId)
-    const tieneCache = cached && Array.isArray(cached) && cached.length > 0
-    if (tieneCache) {
-      try {
-        setClientes(cached.map((c: any) => adaptarCliente(c)))
-      } catch (_) {
-        // Si falla la adaptación, se cargará desde red
-      }
-      setLastClientesUpdate(getClientesLastUpdate(sedeId))
-    }
-    cargarDatos(!!tieneCache)
-  }, [sedeId])
 
   // Ajustar la página si está fuera de rango
   useEffect(() => {
@@ -753,8 +745,26 @@ export default function ClientesPage() {
         : sedeUsuarioId
       setSedeId(nuevaSedeId)
       setSedeSeleccionada(nuevaSedeId)
-      // Mantener loader hasta que cargarDatos termine; si no hay sede, terminar aquí
-      if (!nuevaSedeId) setLoading(false)
+
+      if (!nuevaSedeId) {
+        setLoading(false)
+        return
+      }
+
+      // Cargar rutas de la sede para mostrar en el modal
+      setLoadingRutasModal(true)
+      const sedeNombre = sedesData.find(s => s.id === nuevaSedeId)?.nombre ?? ''
+      setSedeNombreModal(sedeNombre)
+      const rutasData = await rutasAPI.getAll({ sedeId: nuevaSedeId })
+      const rutasActivas = rutasData.filter(r => r.activa)
+      setRutasModal(rutasActivas)
+      setRutas(rutasData)
+      setRutasFiltradas(rutasData)
+      setLoadingRutasModal(false)
+      setLoading(false)
+
+      // Mostrar modal de selección de ruta
+      setModalSeleccionRuta(true)
     } catch (err: any) {
       setError(err.message || 'Error al cargar datos iniciales')
       console.error('Error loading initial data:', err)
@@ -762,7 +772,7 @@ export default function ClientesPage() {
     }
   }
 
-  const cargarDatos = async (background = false) => {
+  const cargarDatos = async (background = false, rutaIdForzada?: string) => {
     try {
       if (!background) setLoading(true)
       else setRefreshingClientes(true)
@@ -771,9 +781,14 @@ export default function ClientesPage() {
       if (sedeId) {
         filtros.sedeId = sedeId
       }
+      // Filtrar clientes por la ruta seleccionada en el modal si corresponde
+      const rutaParaFiltrar = rutaIdForzada ?? rutaFiltroId
+      if (rutaParaFiltrar && rutaParaFiltrar !== 'todas') {
+        filtros.rutaId = rutaParaFiltrar
+      }
       const [clientesData, rutasData, zonasData, ciudadesData] = await Promise.all([
         clientesAPI.getAll(filtros),
-        rutasAPI.getAll(),
+        rutasAPI.getAll({ sedeId: sedeId ?? undefined }),
         zonasAPI.getAll(),
         zonasAPI.ciudades.getAll()
       ])
@@ -786,24 +801,27 @@ export default function ClientesPage() {
       setClientesCache(sedeId, clientesData)
       setLastClientesUpdate(getClientesLastUpdate(sedeId))
       setPage(1)
-      
-      setRutaFiltroId(prev => {
-        if (!prev) {
-          const rutasActivas = rutasData.filter(r => r.activa)
-          if (rutasActivas.length > 0) return rutasActivas[0].id
-          if (rutasData.length > 0) return rutasData[0].id
-          return 'todas'
-        }
-        
-        if (prev !== 'todas' && !rutasData.some(r => r.id === prev)) {
-          const rutasActivas = rutasData.filter(r => r.activa)
-          if (rutasActivas.length > 0) return rutasActivas[0].id
-          if (rutasData.length > 0) return rutasData[0].id
-          return 'todas'
-        }
-        
-        return prev
-      })
+
+      // Establecer el filtro de ruta al seleccionado en el modal
+      if (rutaParaFiltrar) {
+        setRutaFiltroId(rutaParaFiltrar)
+      } else {
+        setRutaFiltroId(prev => {
+          if (!prev) {
+            const rutasActivas = rutasData.filter(r => r.activa)
+            if (rutasActivas.length > 0) return rutasActivas[0].id
+            if (rutasData.length > 0) return rutasData[0].id
+            return 'todas'
+          }
+          if (prev !== 'todas' && !rutasData.some(r => r.id === prev)) {
+            const rutasActivas = rutasData.filter(r => r.activa)
+            if (rutasActivas.length > 0) return rutasActivas[0].id
+            if (rutasData.length > 0) return rutasData[0].id
+            return 'todas'
+          }
+          return prev
+        })
+      }
     } catch (err: any) {
       if (!background) setError(err.message || 'Error al cargar datos')
       console.error('Error cargando datos:', err)
@@ -812,6 +830,15 @@ export default function ClientesPage() {
       setLoadingSede(false)
       setRefreshingClientes(false)
     }
+  }
+
+  // Confirmar selección de ruta desde el modal
+  const confirmarSeleccionRuta = async () => {
+    setModalSeleccionRuta(false)
+    setBusquedaRuta('')
+    const rutaId = rutaSeleccionadaModal || 'todas'
+    setRutaFiltroId(rutaId)
+    await cargarDatos(false, rutaId)
   }
   
   // Cargar zonas cuando cambia el estado seleccionado
@@ -862,10 +889,26 @@ export default function ClientesPage() {
 
   const handleSedeChange = async (nuevaSedeId: string) => {
     setSedeSeleccionada(nuevaSedeId)
-    setLoadingSede(true)
-    setRutaFiltroId('')
     setSedeId(nuevaSedeId)
-    // El useEffect se encargará de cargar los datos
+    setRutaFiltroId('')
+    setClientes([])
+    // Cargar rutas de la nueva sede y mostrar modal
+    try {
+      setLoadingRutasModal(true)
+      const sedeNombre = sedes.find(s => s.id === nuevaSedeId)?.nombre ?? ''
+      setSedeNombreModal(sedeNombre)
+      const rutasData = await rutasAPI.getAll({ sedeId: nuevaSedeId })
+      const rutasActivas = rutasData.filter(r => r.activa)
+      setRutasModal(rutasActivas)
+      setRutas(rutasData)
+      setRutasFiltradas(rutasData)
+      setRutaSeleccionadaModal('')
+      setLoadingRutasModal(false)
+      setModalSeleccionRuta(true)
+    } catch (err: any) {
+      setLoadingRutasModal(false)
+      setError(err.message || 'Error al cargar rutas de la sede')
+    }
   }
 
   // Función para adaptar el cliente de la API al formato del componente
@@ -1477,6 +1520,227 @@ export default function ClientesPage() {
 
   return (
     <Box sx={{ p: 3 }}>
+
+      {/* ===== MODAL DE SELECCIÓN DE RUTA ===== */}
+      <Dialog
+        open={modalSeleccionRuta}
+        maxWidth='sm'
+        fullWidth
+        disableEscapeKeyDown
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            overflow: 'hidden',
+            boxShadow: '0 8px 40px rgba(107,78,47,0.18)'
+          }
+        }}
+      >
+        {/* Header del modal — color primario de la plantilla */}
+        <Box
+          sx={{
+            background: 'linear-gradient(135deg, #6B4E2F 0%, #8C6643 100%)',
+            px: 3,
+            py: 2.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5
+          }}
+        >
+          <Avatar sx={{ bgcolor: 'rgba(245,166,35,0.25)', width: 44, height: 44 }}>
+            <ShippingIcon sx={{ fontSize: 24, color: '#F5A623' }} />
+          </Avatar>
+          <Box sx={{ flex: 1 }}>
+            <Typography variant='h6' sx={{ color: '#fff', fontWeight: 700, lineHeight: 1.2 }}>
+              Seleccionar Ruta
+            </Typography>
+            <Typography variant='caption' sx={{ color: 'rgba(255,255,255,0.75)' }}>
+              {sedeNombreModal ? `Sede: ${sedeNombreModal}` : 'Elige una ruta para comenzar'}
+            </Typography>
+          </Box>
+        </Box>
+
+        <DialogContent sx={{ pt: 2.5, pb: 1, px: 3, bgcolor: '#F5F3F0' }}>
+          {loadingRutasModal ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 5, gap: 2 }}>
+              <CircularProgress sx={{ color: '#6B4E2F' }} />
+              <Typography color='text.secondary' variant='body2'>Cargando rutas...</Typography>
+            </Box>
+          ) : (
+            <>
+              <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
+                Selecciona la ruta que deseas gestionar. Solo se cargarán los clientes de esa ruta.
+              </Typography>
+
+              {/* Buscador de rutas */}
+              <TextField
+                size='small'
+                fullWidth
+                placeholder='Buscar ruta por nombre o código...'
+                value={busquedaRuta}
+                onChange={e => setBusquedaRuta(e.target.value)}
+                sx={{ mb: 2, bgcolor: '#fff', borderRadius: 1 }}
+                InputProps={{
+                  startAdornment: (
+                    <Box component='span' sx={{ mr: 1, color: 'text.secondary', display: 'flex', alignItems: 'center' }}>
+                      <ShippingIcon fontSize='small' />
+                    </Box>
+                  )
+                }}
+              />
+
+              <Grid container spacing={1.5}
+                sx={{ maxHeight: 340, overflowY: 'auto', pr: 0.5,
+                  '&::-webkit-scrollbar': { width: 4 },
+                  '&::-webkit-scrollbar-thumb': { bgcolor: '#6B4E2F', borderRadius: 2 },
+                  '&::-webkit-scrollbar-track': { bgcolor: '#e5ddd5', borderRadius: 2 }
+                }}
+              >
+                {/* Opción: Todas las rutas — solo visible si no hay búsqueda activa */}
+                {!busquedaRuta && (
+                  <Grid item xs={12}>
+                    <Box
+                      onClick={() => setRutaSeleccionadaModal('todas')}
+                      sx={{
+                        border: rutaSeleccionadaModal === 'todas'
+                          ? '2px solid #6B4E2F'
+                          : '2px solid #ddd5c8',
+                        borderRadius: 2,
+                        p: 1.5,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        bgcolor: rutaSeleccionadaModal === 'todas' ? 'rgba(107,78,47,0.08)' : '#fff',
+                        transition: 'all 0.18s ease',
+                        '&:hover': {
+                          bgcolor: 'rgba(107,78,47,0.06)',
+                          borderColor: '#8C6643'
+                        }
+                      }}
+                    >
+                      <Avatar sx={{ bgcolor: rutaSeleccionadaModal === 'todas' ? '#6B4E2F' : '#ede8e3', width: 38, height: 38 }}>
+                        <BusinessIcon sx={{ fontSize: 18, color: rutaSeleccionadaModal === 'todas' ? '#fff' : '#6B4E2F' }} />
+                      </Avatar>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography sx={{ fontWeight: 600, fontSize: '0.9rem', color: 'text.primary' }}>
+                          Todas las rutas
+                        </Typography>
+                        <Typography variant='caption' color='text.secondary'>
+                          Ver clientes de todas las rutas de la sede
+                        </Typography>
+                      </Box>
+                      {rutaSeleccionadaModal === 'todas' && (
+                        <Chip size='small' label='✓' sx={{ bgcolor: '#6B4E2F', color: '#fff', fontWeight: 700, minWidth: 28 }} />
+                      )}
+                    </Box>
+                  </Grid>
+                )}
+
+                {/* Rutas activas filtradas por búsqueda */}
+                {rutasModal
+                  .filter(r => {
+                    const q = busquedaRuta.toLowerCase().trim()
+                    if (!q) return true
+                    return r.nombre.toLowerCase().includes(q) || (r.codigo || '').toLowerCase().includes(q)
+                  })
+                  .length === 0 && (
+                  <Grid item xs={12}>
+                    <Typography color='text.secondary' sx={{ textAlign: 'center', py: 2, fontSize: '0.85rem' }}>
+                      {busquedaRuta ? `Sin resultados para "${busquedaRuta}"` : 'No hay rutas activas para esta sede'}
+                    </Typography>
+                  </Grid>
+                )}
+                {rutasModal
+                  .filter(r => {
+                    const q = busquedaRuta.toLowerCase().trim()
+                    if (!q) return true
+                    return r.nombre.toLowerCase().includes(q) || (r.codigo || '').toLowerCase().includes(q)
+                  })
+                  .map(ruta => (
+                    <Grid item xs={12} sm={6} key={ruta.id}>
+                      <Box
+                        onClick={() => setRutaSeleccionadaModal(ruta.id)}
+                        sx={{
+                          border: rutaSeleccionadaModal === ruta.id
+                            ? '2px solid #6B4E2F'
+                            : '2px solid #ddd5c8',
+                          borderRadius: 2,
+                          p: 1.5,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 1.5,
+                          bgcolor: rutaSeleccionadaModal === ruta.id ? 'rgba(107,78,47,0.08)' : '#fff',
+                          transition: 'all 0.18s ease',
+                          height: '100%',
+                          '&:hover': {
+                            bgcolor: 'rgba(107,78,47,0.06)',
+                            borderColor: '#8C6643'
+                          }
+                        }}
+                      >
+                        <Avatar
+                          sx={{
+                            bgcolor: rutaSeleccionadaModal === ruta.id ? '#6B4E2F' : '#ede8e3',
+                            width: 38, height: 38, flexShrink: 0
+                          }}
+                        >
+                          <ShippingIcon sx={{ fontSize: 18, color: rutaSeleccionadaModal === ruta.id ? '#fff' : '#6B4E2F' }} />
+                        </Avatar>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography sx={{ fontWeight: 600, fontSize: '0.88rem', lineHeight: 1.3, color: 'text.primary' }} noWrap>
+                            {ruta.nombre}
+                          </Typography>
+                          {ruta.codigo && (
+                            <Chip
+                              label={ruta.codigo}
+                              size='small'
+                              sx={{ bgcolor: 'rgba(245,166,35,0.15)', color: '#8C6643', height: 18, fontSize: '0.7rem', mt: 0.4, fontWeight: 600 }}
+                            />
+                          )}
+                          {(ruta.horarioInicio || ruta.horarioFin) && (
+                            <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 0.3, fontSize: '0.7rem' }}>
+                              {ruta.horarioInicio} – {ruta.horarioFin}
+                            </Typography>
+                          )}
+                        </Box>
+                        {rutaSeleccionadaModal === ruta.id && (
+                          <Chip size='small' label='✓' sx={{ bgcolor: '#6B4E2F', color: '#fff', fontWeight: 700, minWidth: 28, flexShrink: 0 }} />
+                        )}
+                      </Box>
+                    </Grid>
+                  ))
+                }
+              </Grid>
+            </>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, pb: 3, pt: 2, bgcolor: '#F5F3F0', borderTop: '1px solid #ddd5c8' }}>
+          <Button
+            variant='contained'
+            disabled={!rutaSeleccionadaModal || loadingRutasModal}
+            onClick={confirmarSeleccionRuta}
+            sx={{
+              bgcolor: '#6B4E2F',
+              color: '#fff',
+              fontWeight: 700,
+              px: 4,
+              borderRadius: 2,
+              textTransform: 'none',
+              fontSize: '0.95rem',
+              boxShadow: '0 2px 8px rgba(107,78,47,0.25)',
+              '&:hover': { bgcolor: '#5A4128', boxShadow: '0 4px 14px rgba(107,78,47,0.35)' },
+              '&:disabled': { bgcolor: '#c9bfb3', color: '#fff' }
+            }}
+          >
+            Cargar clientes
+          </Button>
+        </DialogActions>
+      </Dialog>
+      {/* ===== FIN MODAL SELECCIÓN DE RUTA ===== */}
+
+
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant='h4' component='h1'>
           Gestión de Clientes
@@ -1561,6 +1825,20 @@ export default function ClientesPage() {
                   Última actualización: {formatRelativeTime(lastClientesUpdate)}
                 </Typography>
               )}
+              <Button
+                variant='outlined'
+                size='small'
+                startIcon={<ShippingIcon />}
+                disabled={!sedeId || loadingRutasModal}
+                onClick={() => {
+                  setRutaSeleccionadaModal(rutaFiltroId || '')
+                  setBusquedaRuta('')
+                  setModalSeleccionRuta(true)
+                }}
+                color='secondary'
+              >
+                Cambiar Ruta
+              </Button>
               <Button
                 variant='outlined'
                 size='small'

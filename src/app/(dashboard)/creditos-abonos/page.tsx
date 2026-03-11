@@ -156,7 +156,9 @@ interface PagoPendienteAutorizacion {
   registradoPor: string
   registradoPorNombre?: string
   fechaHora: string
+  fechaHora: string
   observaciones: string
+  ruta?: string
   pagoCompleto?: PagoAPI
 }
 
@@ -229,6 +231,7 @@ export default function CreditosAbonosPage() {
   // Buscador y filtro por ruta en Pagos Pendientes e Historial de Pagos
   const [filtroBusquedaPagosPendientes, setFiltroBusquedaPagosPendientes] = useState('')
   const [filtroBusquedaHistorialPagos, setFiltroBusquedaHistorialPagos] = useState('')
+  const [filtroRutaPagosPendientes, setFiltroRutaPagosPendientes] = useState<string>('todas')
   // Filtros propios del Historial de Pagos: ruta (todas por defecto) y fechas (hoy por defecto)
   const [filtroRutaHistorialPagos, setFiltroRutaHistorialPagos] = useState<string>('todas')
   const [fechaDesdeHistorialPagos, setFechaDesdeHistorialPagos] = useState<string>(() => new Date().toISOString().slice(0, 10))
@@ -406,6 +409,12 @@ export default function CreditosAbonosPage() {
       if (fechaDesdeHistorialPagos) historialFiltros.fechaDesde = fechaDesdeHistorialPagos
       if (fechaHastaHistorialPagos) historialFiltros.fechaHasta = fechaHastaHistorialPagos
 
+      const pagosPendientesFiltros: { estado: string; rutaId?: string } = { estado: 'pendiente' }
+      if (filtroRutaPagosPendientes && filtroRutaPagosPendientes !== 'todas') {
+        const rutaPed = listaRutas.find(r => r.nombre === filtroRutaPagosPendientes)
+        if (rutaPed) pagosPendientesFiltros.rutaId = rutaPed.id
+      }
+
       const [resumen, clientesResp, pagos, historial] = await Promise.all([
         creditosAbonosAPI.getResumenCartera(Object.keys(resumenFiltros).length > 0 ? resumenFiltros : undefined),
         creditosAbonosAPI.getClientesCredito({
@@ -413,7 +422,7 @@ export default function CreditosAbonosPage() {
           page: pageC + 1,
           pageSize: rppClientes
         }),
-        creditosAbonosAPI.getAllPagos({ estado: 'pendiente', ...(rutaIdParaCarga && { rutaId: rutaIdParaCarga }) }),
+        creditosAbonosAPI.getAllPagos(pagosPendientesFiltros),
         creditosAbonosAPI.getAllPagos(Object.keys(historialFiltros).length > 0 ? historialFiltros : undefined)
       ])
 
@@ -448,6 +457,7 @@ export default function CreditosAbonosPage() {
           id: p.id,
           cliente: p.cliente ? `${p.cliente.nombre} ${p.cliente.apellidoPaterno} ${p.cliente.apellidoMaterno}` : 'N/A',
           nota: p.notaCredito?.numeroNota || 'Abono general',
+          ruta: p.cliente?.ruta?.nombre || 'Sin ruta',
           montoPagado: p.montoTotal,
           formasPago: p.formasPago?.map(fp => ({
             id: fp.id,
@@ -971,7 +981,8 @@ export default function CreditosAbonosPage() {
       p =>
         (p.cliente && p.cliente.toLowerCase().includes(busqueda)) ||
         (p.nota && p.nota.toLowerCase().includes(busqueda)) ||
-        (p.registradoPorNombre && p.registradoPorNombre.toLowerCase().includes(busqueda))
+        (p.registradoPorNombre && p.registradoPorNombre.toLowerCase().includes(busqueda)) ||
+        (p.ruta && p.ruta.toLowerCase().includes(busqueda))
     )
   }, [pagosPendientesAutorizacion, filtroBusquedaPagosPendientes])
 
@@ -996,7 +1007,12 @@ export default function CreditosAbonosPage() {
     setPageClientes(0)
     setPageHistorial(0)
     cargarDatos(undefined, { pageClientes: 0, pageHistorial: 0 })
-  }, [filtros.nombre, filtros.ruta, filtros.estado, filtroRutaHistorialPagos, fechaDesdeHistorialPagos, fechaHastaHistorialPagos, filtroRutaDashboard, fechaDesdeDashboard, fechaHastaDashboard])
+  }, [
+    filtros.nombre, filtros.ruta, filtros.estado, 
+    filtroRutaHistorialPagos, fechaDesdeHistorialPagos, fechaHastaHistorialPagos, 
+    filtroRutaDashboard, fechaDesdeDashboard, fechaHastaDashboard,
+    filtroRutaPagosPendientes
+  ])
 
   return (
     <Box sx={{ p: 3 }}>
@@ -1961,10 +1977,13 @@ export default function CreditosAbonosPage() {
                   <InputLabel>Ruta</InputLabel>
                   <Select
                     label='Ruta'
-                    value={filtros.ruta}
-                    onChange={(e) => manejarCambioFiltros('ruta', e.target.value)}
+                    value={filtroRutaPagosPendientes}
+                    onChange={(e) => {
+                      setFiltroRutaPagosPendientes(e.target.value)
+                      setPagePagosPendientes(0)
+                    }}
                   >
-                    <MenuItem value=''>Primera ruta (por defecto)</MenuItem>
+                    <MenuItem value='todas'>Todas las rutas</MenuItem>
                     {rutasUnicas.map((ruta) => (
                       <MenuItem key={ruta} value={ruta}>
                         {ruta}
@@ -1978,6 +1997,7 @@ export default function CreditosAbonosPage() {
                   <TableHead>
                     <TableRow>
                       <TableCell>Cliente</TableCell>
+                      <TableCell>Ruta</TableCell>
                       <TableCell>Nota</TableCell>
                       <TableCell align='right'>Monto Pagado</TableCell>
                       <TableCell>Formas de Pago</TableCell>
@@ -1997,6 +2017,11 @@ export default function CreditosAbonosPage() {
                         <TableCell>
                           <Typography variant='subtitle2' fontWeight='bold'>
                             {pago.cliente}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant='body2'>
+                            {pago.ruta}
                           </Typography>
                         </TableCell>
                         <TableCell>
