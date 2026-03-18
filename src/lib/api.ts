@@ -1975,6 +1975,13 @@ export interface ResumenVentas {
   pedidosEntregados: number
   alertasCriticas: number
   efectivoConsolidado: number
+  efectivoHoy: number
+  creditoHoy: number
+  ventasPipas: number
+  ventasCilindros: number
+  litrosPipas: number
+  litrosCilindros: number
+  litrosTotales: number
 }
 
 export interface CorteRepartidor {
@@ -2005,6 +2012,13 @@ export const ventasAPI = {
           pedidosEntregados: 0,
           alertasCriticas: 0,
           efectivoConsolidado: 0,
+          efectivoHoy: 0,
+          creditoHoy: 0,
+          ventasPipas: 0,
+          ventasCilindros: 0,
+          litrosPipas: 0,
+          litrosCilindros: 0,
+          litrosTotales: 0,
         }
       }
       const error = await response.json()

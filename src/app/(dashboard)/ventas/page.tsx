@@ -1954,16 +1954,16 @@ export default function VentasPage() {
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box>
                       <Typography color='text.secondary' gutterBottom>
-                        ALERTAS
+                        LITROS HOY
                       </Typography>
-                      <Typography variant='h4' component='div' color='warning.main'>
-                        {resumenVentas?.alertasCriticas || 0}
+                      <Typography variant='h4' component='div' color='info.main'>
+                        {(resumenVentas?.litrosTotales || 0).toLocaleString('es-MX', { maximumFractionDigits: 1 })} L
                       </Typography>
                       <Typography variant='body2' color='text.secondary'>
-                        Críticas
+                        Pipas: {(resumenVentas?.litrosPipas || 0).toLocaleString('es-MX', { maximumFractionDigits: 1 })} L &nbsp;|&nbsp; Cil: {(resumenVentas?.litrosCilindros || 0).toLocaleString('es-MX', { maximumFractionDigits: 1 })} L
                       </Typography>
                     </Box>
-                    <WarningIcon color='warning' sx={{ fontSize: 40 }} />
+                    <GasMeterIcon color='info' sx={{ fontSize: 40 }} />
                   </Box>
                 </CardContent>
               </Card>
@@ -1978,10 +1978,10 @@ export default function VentasPage() {
                         EFECTIVO
                       </Typography>
                       <Typography variant='h4' component='div' color='success.main'>
-                        ${efectivoConsolidado.toLocaleString()}
+                        ${(resumenVentas?.efectivoHoy || 0).toLocaleString()}
                       </Typography>
                       <Typography variant='body2' color='text.secondary'>
-                        Consolidado
+                        Del día en cash
                       </Typography>
                     </Box>
                     <AttachMoneyIcon color='success' sx={{ fontSize: 40 }} />
@@ -2141,24 +2141,52 @@ export default function VentasPage() {
             <Grid item xs={12}>
               <Card sx={{ bgcolor: 'primary.main', color: 'white' }}>
                 <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                      <Typography variant='h6' gutterBottom sx={{ color: 'white' }}>
-                        TOTAL OPERACIÓN
+                  <Grid container spacing={2} alignItems='center'>
+                    <Grid item xs={6} sm={3}>
+                      <Typography variant='body2' sx={{ color: 'rgba(255,255,255,0.75)', mb: 0.5 }}>
+                        PIPAS
                       </Typography>
-                      <Typography variant='h3' sx={{ color: 'white' }}>
-                        ${granTotalOperacion.toLocaleString()}
+                      <Typography variant='h5' sx={{ color: 'white', fontWeight: 'bold' }}>
+                        ${(resumenVentas?.ventasPipas || 0).toLocaleString()}
                       </Typography>
-                    </Box>
-                    <Box sx={{ textAlign: 'right' }}>
-                      <Typography variant='h6' gutterBottom sx={{ color: 'white' }}>
-                        EFECTIVO CONSOLIDADO
+                      <Typography variant='body2' sx={{ color: 'rgba(255,255,255,0.75)' }}>
+                        {(resumenVentas?.litrosPipas || 0).toLocaleString('es-MX', { maximumFractionDigits: 1 })} litros
                       </Typography>
-                      <Typography variant='h4' sx={{ color: 'white' }}>
-                        ${efectivoConsolidado.toLocaleString()}
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                      <Typography variant='body2' sx={{ color: 'rgba(255,255,255,0.75)', mb: 0.5 }}>
+                        CILINDROS
                       </Typography>
-                    </Box>
-                  </Box>
+                      <Typography variant='h5' sx={{ color: 'white', fontWeight: 'bold' }}>
+                        ${(resumenVentas?.ventasCilindros || 0).toLocaleString()}
+                      </Typography>
+                      <Typography variant='body2' sx={{ color: 'rgba(255,255,255,0.75)' }}>
+                        {(resumenVentas?.litrosCilindros || 0).toLocaleString('es-MX', { maximumFractionDigits: 1 })} litros
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                      <Typography variant='body2' sx={{ color: 'rgba(255,255,255,0.75)', mb: 0.5 }}>
+                        TOTAL VENTAS
+                      </Typography>
+                      <Typography variant='h5' sx={{ color: 'white', fontWeight: 'bold' }}>
+                        ${(resumenVentas?.ventasHoy || 0).toLocaleString()}
+                      </Typography>
+                      <Typography variant='body2' sx={{ color: 'rgba(255,255,255,0.75)' }}>
+                        {(resumenVentas?.litrosTotales || 0).toLocaleString('es-MX', { maximumFractionDigits: 1 })} litros totales
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                      <Typography variant='body2' sx={{ color: 'rgba(255,255,255,0.75)', mb: 0.5 }}>
+                        A CRÉDITO
+                      </Typography>
+                      <Typography variant='h5' sx={{ color: 'white', fontWeight: 'bold' }}>
+                        ${(resumenVentas?.creditoHoy || 0).toLocaleString()}
+                      </Typography>
+                      <Typography variant='body2' sx={{ color: 'rgba(255,255,255,0.75)' }}>
+                        Del total del día
+                      </Typography>
+                    </Grid>
+                  </Grid>
                 </CardContent>
               </Card>
             </Grid>
