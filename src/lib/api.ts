@@ -3274,3 +3274,41 @@ export const configuracionTicketsAPI = {
   },
 }
 
+
+// API de Resumen por Repartidor
+export interface RepartidorResumen {
+  id: string
+  nombre: string
+  tipo: 'pipas' | 'cilindros'
+  servicios: number
+  totalVentas: number
+  litros: number
+  cil10: number
+  cil20: number
+  cil30: number
+  tanque10: number
+  tanque20: number
+  tanque30: number
+  valvulas: number
+}
+
+export interface ResumenRepartidores {
+  pipas: RepartidorResumen[]
+  cilindros: RepartidorResumen[]
+}
+
+export const resumenRepartidoresAPI = {
+  get: async (sedeId?: string): Promise<ResumenRepartidores> => {
+    const queryParams = new URLSearchParams()
+    if (sedeId) queryParams.append('sedeId', sedeId)
+    const queryString = queryParams.toString()
+    const url = `/ventas/resumen-repartidores${queryString ? `?${queryString}` : ''}`
+    const response = await fetchWithAuth(url, { method: 'GET' })
+    if (!response.ok) {
+      if (response.status === 404) return { pipas: [], cilindros: [] }
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener resumen por repartidor')
+    }
+    return response.json()
+  }
+}

@@ -8,6 +8,9 @@ import {
   productosAPI,
   pedidosAPI,
   ventasAPI,
+  resumenRepartidoresAPI,
+  type ResumenRepartidores,
+  type RepartidorResumen,
   descuentosRepartidorAPI,
   sedesAPI,
   configuracionesAPI,
@@ -140,6 +143,7 @@ export default function VentasPage() {
   const [resumenVentas, setResumenVentas] = useState<ResumenVentas | null>(null)
   const [cortePipas, setCortePipas] = useState<CorteRepartidor | null>(null)
   const [corteCilindros, setCorteCilindros] = useState<CorteRepartidor | null>(null)
+  const [resumenRepartidores, setResumenRepartidores] = useState<ResumenRepartidores>({ pipas: [], cilindros: [] })
   const [productos, setProductos] = useState<Producto[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [repartidores, setRepartidores] = useState<Usuario[]>([])
@@ -484,14 +488,16 @@ export default function VentasPage() {
 
   const loadDashboardData = async () => {
     try {
-      const [resumen, pipas, cilindros] = await Promise.all([
+      const [resumen, pipas, cilindros, repartidores] = await Promise.all([
         ventasAPI.getResumen(sedeId || undefined),
         ventasAPI.getCortePipas(sedeId || undefined),
-        ventasAPI.getCorteCilindros(sedeId || undefined)
+        ventasAPI.getCorteCilindros(sedeId || undefined),
+        resumenRepartidoresAPI.get(sedeId || undefined)
       ])
       setResumenVentas(resumen)
       setCortePipas(pipas)
       setCorteCilindros(cilindros)
+      setResumenRepartidores(repartidores)
     } catch (err: any) {
       console.error('Error loading dashboard data:', err)
     }
@@ -1986,6 +1992,91 @@ export default function VentasPage() {
                     </Box>
                     <AttachMoneyIcon color='success' sx={{ fontSize: 40 }} />
                   </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* Resumen por Repartidor */}
+          <Grid container spacing={3} sx={{ mb: 3, mt: 1 }}>
+            {/* Pipas */}
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <LocalShippingIcon color='primary' sx={{ mr: 1 }} />
+                    <Typography variant='h6'>PIPAS — Resumen por Operador</Typography>
+                  </Box>
+                  {resumenRepartidores.pipas.length === 0 ? (
+                    <Typography variant='body2' color='text.secondary'>Sin servicios entregados hoy</Typography>
+                  ) : (
+                    <TableContainer>
+                      <Table size='small'>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell><strong>Operador</strong></TableCell>
+                            <TableCell align='center'><strong>Servicios</strong></TableCell>
+                            <TableCell align='right'><strong>Litros</strong></TableCell>
+                            <TableCell align='right'><strong>Total</strong></TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {resumenRepartidores.pipas.map(r => (
+                            <TableRow key={r.id} hover>
+                              <TableCell>{r.nombre}</TableCell>
+                              <TableCell align='center'>{r.servicios}</TableCell>
+                              <TableCell align='right' sx={{ color: 'info.main' }}>{r.litros.toLocaleString('es-MX', { maximumFractionDigits: 1 })} L</TableCell>
+                              <TableCell align='right' sx={{ color: 'primary.main' }}>${r.totalVentas.toLocaleString()}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Cilindros */}
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <GasMeterIcon color='secondary' sx={{ mr: 1 }} />
+                    <Typography variant='h6'>CILINDROS — Resumen por Operador</Typography>
+                  </Box>
+                  {resumenRepartidores.cilindros.length === 0 ? (
+                    <Typography variant='body2' color='text.secondary'>Sin servicios entregados hoy</Typography>
+                  ) : (
+                    <TableContainer>
+                      <Table size='small'>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell><strong>Operador</strong></TableCell>
+                            <TableCell align='center'><strong>Srv</strong></TableCell>
+                            <TableCell align='center'><strong>10kg</strong></TableCell>
+                            <TableCell align='center'><strong>20kg</strong></TableCell>
+                            <TableCell align='center'><strong>30kg</strong></TableCell>
+                            <TableCell align='center'><strong>Val</strong></TableCell>
+                            <TableCell align='right'><strong>Total</strong></TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {resumenRepartidores.cilindros.map(r => (
+                            <TableRow key={r.id} hover>
+                              <TableCell>{r.nombre}</TableCell>
+                              <TableCell align='center'>{r.servicios}</TableCell>
+                              <TableCell align='center'>{r.cil10 || '-'}</TableCell>
+                              <TableCell align='center'>{r.cil20 || '-'}</TableCell>
+                              <TableCell align='center'>{r.cil30 || '-'}</TableCell>
+                              <TableCell align='center'>{r.valvulas || '-'}</TableCell>
+                              <TableCell align='right' sx={{ color: 'primary.main' }}>${r.totalVentas.toLocaleString()}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
                 </CardContent>
               </Card>
             </Grid>
