@@ -994,7 +994,7 @@ export default function VentasPage() {
 
   // Exportar pedidos filtrados a CSV
   const exportarCSV = () => {
-    const headers = ['ID Pedido','Ruta','Operador','Tipo','Cliente','Fecha','Hora','Estado','Detalle','Descuento','Total']
+    const headers = ['ID Pedido','Ruta','Operador','Tipo','Cliente','Fecha','Hora','Estado','Detalle','Forma de Pago','Descuento','Total']
     const rows = pedidosFiltrados.map(p => {
       const operador = p.repartidor ? `${p.repartidor.nombres} ${p.repartidor.apellidoPaterno || ''}`.trim() : 'Sin asignar'
       const cliente = p.cliente ? `${p.cliente.nombre} ${p.cliente.apellidoPaterno || ''}`.trim() : 'N/A'
@@ -2956,6 +2956,7 @@ export default function VentasPage() {
                       <TableCell><strong>Fecha y Hora</strong></TableCell>
                       <TableCell align='center'><strong>Estado</strong></TableCell>
                       <TableCell><strong>Detalle</strong></TableCell>
+                      <TableCell><strong>Pago</strong></TableCell>
                       <TableCell align='right'><strong>Descuento</strong></TableCell>
                       <TableCell align='right'><strong>Total</strong></TableCell>
                       <TableCell align='center'><strong>Acciones</strong></TableCell>
@@ -3011,6 +3012,13 @@ export default function VentasPage() {
                               {getDetallePedido(pedido)}
                             </Typography>
                           </TableCell>
+                          <TableCell>
+                            <Typography variant='caption' color='text.secondary'>
+                              {pedido.pagos && pedido.pagos.length > 0
+                                ? pedido.pagos.map(p => p.tipo === 'credito' ? 'Crédito' : (p.metodo?.nombre || 'Pago')).join(' + ')
+                                : '-'}
+                            </Typography>
+                          </TableCell>
                           <TableCell align='right'>
                             <Typography variant='caption' color={getDescuentoPedido(pedido) !== '-' ? 'error' : 'text.secondary'}>
                               {getDescuentoPedido(pedido)}
@@ -3020,11 +3028,6 @@ export default function VentasPage() {
                             <Typography variant='body2' color='primary' fontWeight='bold'>
                               ${pedido.ventaTotal.toLocaleString()}
                             </Typography>
-                            {pedido.pagos && pedido.pagos.length > 0 && (
-                              <Typography variant='caption' color='text.secondary' display='block'>
-                                {pedido.pagos.map(p => p.tipo === 'credito' ? 'Crédito' : (p.metodo?.nombre || 'Pago')).join(' + ')}
-                              </Typography>
-                            )}
                           </TableCell>
                           <TableCell align='center'>
                             <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
