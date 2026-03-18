@@ -81,7 +81,9 @@ import {
   ListItemIcon,
   ListItemAvatar,
   InputAdornment,
-  Autocomplete
+  Autocomplete,
+  Menu,
+  Checkbox
 } from '@mui/material'
 import {
   TrendingUp as TrendingUpIcon,
@@ -206,6 +208,11 @@ export default function VentasPage() {
   const [pedidoACerrar, setPedidoACerrar] = useState<Pedido | null>(null)
   const [pedidoModificarPago, setPedidoModificarPago] = useState<Pedido | null>(null)
   const [filtrosColapsados, setFiltrosColapsados] = useState(true)
+  const [columnasVisibles, setColumnasVisibles] = useState({
+    ruta: true, operador: true, tipo: true, cliente: true, fechaHora: true,
+    estado: true, detalle: true, pago: true, descTipo: true, descMonto: true, total: true
+  })
+  const [menuColumnasAnchor, setMenuColumnasAnchor] = useState<null | HTMLElement>(null)
   const [nuevosPagos, setNuevosPagos] = useState<{metodoId: string, monto: string, folio: string, tipo: string}[]>([{metodoId: '', monto: '', folio: '', tipo: 'metodo_pago'}])
   const [formasPagoCerrar, setFormasPagoCerrar] = useState<FormaPago[]>([])
   const [pagosCerrarPedido, setPagosCerrarPedido] = useState<Record<string, { monto: string; referencia?: string }>>({})
@@ -994,12 +1001,20 @@ export default function VentasPage() {
 
   // Exportar pedidos filtrados a CSV
   const exportarCSV = () => {
-    const headers = ['ID Pedido','Ruta','Operador','Tipo','Cliente','Fecha','Hora','Estado','Detalle','Forma de Pago','Descuento','Total']
+    const headers = ['ID Pedido','Ruta','Operador','Tipo','Cliente','Fecha','Hora','Estado','Detalle','Forma de Pago','Tipo Descuento','Monto Descuento','Total']
     const rows = pedidosFiltrados.map(p => {
       const operador = p.repartidor ? `${p.repartidor.nombres} ${p.repartidor.apellidoPaterno || ''}`.trim() : 'Sin asignar'
       const cliente = p.cliente ? `${p.cliente.nombre} ${p.cliente.apellidoPaterno || ''}`.trim() : 'N/A'
       const detalle = getDetallePedido(p)
-      const descuento = getDescuentoPedido(p)
+      const formaPago = p.pagos && p.pagos.length > 0
+        ? p.pagos.map((pg: any) => pg.tipo === 'credito' ? 'Crédito' : (pg.metodo?.nombre || 'Pago')).join(' + ')
+        : '-'
+      const tipoDescuento = p.productosPedido && p.productosPedido.length > 0
+        ? [...new Set(p.productosPedido.filter((pp: any) => pp.descuento).map((pp: any) => pp.descuento))].join(', ') || '-'
+        : '-'
+      const montoDescuento = p.productosPedido && p.productosPedido.length > 0
+        ? p.productosPedido.reduce((s: number, pp: any) => s + (parseFloat(String(pp.descuentoMonto)) || 0), 0)
+        : 0
       return [
         p.numeroPedido,
         p.ruta?.nombre || 'N/A',
@@ -1010,17 +1025,12 @@ export default function VentasPage() {
         p.horaPedido || '',
         p.estado.toUpperCase(),
         detalle,
-        descuento,
+        formaPago,
+        tipoDescuento,
+        montoDescuento > 0 ? `$${montoDescuento.toLocaleString('es-MX', { maximumFractionDigits: 2 })}` : '-',
         `$${p.ventaTotal.toLocaleString()}`
       ]
     })
-    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `pedidos_${getFechaHoy()}.csv`
-    a.click()
     URL.revokeObjectURL(url)
   }
 
@@ -2939,9 +2949,34 @@ export default function VentasPage() {
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant='h6'>Pedidos ({pedidosFiltrados.length})</Typography>
-                <Button variant='outlined' size='small' startIcon={<DownloadIcon />} onClick={exportarCSV}>
-                  Exportar CSV
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button variant='outlined' size='small' onClick={e => setMenuColumnasAnchor(e.currentTarget)}>
+                    Columnas
+                  </Button>
+                  <Menu anchorEl={menuColumnasAnchor} open={Boolean(menuColumnasAnchor)} onClose={() => setMenuColumnasAnchor(null)}>
+                    {[
+                      { key: 'ruta', label: 'Ruta' },
+                      { key: 'operador', label: 'Operador' },
+                      { key: 'tipo', label: 'Tipo' },
+                      { key: 'cliente', label: 'Cliente' },
+                      { key: 'fechaHora', label: 'Fecha y Hora' },
+                      { key: 'estado', label: 'Estado' },
+                      { key: 'detalle', label: 'Detalle' },
+                      { key: 'pago', label: 'Forma de Pago' },
+                      { key: 'descTipo', label: 'Tipo Descuento' },
+                      { key: 'descMonto', label: 'Monto Descuento' },
+                      { key: 'total', label: 'Total' },
+                    ].map(col => (
+                      <MenuItem key={col.key} dense onClick={() => setColumnasVisibles(prev => ({ ...prev, [col.key]: !prev[col.key as keyof typeof prev] }))}>
+                        <Checkbox size='small' checked={columnasVisibles[col.key as keyof typeof columnasVisibles]} sx={{ p: 0.5 }} />
+                        <Typography variant='body2' sx={{ ml: 1 }}>{col.label}</Typography>
+                      </MenuItem>
+                    ))}
+                  </Menu>
+                  <Button variant='outlined' size='small' startIcon={<DownloadIcon />} onClick={exportarCSV}>
+                    Exportar CSV
+                  </Button>
+                </Box>
               </Box>
 
               <TableContainer component={Paper} variant='outlined'>
@@ -2949,16 +2984,17 @@ export default function VentasPage() {
                   <TableHead>
                     <TableRow>
                       <TableCell><strong>ID Pedido</strong></TableCell>
-                      <TableCell><strong>Ruta</strong></TableCell>
-                      <TableCell><strong>Operador</strong></TableCell>
-                      <TableCell align='center'><strong>Tipo</strong></TableCell>
-                      <TableCell><strong>Cliente</strong></TableCell>
-                      <TableCell><strong>Fecha y Hora</strong></TableCell>
-                      <TableCell align='center'><strong>Estado</strong></TableCell>
-                      <TableCell><strong>Detalle</strong></TableCell>
-                      <TableCell><strong>Pago</strong></TableCell>
-                      <TableCell align='right'><strong>Descuento</strong></TableCell>
-                      <TableCell align='right'><strong>Total</strong></TableCell>
+                      {columnasVisibles.ruta && <TableCell><strong>Ruta</strong></TableCell>}
+                      {columnasVisibles.operador && <TableCell><strong>Operador</strong></TableCell>}
+                      {columnasVisibles.tipo && <TableCell align='center'><strong>Tipo</strong></TableCell>}
+                      {columnasVisibles.cliente && <TableCell><strong>Cliente</strong></TableCell>}
+                      {columnasVisibles.fechaHora && <TableCell><strong>Fecha y Hora</strong></TableCell>}
+                      {columnasVisibles.estado && <TableCell align='center'><strong>Estado</strong></TableCell>}
+                      {columnasVisibles.detalle && <TableCell><strong>Detalle</strong></TableCell>}
+                      {columnasVisibles.pago && <TableCell><strong>Pago</strong></TableCell>}
+                      {columnasVisibles.descTipo && <TableCell align='center'><strong>Desc.</strong></TableCell>}
+                      {columnasVisibles.descMonto && <TableCell align='right'><strong>-Monto</strong></TableCell>}
+                      {columnasVisibles.total && <TableCell align='right'><strong>Total</strong></TableCell>}
                       <TableCell align='center'><strong>Acciones</strong></TableCell>
                     </TableRow>
                   </TableHead>
@@ -2976,13 +3012,13 @@ export default function VentasPage() {
                           <TableCell>
                             <Typography variant='caption' fontWeight='bold'>{pedido.numeroPedido}</Typography>
                           </TableCell>
-                          <TableCell>
+                          {columnasVisibles.ruta && <TableCell>
                             <Typography variant='caption'>{pedido.ruta?.nombre || 'N/A'}</Typography>
-                          </TableCell>
-                          <TableCell>
+                          </TableCell>}
+                          {columnasVisibles.operador && <TableCell>
                             <Typography variant='caption'>{operador}</Typography>
-                          </TableCell>
-                          <TableCell align='center'>
+                          </TableCell>}
+                          {columnasVisibles.tipo && <TableCell align='center'>
                             <Chip
                               label={esPipa ? 'PIPA' : 'CIL'}
                               size='small'
@@ -2992,43 +3028,51 @@ export default function VentasPage() {
                                 fontWeight: 'bold', fontSize: '10px'
                               }}
                             />
-                          </TableCell>
-                          <TableCell>
+                          </TableCell>}
+                          {columnasVisibles.cliente && <TableCell>
                             <Typography variant='caption' fontWeight='bold'>{cliente}</Typography>
-                          </TableCell>
-                          <TableCell>
+                          </TableCell>}
+                          {columnasVisibles.fechaHora && <TableCell>
                             <Typography variant='caption'>
                               {getFechaDisplay(pedido.fechaPedido, pedido.numeroPedido, pedido.horaPedido)}
                             </Typography>
                             <Typography variant='caption' color='text.secondary' display='block'>
                               {pedido.horaPedido || ''}
                             </Typography>
-                          </TableCell>
-                          <TableCell align='center'>
+                          </TableCell>}
+                          {columnasVisibles.estado && <TableCell align='center'>
                             <Chip label={pedido.estado.replace('_',' ').toUpperCase()} color={getEstadoColor(pedido.estado) as any} size='small' />
-                          </TableCell>
-                          <TableCell>
+                          </TableCell>}
+                          {columnasVisibles.detalle && <TableCell>
                             <Typography variant='caption' sx={{ color: esPipa ? 'info.main' : 'text.primary' }}>
                               {getDetallePedido(pedido)}
                             </Typography>
-                          </TableCell>
-                          <TableCell>
+                          </TableCell>}
+                          {columnasVisibles.pago && <TableCell>
                             <Typography variant='caption' color='text.secondary'>
                               {pedido.pagos && pedido.pagos.length > 0
                                 ? pedido.pagos.map(p => p.tipo === 'credito' ? 'Crédito' : (p.metodo?.nombre || 'Pago')).join(' + ')
                                 : '-'}
                             </Typography>
-                          </TableCell>
-                          <TableCell align='right'>
-                            <Typography variant='caption' color={getDescuentoPedido(pedido) !== '-' ? 'error' : 'text.secondary'}>
-                              {getDescuentoPedido(pedido)}
+                          </TableCell>}
+                          {columnasVisibles.descTipo && <TableCell align='center'>
+                            <Typography variant='caption' color='text.secondary'>
+                              {pedido.productosPedido?.find((pp: any) => pp.descuento)?.descuento || '-'}
                             </Typography>
-                          </TableCell>
-                          <TableCell align='right'>
+                          </TableCell>}
+                          {columnasVisibles.descMonto && <TableCell align='right'>
+                            <Typography variant='caption' color='error'>
+                              {(() => {
+                                const monto = (pedido.productosPedido || []).reduce((s: number, pp: any) => s + (parseFloat(String(pp.descuentoMonto)) || 0), 0)
+                                return monto > 0 ? `-$${monto.toLocaleString('es-MX', { maximumFractionDigits: 2 })}` : '-'
+                              })()}
+                            </Typography>
+                          </TableCell>}
+                          {columnasVisibles.total && <TableCell align='right'>
                             <Typography variant='body2' color='primary' fontWeight='bold'>
                               ${pedido.ventaTotal.toLocaleString()}
                             </Typography>
-                          </TableCell>
+                          </TableCell>}
                           <TableCell align='center'>
                             <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
                               <Tooltip title='Ver ticket'>
