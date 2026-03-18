@@ -1031,7 +1031,14 @@ export default function VentasPage() {
         `$${p.ventaTotal.toLocaleString()}`
       ]
     })
-    URL.revokeObjectURL(url)
+    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}`).join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const csvUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = csvUrl
+    a.download = `pedidos_${getFechaHoy()}.csv`
+    a.click()
+    URL.revokeObjectURL(csvUrl)
   }
 
   // Obtener detalle de pedido para tabla
