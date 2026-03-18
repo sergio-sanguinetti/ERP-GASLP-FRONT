@@ -1578,7 +1578,8 @@ export default function VentasPage() {
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-      second: '2-digit'
+      second: '2-digit',
+      timeZone: 'America/Mexico_City'
     })
 
     let productsHTML = ''
@@ -2884,7 +2885,7 @@ export default function VentasPage() {
                         <TableCell>
                           <Box>
                             <Typography variant='body2'>
-                              {new Date(pedido.fechaPedido).toLocaleDateString('es-MX')}
+                              {new Date(pedido.fechaPedido).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })}
                             </Typography>
                             <Typography variant='caption' color='text.secondary'>
                               {pedido.horaPedido || 'N/A'}
@@ -3333,7 +3334,7 @@ export default function VentasPage() {
                               {pedido.numeroPedido}
                             </Typography>
                           </TableCell>
-                          <TableCell>{new Date(pedido.fechaPedido).toLocaleDateString('es-MX')}</TableCell>
+                          <TableCell>{new Date(pedido.fechaPedido).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })}</TableCell>
                           <TableCell>
                             <Chip
                               label={pedido.estado.replace('-', ' ').toUpperCase()}
@@ -3765,7 +3766,7 @@ export default function VentasPage() {
                   Fecha y Hora
                 </Typography>
                 <Typography variant='body1'>
-                  {new Date(pedidoSeleccionado.fechaPedido).toLocaleDateString('es-MX')} {pedidoSeleccionado.horaPedido}
+                  {new Date(pedidoSeleccionado.fechaPedido).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })} {pedidoSeleccionado.horaPedido}
                 </Typography>
               </Grid>
 

@@ -468,7 +468,7 @@ export default function CreditosAbonosPage() {
           })) || [],
           registradoPor: p.usuarioRegistro,
           registradoPorNombre: nombreUsuario,
-          fechaHora: `${new Date(p.fechaPago).toLocaleDateString('es-MX')} ${p.horaPago}`,
+          fechaHora: `${new Date(p.fechaPago).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })} ${p.horaPago}`,
           observaciones: p.observaciones || '',
           pagoCompleto: p
         }
@@ -577,7 +577,8 @@ export default function CreditosAbonosPage() {
       return date.toLocaleDateString('es-MX', {
         year: 'numeric',
         month: '2-digit',
-        day: '2-digit'
+        day: '2-digit',
+        timeZone: 'America/Mexico_City'
       })
     } catch {
       return fecha
@@ -2654,7 +2655,8 @@ export default function CreditosAbonosPage() {
                         {new Date(pagoSeleccionadoDetalle.fechaPago).toLocaleDateString('es-MX', {
                           year: 'numeric',
                           month: 'long',
-                          day: 'numeric'
+                          day: 'numeric',
+                          timeZone: 'America/Mexico_City'
                         })}
                       </Typography>
                     </Grid>
