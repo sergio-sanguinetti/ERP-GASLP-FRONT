@@ -34,7 +34,8 @@ import {
   type Ruta,
   type CreateClienteRequest,
   type ConfiguracionTicket,
-  type FormaPago
+  type FormaPago,
+  pedidosPagosAPI
 } from '@/lib/api'
 
 import {
@@ -115,6 +116,7 @@ interface FiltrosPedidos {
   rutaId: string
   repartidorId: string
   estado: string
+  tipoServicio: string
   mostrarTodos: boolean
 }
 
@@ -189,6 +191,7 @@ export default function VentasPage() {
     rutaId: '',
     repartidorId: '',
     estado: '',
+    tipoServicio: '',
     mostrarTodos: false
   })
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteAnalisis | null>(null)
@@ -201,6 +204,9 @@ export default function VentasPage() {
 
   // Cerrar pedido desde panel: diálogo con formas de pago (como en la app)
   const [pedidoACerrar, setPedidoACerrar] = useState<Pedido | null>(null)
+  const [pedidoModificarPago, setPedidoModificarPago] = useState<Pedido | null>(null)
+  const [filtrosColapsados, setFiltrosColapsados] = useState(true)
+  const [nuevosPagos, setNuevosPagos] = useState<{metodoId: string, monto: string, folio: string, tipo: string}[]>([{metodoId: '', monto: '', folio: '', tipo: 'metodo_pago'}])
   const [formasPagoCerrar, setFormasPagoCerrar] = useState<FormaPago[]>([])
   const [pagosCerrarPedido, setPagosCerrarPedido] = useState<Record<string, { monto: string; referencia?: string }>>({})
   const [creditMontoCerrar, setCreditMontoCerrar] = useState('')
@@ -700,6 +706,7 @@ export default function VentasPage() {
       if (f.estado) filtros.estado = f.estado
       if (f.rutaId) filtros.rutaId = f.rutaId
       if (f.repartidorId) filtros.repartidorId = f.repartidorId
+      if (f.tipoServicio) filtros.tipoServicio = f.tipoServicio
 
       console.log('Filtros enviados:', filtros)
 
@@ -983,6 +990,97 @@ export default function VentasPage() {
   const abrirDialogoEliminar = (pedido: Pedido) => {
     setPedidoAEliminar(pedido)
     setDialogoEliminar(true)
+  }
+
+  // Exportar pedidos filtrados a CSV
+  const exportarCSV = () => {
+    const headers = ['ID Pedido','Ruta','Operador','Tipo','Cliente','Fecha','Hora','Estado','Detalle','Descuento','Total']
+    const rows = pedidosFiltrados.map(p => {
+      const operador = p.repartidor ? `${p.repartidor.nombres} ${p.repartidor.apellidoPaterno || ''}`.trim() : 'Sin asignar'
+      const cliente = p.cliente ? `${p.cliente.nombre} ${p.cliente.apellidoPaterno || ''}`.trim() : 'N/A'
+      const detalle = getDetallePedido(p)
+      const descuento = getDescuentoPedido(p)
+      return [
+        p.numeroPedido,
+        p.ruta?.nombre || 'N/A',
+        operador,
+        p.tipoServicio === 'pipas' ? 'PIPA' : 'CILINDRO',
+        cliente,
+        getFechaDisplay(p.fechaPedido, p.numeroPedido, p.horaPedido),
+        p.horaPedido || '',
+        p.estado.toUpperCase(),
+        detalle,
+        descuento,
+        `$${p.ventaTotal.toLocaleString()}`
+      ]
+    })
+    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `pedidos_${getFechaHoy()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // Obtener detalle de pedido para tabla
+  const getDetallePedido = (pedido: Pedido): string => {
+    if (pedido.tipoServicio === 'pipas') {
+      try {
+        const c = typeof pedido.calculoPipas === 'string' ? JSON.parse(pedido.calculoPipas as any) : pedido.calculoPipas
+        if (!c) return '-'
+        if (Array.isArray(c)) {
+          const total = c.reduce((s: number, carga: any) => s + (parseFloat(carga.cantidadLitros) || 0), 0)
+          return `${total.toLocaleString('es-MX', { maximumFractionDigits: 1 })} L (${c.length} cargas)`
+        }
+        if (c.cantidadLitros) return `${parseFloat(c.cantidadLitros).toLocaleString('es-MX', { maximumFractionDigits: 1 })} L`
+        return '-'
+      } catch { return '-' }
+    } else {
+      if (!pedido.productosPedido?.length) return '-'
+      const grupos: Record<string, number> = {}
+      pedido.productosPedido.forEach(pp => {
+        const nombre = pp.producto?.nombre || 'Producto'
+        grupos[nombre] = (grupos[nombre] || 0) + (parseInt(String(pp.cantidad)) || 0)
+      })
+      return Object.entries(grupos).map(([n, c]) => `${c}×${n}`).join(', ')
+    }
+  }
+
+  // Obtener descuento de pedido
+  const getDescuentoPedido = (pedido: Pedido): string => {
+    if (!pedido.productosPedido?.length) return '-'
+    const total = pedido.productosPedido.reduce((s, pp) => s + (parseFloat(String(pp.descuentoMonto)) || 0), 0)
+    return total > 0 ? `$${total.toLocaleString('es-MX', { maximumFractionDigits: 2 })}` : '-'
+  }
+
+  // Modificar pagos de un pedido
+  const guardarModificacionPago = async () => {
+    if (!pedidoModificarPago) return
+    try {
+      const pagosValidos = nuevosPagos.filter(p => p.metodoId && parseFloat(p.monto) > 0)
+      if (pagosValidos.length === 0) { alert('Agrega al menos una forma de pago válida'); return }
+      await pedidosPagosAPI.updatePagos(pedidoModificarPago.id, pagosValidos.map(p => ({
+        metodoId: p.metodoId,
+        monto: parseFloat(p.monto),
+        folio: p.folio || undefined,
+        tipo: p.tipo
+      })))
+      setPedidoModificarPago(null)
+      setNuevosPagos([{metodoId: '', monto: '', folio: '', tipo: 'metodo_pago'}])
+      await loadPedidos()
+      alert('Pagos actualizados correctamente')
+    } catch (err: any) { alert(`Error: ${err.message}`) }
+  }
+
+  // Cancelar pedido
+  const cancelarPedido = async (pedido: Pedido) => {
+    if (!confirm(`¿Cancelar el pedido ${pedido.numeroPedido}? Esta acción no se puede deshacer fácilmente.`)) return
+    try {
+      await pedidosPagosAPI.cancelar(pedido.id)
+      await loadPedidos()
+    } catch (err: any) { alert(`Error: ${err.message}`) }
   }
 
   const cerrarDialogoEliminar = () => {
@@ -2721,282 +2819,246 @@ export default function VentasPage() {
             </Button>
           </Box>
 
-          {/* Filtros Avanzados */}
+          {/* Filtros colapsables */}
           <Card sx={{ mb: 3 }}>
-            <CardContent>
-              <Typography variant='h6' gutterBottom>
-                Filtros Avanzados
-              </Typography>
+            <CardContent sx={{ pb: '12px !important' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant='subtitle1' fontWeight='bold'>Filtros</Typography>
+                <Button
+                  size='small'
+                  variant='outlined'
+                  onClick={() => setFiltrosColapsados(!filtrosColapsados)}
+                  startIcon={filtrosColapsados ? <SearchIcon /> : <SearchIcon />}
+                >
+                  {filtrosColapsados ? 'Mostrar filtros' : 'Ocultar filtros'}
+                </Button>
+              </Box>
 
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6} md={3}>
-                  <TextField
-                    fullWidth
-                    label='Fecha Desde'
-                    type='date'
-                    value={filtrosPedidos.fechaDesde}
-                    onChange={e => manejarCambioFiltros('fechaDesde', e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={3}>
-                  <TextField
-                    fullWidth
-                    label='Fecha Hasta'
-                    type='date'
-                    value={filtrosPedidos.fechaHasta}
-                    onChange={e => manejarCambioFiltros('fechaHasta', e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={3}>
-                  <TextField
-                    fullWidth
-                    label='Buscar por Cliente'
-                    value={filtrosPedidos.cliente}
-                    onChange={e => manejarCambioFiltros('cliente', e.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position='start'>
-                          <SearchIcon />
-                        </InputAdornment>
-                      )
-                    }}
-                  />
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={3}>
-                  <FormControl fullWidth>
-                    <InputLabel>Ruta</InputLabel>
-                    <Select
-                      value={filtrosPedidos.rutaId}
-                      onChange={e => manejarCambioFiltros('rutaId', e.target.value)}
-                      label='Ruta'
-                    >
-                      <MenuItem value=''>Todas las rutas</MenuItem>
-                      {rutas.map(ruta => (
-                        <MenuItem key={ruta.id} value={ruta.id}>
-                          {ruta.nombre} {ruta.codigo ? `(${ruta.codigo})` : ''}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={3}>
-                  <FormControl fullWidth>
-                    <InputLabel>Operador</InputLabel>
-                    <Select
-                      value={filtrosPedidos.repartidorId}
-                      onChange={e => manejarCambioFiltros('repartidorId', e.target.value)}
-                      label='Operador'
-                    >
-                      <MenuItem value=''>Cualquier operador</MenuItem>
-                      {repartidores.map(repartidor => (
-                        <MenuItem key={repartidor.id} value={repartidor.id}>
-                          {`${repartidor.nombres} ${repartidor.apellidoPaterno} ${repartidor.apellidoMaterno || ''}`.trim()}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={3}>
-                  <FormControl fullWidth>
-                    <InputLabel>Estado</InputLabel>
-                    <Select
-                      value={filtrosPedidos.estado}
-                      onChange={e => manejarCambioFiltros('estado', e.target.value)}
-                      label='Estado'
-                    >
-                      <MenuItem value=''>Todos los estados</MenuItem>
-                      <MenuItem value='pendiente'>Pendiente</MenuItem>
-                      <MenuItem value='en_proceso'>En Proceso</MenuItem>
-                      <MenuItem value='entregado'>Entregado</MenuItem>
-                      <MenuItem value='cancelado'>Cancelado</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={3}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={filtrosPedidos.mostrarTodos}
-                        onChange={e => manejarCambioFiltros('mostrarTodos', e.target.checked)}
-                      />
-                    }
-                    label='Mostrar todos los pedidos'
-                  />
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={3}>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button variant='contained' startIcon={<SearchIcon />} onClick={() => loadPedidos()}>
-                      Buscar
-                    </Button>
-                    <Button
-                      variant='outlined'
-                      onClick={() => {
+              {!filtrosColapsados && (
+                <Grid container spacing={2} sx={{ mt: 1 }}>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <TextField fullWidth label='Fecha Desde' type='date'
+                      value={filtrosPedidos.fechaDesde}
+                      onChange={e => manejarCambioFiltros('fechaDesde', e.target.value)}
+                      InputLabelProps={{ shrink: true }} size='small' />
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <TextField fullWidth label='Fecha Hasta' type='date'
+                      value={filtrosPedidos.fechaHasta}
+                      onChange={e => manejarCambioFiltros('fechaHasta', e.target.value)}
+                      InputLabelProps={{ shrink: true }} size='small' />
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <TextField fullWidth label='Cliente' size='small'
+                      value={filtrosPedidos.cliente}
+                      onChange={e => manejarCambioFiltros('cliente', e.target.value)}
+                      InputProps={{ startAdornment: <InputAdornment position='start'><SearchIcon fontSize='small' /></InputAdornment> }} />
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <FormControl fullWidth size='small'>
+                      <InputLabel>Ruta</InputLabel>
+                      <Select value={filtrosPedidos.rutaId} onChange={e => manejarCambioFiltros('rutaId', e.target.value)} label='Ruta'>
+                        <MenuItem value=''>Todas las rutas</MenuItem>
+                        {rutas.map(r => <MenuItem key={r.id} value={r.id}>{r.nombre}</MenuItem>)}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <FormControl fullWidth size='small'>
+                      <InputLabel>Operador</InputLabel>
+                      <Select value={filtrosPedidos.repartidorId} onChange={e => manejarCambioFiltros('repartidorId', e.target.value)} label='Operador'>
+                        <MenuItem value=''>Todos</MenuItem>
+                        {repartidores.map(r => <MenuItem key={r.id} value={r.id}>{`${r.nombres} ${r.apellidoPaterno || ''}`.trim()}</MenuItem>)}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <FormControl fullWidth size='small'>
+                      <InputLabel>Tipo</InputLabel>
+                      <Select value={filtrosPedidos.tipoServicio} onChange={e => manejarCambioFiltros('tipoServicio', e.target.value)} label='Tipo'>
+                        <MenuItem value=''>Todos</MenuItem>
+                        <MenuItem value='pipas'>🚛 Pipas</MenuItem>
+                        <MenuItem value='cilindros'>🔵 Cilindros</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <FormControl fullWidth size='small'>
+                      <InputLabel>Estado</InputLabel>
+                      <Select value={filtrosPedidos.estado} onChange={e => manejarCambioFiltros('estado', e.target.value)} label='Estado'>
+                        <MenuItem value=''>Todos</MenuItem>
+                        <MenuItem value='pendiente'>Pendiente</MenuItem>
+                        <MenuItem value='en_proceso'>En Proceso</MenuItem>
+                        <MenuItem value='entregado'>Entregado</MenuItem>
+                        <MenuItem value='cancelado'>Cancelado</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', height: '100%' }}>
+                      <Button variant='contained' size='small' startIcon={<SearchIcon />} onClick={() => loadPedidos()}>
+                        Buscar
+                      </Button>
+                      <Button variant='outlined' size='small' onClick={() => {
                         const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
-                        const nuevosFiltros: FiltrosPedidos = {
-                          fechaDesde: hoy,
-                          fechaHasta: hoy,
-                          cliente: '',
-                          tipoCliente: '',
-                          zona: '',
-                          rutaId: '',
-                          repartidorId: '',
-                          estado: '',
-                          mostrarTodos: false
-                        }
-                        setFiltrosPedidos(nuevosFiltros)
-                        loadPedidos(nuevosFiltros)
-                      }}
-                    >
-                      Limpiar
-                    </Button>
-                  </Box>
+                        const f: FiltrosPedidos = { fechaDesde: hoy, fechaHasta: hoy, cliente: '', tipoCliente: '', zona: '', rutaId: '', repartidorId: '', estado: '', tipoServicio: '', mostrarTodos: false }
+                        setFiltrosPedidos(f)
+                        loadPedidos(f)
+                      }}>
+                        Limpiar
+                      </Button>
+                    </Box>
+                  </Grid>
                 </Grid>
-              </Grid>
+              )}
             </CardContent>
           </Card>
 
           {/* Tabla de Pedidos */}
           <Card>
             <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant='h6'>Pedidos ({pedidosFiltrados.length})</Typography>
-                <Button variant='outlined' startIcon={<DownloadIcon />}>
-                  Exportar Datos
+                <Button variant='outlined' size='small' startIcon={<DownloadIcon />} onClick={exportarCSV}>
+                  Exportar CSV
                 </Button>
               </Box>
 
               <TableContainer component={Paper} variant='outlined'>
-                <Table>
+                <Table size='small'>
                   <TableHead>
                     <TableRow>
-                      <TableCell>ID del Pedido</TableCell>
-                      <TableCell>Ruta</TableCell>
-                      <TableCell>Operador</TableCell>
-                      <TableCell>Cliente</TableCell>
-                      <TableCell>Fecha y Hora</TableCell>
-                      <TableCell align='center'>Estado</TableCell>
-                      <TableCell align='right'>Costo</TableCell>
-                      <TableCell align='center'>Acciones</TableCell>
+                      <TableCell><strong>ID Pedido</strong></TableCell>
+                      <TableCell><strong>Ruta</strong></TableCell>
+                      <TableCell><strong>Operador</strong></TableCell>
+                      <TableCell align='center'><strong>Tipo</strong></TableCell>
+                      <TableCell><strong>Cliente</strong></TableCell>
+                      <TableCell><strong>Fecha y Hora</strong></TableCell>
+                      <TableCell align='center'><strong>Estado</strong></TableCell>
+                      <TableCell><strong>Detalle</strong></TableCell>
+                      <TableCell align='right'><strong>Descuento</strong></TableCell>
+                      <TableCell align='right'><strong>Total</strong></TableCell>
+                      <TableCell align='center'><strong>Acciones</strong></TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {pedidosPaginados.map(pedido => (
-                      <TableRow key={pedido.id} hover>
-                        <TableCell>
-                          <Typography variant='subtitle2' fontWeight='bold'>
-                            {pedido.numeroPedido}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='body2'>{pedido.ruta?.nombre || 'N/A'}</Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='body2'>
-                            {pedido.repartidor
-                              ? `${pedido.repartidor.nombres} ${pedido.repartidor.apellidoPaterno} ${pedido.repartidor.apellidoMaterno || ''}`.trim()
-                              : 'Sin asignar'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='subtitle2' fontWeight='bold'>
-                            {pedido.cliente
-                              ? `${pedido.cliente.nombre} ${pedido.cliente.apellidoPaterno} ${pedido.cliente.apellidoMaterno || ''}`.trim()
-                              : 'N/A'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Box>
-                            <Typography variant='body2'>
+                    {pedidosPaginados.map(pedido => {
+                      const operador = pedido.repartidor ? `${pedido.repartidor.nombres} ${pedido.repartidor.apellidoPaterno || ''}`.trim() : 'Sin asignar'
+                      const cliente = pedido.cliente ? `${pedido.cliente.nombre} ${pedido.cliente.apellidoPaterno || ''}`.trim() : 'N/A'
+                      const esPipa = pedido.tipoServicio === 'pipas'
+                      const rolUsuario = usuario?.rol || ''
+                      const puedeModificarPago = ['superAdministrador','administrador','oficina','planta'].includes(rolUsuario)
+                      const puedeCancelar = ['superAdministrador','administrador','oficina','planta'].includes(rolUsuario)
+                      const puedeEliminar = ['superAdministrador','administrador'].includes(rolUsuario)
+                      return (
+                        <TableRow key={pedido.id} hover>
+                          <TableCell>
+                            <Typography variant='caption' fontWeight='bold'>{pedido.numeroPedido}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant='caption'>{pedido.ruta?.nombre || 'N/A'}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant='caption'>{operador}</Typography>
+                          </TableCell>
+                          <TableCell align='center'>
+                            <Chip
+                              label={esPipa ? 'PIPA' : 'CIL'}
+                              size='small'
+                              sx={{
+                                bgcolor: esPipa ? 'primary.light' : 'warning.light',
+                                color: esPipa ? 'primary.dark' : 'warning.dark',
+                                fontWeight: 'bold', fontSize: '10px'
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant='caption' fontWeight='bold'>{cliente}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant='caption'>
                               {getFechaDisplay(pedido.fechaPedido, pedido.numeroPedido, pedido.horaPedido)}
                             </Typography>
-                            <Typography variant='caption' color='text.secondary'>
-                              {pedido.horaPedido || 'N/A'}
+                            <Typography variant='caption' color='text.secondary' display='block'>
+                              {pedido.horaPedido || ''}
                             </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell align='center'>
-                          <Chip
-                            label={pedido.estado.replace('-', ' ').toUpperCase()}
-                            color={getEstadoColor(pedido.estado) as any}
-                            size='small'
-                          />
-                        </TableCell>
-                        <TableCell align='right'>
-                          <Typography variant='h6' color='primary'>
-                            ${pedido.ventaTotal.toLocaleString()}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align='center'>
-                          <Box sx={{ display: 'flex', gap: 0.5 }}>
-                            <Tooltip title='Ver ticket'>
-                              <IconButton
-                                size='small'
-                                onClick={() => abrirDialogoTicket(pedido)}
-                              >
-                                <ReceiptIcon />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title='Ver detalles'>
-                              <IconButton
-                                size='small'
-                                onClick={() => {
-                                  setPedidoSeleccionado(pedido)
-                                  setTipoDialogo('pedido-detalles')
-                                  setDialogoAbierto(true)
-                                }}
-                              >
-                                <VisibilityIcon />
-                              </IconButton>
-                            </Tooltip>
-                            {pedido.estado !== 'entregado' && (
-                              <Tooltip title='Editar pedido'>
-                                <IconButton
-                                  size='small'
-                                  color='primary'
-                                  onClick={() => abrirDialogoEditarPedido(pedido)}
-                                >
-                                  <EditIcon />
+                          </TableCell>
+                          <TableCell align='center'>
+                            <Chip label={pedido.estado.replace('_',' ').toUpperCase()} color={getEstadoColor(pedido.estado) as any} size='small' />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant='caption' sx={{ color: esPipa ? 'info.main' : 'text.primary' }}>
+                              {getDetallePedido(pedido)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align='right'>
+                            <Typography variant='caption' color={getDescuentoPedido(pedido) !== '-' ? 'error' : 'text.secondary'}>
+                              {getDescuentoPedido(pedido)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align='right'>
+                            <Typography variant='body2' color='primary' fontWeight='bold'>
+                              ${pedido.ventaTotal.toLocaleString()}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align='center'>
+                            <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                              <Tooltip title='Ver ticket'>
+                                <IconButton size='small' onClick={() => abrirDialogoTicket(pedido)}>
+                                  <ReceiptIcon fontSize='small' />
                                 </IconButton>
                               </Tooltip>
-                            )}
-
-                            {pedido.estado === 'pendiente' && (
-                              <Tooltip title='Cerrar Venta (Registrar Pago)'>
-                                <IconButton
-                                  size='small'
-                                  color='primary'
-                                  onClick={() => abrirDialogoCerrarPedido(pedido)}
-                                >
-                                  <CheckCircleIcon />
+                              <Tooltip title='Ver detalles'>
+                                <IconButton size='small' onClick={() => { setPedidoSeleccionado(pedido); setTipoDialogo('pedido-detalles'); setDialogoAbierto(true) }}>
+                                  <VisibilityIcon fontSize='small' />
                                 </IconButton>
                               </Tooltip>
-                            )}
-
-                            <Tooltip title='Eliminar pedido'>
-                              <IconButton
-                                size='small'
-                                color='error'
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  abrirDialogoEliminar(pedido)
-                                }}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                              {pedido.estado !== 'entregado' && pedido.estado !== 'cancelado' && (
+                                <Tooltip title='Editar pedido'>
+                                  <IconButton size='small' color='primary' onClick={() => abrirDialogoEditarPedido(pedido)}>
+                                    <EditIcon fontSize='small' />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              {pedido.estado === 'pendiente' && (
+                                <Tooltip title='Registrar Pago'>
+                                  <IconButton size='small' color='success' onClick={() => abrirDialogoCerrarPedido(pedido)}>
+                                    <CheckCircleIcon fontSize='small' />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              {puedeModificarPago && pedido.estado === 'entregado' && (
+                                <Tooltip title='Modificar forma de pago'>
+                                  <IconButton size='small' color='warning' onClick={() => {
+                                    setPedidoModificarPago(pedido)
+                                    const pagosActuales = pedido.pagos && pedido.pagos.length > 0
+                                      ? pedido.pagos.map(p => ({ metodoId: p.metodoId || '', monto: String(p.monto), folio: p.folio || '', tipo: p.tipo || 'metodo_pago' }))
+                                      : [{metodoId: '', monto: String(pedido.ventaTotal), folio: '', tipo: 'metodo_pago'}]
+                                    setNuevosPagos(pagosActuales)
+                                  }}>
+                                    <EditIcon fontSize='small' />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              {puedeCancelar && pedido.estado !== 'cancelado' && pedido.estado !== 'entregado' && (
+                                <Tooltip title='Cancelar pedido'>
+                                  <IconButton size='small' color='error' onClick={() => cancelarPedido(pedido)}>
+                                    <DeleteIcon fontSize='small' />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              {puedeEliminar && (
+                                <Tooltip title='Eliminar definitivamente'>
+                                  <IconButton size='small' color='error' onClick={e => { e.stopPropagation(); abrirDialogoEliminar(pedido) }}>
+                                    <DeleteIcon fontSize='small' />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -3006,16 +3068,68 @@ export default function VentasPage() {
                 page={paginaEfectiva}
                 onPageChange={(_, nuevaPagina) => setPaginaPedidos(nuevaPagina)}
                 rowsPerPage={filasPorPaginaPedidos}
-                onRowsPerPageChange={e => {
-                  setFilasPorPaginaPedidos(parseInt(e.target.value, 10))
-                  setPaginaPedidos(0)
-                }}
-                rowsPerPageOptions={[5, 10, 25, 50]}
+                onRowsPerPageChange={e => { setFilasPorPaginaPedidos(parseInt(e.target.value, 10)); setPaginaPedidos(0) }}
+                rowsPerPageOptions={[10, 25, 50, 100]}
                 labelRowsPerPage='Filas por página:'
                 labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
               />
             </CardContent>
           </Card>
+
+          {/* Modal Modificar Forma de Pago */}
+          <Dialog open={!!pedidoModificarPago} onClose={() => setPedidoModificarPago(null)} maxWidth='sm' fullWidth>
+            <DialogTitle>Modificar Forma de Pago — {pedidoModificarPago?.numeroPedido}</DialogTitle>
+            <DialogContent>
+              <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
+                Total del pedido: <strong>${pedidoModificarPago?.ventaTotal.toLocaleString()}</strong>
+              </Typography>
+              {nuevosPagos.map((pago, idx) => (
+                <Box key={idx} sx={{ mb: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                  <Typography variant='caption' color='text.secondary'>Forma de pago {idx + 1}</Typography>
+                  <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                    <Grid item xs={12} sm={6}>
+                      <FormControl fullWidth size='small'>
+                        <InputLabel>Método</InputLabel>
+                        <Select value={pago.metodoId} label='Método'
+                          onChange={e => {
+                            const updated = [...nuevosPagos]
+                            updated[idx] = { ...updated[idx], metodoId: e.target.value }
+                            setNuevosPagos(updated)
+                          }}>
+                          <MenuItem value=''>Seleccionar...</MenuItem>
+                          {formasPagoCerrar.map(fp => <MenuItem key={fp.id} value={fp.id}>{fp.nombre}</MenuItem>)}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField fullWidth size='small' label='Monto' type='number'
+                        value={pago.monto}
+                        onChange={e => { const u = [...nuevosPagos]; u[idx] = { ...u[idx], monto: e.target.value }; setNuevosPagos(u) }} />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <TextField fullWidth size='small' label='Folio / Referencia (opcional)'
+                        value={pago.folio}
+                        onChange={e => { const u = [...nuevosPagos]; u[idx] = { ...u[idx], folio: e.target.value }; setNuevosPagos(u) }} />
+                    </Grid>
+                  </Grid>
+                  {nuevosPagos.length > 1 && (
+                    <Button size='small' color='error' sx={{ mt: 1 }}
+                      onClick={() => setNuevosPagos(nuevosPagos.filter((_, i) => i !== idx))}>
+                      Quitar
+                    </Button>
+                  )}
+                </Box>
+              ))}
+              <Button size='small' variant='outlined' onClick={() => setNuevosPagos([...nuevosPagos, {metodoId: '', monto: '', folio: '', tipo: 'metodo_pago'}])}>
+                + Agregar otra forma de pago
+              </Button>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setPedidoModificarPago(null)}>Cancelar</Button>
+              <Button variant='contained' onClick={guardarModificacionPago}>Guardar cambios</Button>
+            </DialogActions>
+          </Dialog>
+
 
           {/* Diálogo Cerrar pedido - Registrar pago (formas de pago como en la app) */}
           <Dialog open={!!pedidoACerrar} onClose={cerrarDialogoCerrarPedido} maxWidth='sm' fullWidth>

@@ -3312,3 +3312,30 @@ export const resumenRepartidoresAPI = {
     return response.json()
   }
 }
+
+// API para modificar pagos y cancelar pedidos
+export const pedidosPagosAPI = {
+  updatePagos: async (pedidoId: string, pagos: {metodoId?: string, monto: number, folio?: string, tipo?: string}[]): Promise<any> => {
+    const response = await fetchWithAuth(`/pedidos/${pedidoId}/pagos`, {
+      method: 'PUT',
+      body: JSON.stringify({ pagos }),
+    })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al actualizar pagos')
+    }
+    return response.json()
+  },
+
+  cancelar: async (pedidoId: string): Promise<any> => {
+    const response = await fetchWithAuth(`/pedidos/${pedidoId}/cancelar`, {
+      method: 'PUT',
+      body: JSON.stringify({}),
+    })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al cancelar pedido')
+    }
+    return response.json()
+  }
+}
