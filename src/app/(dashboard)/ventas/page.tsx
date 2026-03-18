@@ -1031,7 +1031,7 @@ export default function VentasPage() {
         `$${p.ventaTotal.toLocaleString()}`
       ]
     })
-    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}`).join(',')).join('\n')
+    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
     const csvUrl = URL.createObjectURL(blob)
     const a = document.createElement('a')
