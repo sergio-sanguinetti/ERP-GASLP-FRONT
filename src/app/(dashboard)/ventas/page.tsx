@@ -3020,6 +3020,11 @@ export default function VentasPage() {
                             <Typography variant='body2' color='primary' fontWeight='bold'>
                               ${pedido.ventaTotal.toLocaleString()}
                             </Typography>
+                            {pedido.pagos && pedido.pagos.length > 0 && (
+                              <Typography variant='caption' color='text.secondary' display='block'>
+                                {pedido.pagos.map(p => p.tipo === 'credito' ? 'Crédito' : (p.metodo?.nombre || 'Pago')).join(' + ')}
+                              </Typography>
+                            )}
                           </TableCell>
                           <TableCell align='center'>
                             <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
