@@ -1525,6 +1525,26 @@ export default function VentasPage() {
     setFiltrosPedidos(prev => ({ ...prev, [campo]: valor }))
   }
 
+  // Extrae la fecha correcta del folio cuando fechaPedido llega como medianoche UTC (problema de sincronización offline)
+  const getFechaDisplay = (fechaPedido: string, numeroPedido: string, horaPedido?: string): string => {
+    const fecha = new Date(fechaPedido)
+    const esMedianoche = fecha.getUTCHours() === 0 && fecha.getUTCMinutes() === 0 && fecha.getUTCSeconds() === 0
+    if (esMedianoche && numeroPedido && numeroPedido.length >= 12) {
+      // Extraer fecha del folio: PED-20260318-XXXX → 2026-03-18
+      const raw = numeroPedido.replace('PED-', '').slice(0, 8)
+      const anio = raw.slice(0, 4)
+      const mes = raw.slice(4, 6)
+      const dia = raw.slice(6, 8)
+      return `${dia}/${mes}/${anio}`
+    }
+    return fecha.toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })
+  }
+
+  const getFechaHoraDisplay = (fechaPedido: string, numeroPedido: string, horaPedido?: string): string => {
+    const fecha = getFechaDisplay(fechaPedido, numeroPedido, horaPedido)
+    return `${fecha}${horaPedido ? ` ${horaPedido}` : ''}`
+  }
+
   const getEstadoColor = (estado: string) => {
     switch (estado) {
       case 'entregado':
@@ -1572,15 +1592,26 @@ export default function VentasPage() {
       ? `${pedido.repartidor.nombres} ${pedido.repartidor.apellidoPaterno ?? ''} ${pedido.repartidor.apellidoMaterno ?? ''}`.trim()
       : 'Operador'
     const folio = pedido.numeroPedido || `F${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`
-    const formattedDate = new Date(pedido.fechaPedido).toLocaleString('es-MX', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      timeZone: 'America/Mexico_City'
-    })
+    const fecha = new Date(pedido.fechaPedido)
+    const esMedianoche = fecha.getUTCHours() === 0 && fecha.getUTCMinutes() === 0 && fecha.getUTCSeconds() === 0
+    let formattedDate: string
+    if (esMedianoche && pedido.numeroPedido && pedido.numeroPedido.length >= 12) {
+      const raw = pedido.numeroPedido.replace('PED-', '').slice(0, 8)
+      const anio = raw.slice(0, 4)
+      const mes = raw.slice(4, 6)
+      const dia = raw.slice(6, 8)
+      formattedDate = `${dia}/${mes}/${anio}, ${pedido.horaPedido || '00:00'}`
+    } else {
+      formattedDate = fecha.toLocaleString('es-MX', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZone: 'America/Mexico_City'
+      })
+    }
 
     let productsHTML = ''
     if (pedido.productosPedido && pedido.productosPedido.length > 0) {
@@ -2885,7 +2916,7 @@ export default function VentasPage() {
                         <TableCell>
                           <Box>
                             <Typography variant='body2'>
-                              {new Date(pedido.fechaPedido).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })}
+                              {getFechaDisplay(pedido.fechaPedido, pedido.numeroPedido, pedido.horaPedido)}
                             </Typography>
                             <Typography variant='caption' color='text.secondary'>
                               {pedido.horaPedido || 'N/A'}
@@ -3334,7 +3365,7 @@ export default function VentasPage() {
                               {pedido.numeroPedido}
                             </Typography>
                           </TableCell>
-                          <TableCell>{new Date(pedido.fechaPedido).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })}</TableCell>
+                          <TableCell>{getFechaDisplay(pedido.fechaPedido, pedido.numeroPedido, pedido.horaPedido)}</TableCell>
                           <TableCell>
                             <Chip
                               label={pedido.estado.replace('-', ' ').toUpperCase()}
@@ -3766,7 +3797,7 @@ export default function VentasPage() {
                   Fecha y Hora
                 </Typography>
                 <Typography variant='body1'>
-                  {new Date(pedidoSeleccionado.fechaPedido).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })} {pedidoSeleccionado.horaPedido}
+                  {getFechaHoraDisplay(pedidoSeleccionado.fechaPedido, pedidoSeleccionado.numeroPedido, pedidoSeleccionado.horaPedido)}
                 </Typography>
               </Grid>
 
