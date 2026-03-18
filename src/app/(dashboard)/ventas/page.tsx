@@ -1048,12 +1048,32 @@ export default function VentasPage() {
     }
   }
 
-  // Obtener descuento de pedido
+  // Obtener descuento de pedido — nombre + monto
   const getDescuentoPedido = (pedido: Pedido): string => {
     if (!pedido.productosPedido?.length) return '-'
     const total = pedido.productosPedido.reduce((s, pp) => s + (parseFloat(String(pp.descuentoMonto)) || 0), 0)
-    return total > 0 ? `$${total.toLocaleString('es-MX', { maximumFractionDigits: 2 })}` : '-'
+    if (total <= 0) return '-'
+    // Obtener nombre del descuento (ej: "$0.50", "$0.65")
+    const nombres = pedido.productosPedido
+      .filter(pp => pp.descuento)
+      .map(pp => pp.descuento)
+      .filter((v, i, a) => a.indexOf(v) === i) // únicos
+    const label = nombres.length > 0 ? `${nombres[0]} ` : ''
+    return `${label}($${total.toLocaleString('es-MX', { maximumFractionDigits: 2 })})`
   }
+
+  // Cargar formas de pago cuando se abre el modal de modificar pago
+  useEffect(() => {
+    if (!pedidoModificarPago) return
+    if (formasPagoCerrar.length > 0) return // ya cargadas
+    formasPagoAPI.getAll({ activa: 'true' })
+      .then(list => {
+        const activas = (list || []).filter((f: FormaPago) => f.tipo !== 'credito' && f.activa !== false)
+        if (activas.length > 0) setFormasPagoCerrar(activas)
+        else formasPagoAPI.getAll().then(all => setFormasPagoCerrar((all || []).filter((f: FormaPago) => f.tipo !== 'credito')))
+      })
+      .catch(() => formasPagoAPI.getAll().then(all => setFormasPagoCerrar(all || [])))
+  }, [pedidoModificarPago])
 
   // Modificar pagos de un pedido
   const guardarModificacionPago = async () => {
@@ -3040,9 +3060,9 @@ export default function VentasPage() {
                                   </IconButton>
                                 </Tooltip>
                               )}
-                              {puedeCancelar && pedido.estado !== 'cancelado' && pedido.estado !== 'entregado' && (
+                              {puedeCancelar && pedido.estado !== 'cancelado' && (
                                 <Tooltip title='Cancelar pedido'>
-                                  <IconButton size='small' color='error' onClick={() => cancelarPedido(pedido)}>
+                                  <IconButton size='small' sx={{ color: 'warning.main' }} onClick={() => cancelarPedido(pedido)}>
                                     <DeleteIcon fontSize='small' />
                                   </IconButton>
                                 </Tooltip>
