@@ -3339,3 +3339,23 @@ export const pedidosPagosAPI = {
     return response.json()
   }
 }
+
+// API Análisis de Clientes
+export const clientesAnalisisAPI = {
+  getRanking: async (params: { tipoServicio?: string, fechaDesde?: string, fechaHasta?: string, sedeId?: string }): Promise<{ranking: any[], kpis: any}> => {
+    const query = new URLSearchParams()
+    if (params.tipoServicio && params.tipoServicio !== 'todos') query.append('tipoServicio', params.tipoServicio)
+    if (params.fechaDesde) query.append('fechaDesde', params.fechaDesde)
+    if (params.fechaHasta) query.append('fechaHasta', params.fechaHasta)
+    if (params.sedeId) query.append('sedeId', params.sedeId)
+    const response = await fetchWithAuth(`/clientes/ranking?${query.toString()}`)
+    if (!response.ok) return { ranking: [], kpis: {} }
+    return response.json()
+  },
+
+  getHistorial: async (clienteId: string): Promise<any> => {
+    const response = await fetchWithAuth(`/clientes/${clienteId}/historial`)
+    if (!response.ok) return null
+    return response.json()
+  }
+}
