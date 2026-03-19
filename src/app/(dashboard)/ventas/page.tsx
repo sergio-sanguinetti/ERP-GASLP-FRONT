@@ -2973,6 +2973,51 @@ export default function VentasPage() {
                 </Box>
               </Box>
 
+              {/* Resumen de totales filtrados */}
+              {pedidosFiltrados.length > 0 && (
+                <Box sx={{ display: 'flex', gap: 2, mb: 2, p: 1.5, bgcolor: 'primary.main', borderRadius: 1, flexWrap: 'wrap' }}>
+                  <Box sx={{ minWidth: 100 }}>
+                    <Typography variant='caption' sx={{ color: 'rgba(255,255,255,0.7)' }}>Pedidos</Typography>
+                    <Typography variant='body1' fontWeight='bold' sx={{ color: 'white' }}>
+                      {pedidosFiltrados.length}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ minWidth: 100 }}>
+                    <Typography variant='caption' sx={{ color: 'rgba(255,255,255,0.7)' }}>Litros (Pipas)</Typography>
+                    <Typography variant='body1' fontWeight='bold' sx={{ color: 'white' }}>
+                      {(() => {
+                        const litros = pedidosFiltrados.filter(p => p.tipoServicio === 'pipas').reduce((sum, p) => {
+                          try {
+                            const c = typeof p.calculoPipas === 'string' ? JSON.parse(p.calculoPipas as any) : p.calculoPipas
+                            if (!c) return sum
+                            if (Array.isArray(c)) return sum + c.reduce((s: number, carga: any) => s + (parseFloat(carga.cantidadLitros) || 0), 0)
+                            return sum + (parseFloat(c.cantidadLitros) || 0)
+                          } catch { return sum }
+                        }, 0)
+                        return `${litros.toLocaleString('es-MX', { maximumFractionDigits: 1 })} L`
+                      })()}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ minWidth: 100 }}>
+                    <Typography variant='caption' sx={{ color: 'rgba(255,255,255,0.7)' }}>Descuentos</Typography>
+                    <Typography variant='body1' fontWeight='bold' sx={{ color: 'white' }}>
+                      {(() => {
+                        const desc = pedidosFiltrados.reduce((sum, p) => {
+                          return sum + (p.productosPedido || []).reduce((s: number, pp: any) => s + (parseFloat(String(pp.descuentoMonto)) || 0), 0)
+                        }, 0)
+                        return desc > 0 ? `-$${desc.toLocaleString('es-MX', { maximumFractionDigits: 2 })}` : '$0'
+                      })()}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ minWidth: 120 }}>
+                    <Typography variant='caption' sx={{ color: 'rgba(255,255,255,0.7)' }}>Total Vendido</Typography>
+                    <Typography variant='body1' fontWeight='bold' sx={{ color: 'white' }}>
+                      ${pedidosFiltrados.reduce((sum, p) => sum + (parseFloat(String(p.ventaTotal)) || 0), 0).toLocaleString('es-MX', { maximumFractionDigits: 2 })}
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+
               <TableContainer component={Paper} variant='outlined'>
                 <Table size='small'>
                   <TableHead>
