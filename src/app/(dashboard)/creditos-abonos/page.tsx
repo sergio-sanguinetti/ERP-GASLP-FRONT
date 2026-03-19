@@ -168,7 +168,7 @@ interface PagoPendienteAutorizacion {
 }
 
 export default function CreditosAbonosPage() {
-  const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'pagos-pendientes' | 'historial-pagos' | 'clientes-duplicados' | 'pagos-sbc'>('dashboard')
+  const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'pagos-pendientes' | 'historial-pagos' | 'pagos-sbc'>('dashboard')
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteCredito | null>(null)
   const refFichaCliente = useRef<HTMLDivElement | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
@@ -303,6 +303,13 @@ export default function CreditosAbonosPage() {
 
   const ejecutarAccionSbc = async () => {
     if (!pagoSbcSel) return
+    // Validar permisos por rol
+    const rolUsuario = usuario?.rol || ''
+    const rolesSanLuis = ['superAdministrador', 'administrador']
+    if (tipoAccionSbc === 'sanluis' && !rolesSanLuis.includes(rolUsuario)) {
+      setError('Solo Administrador o SuperAdministrador puede confirmar como San Luis.')
+      return
+    }
     try {
       setSaving(true)
       const endpoint = tipoAccionSbc === 'oficina' ? 'confirmar-oficina'
@@ -1215,13 +1222,7 @@ export default function CreditosAbonosPage() {
           >
             Historial de Pagos
           </Button>
-          <Button
-            variant={vistaActual === 'clientes-duplicados' ? 'contained' : 'outlined'}
-            onClick={() => setVistaActual('clientes-duplicados')}
-            startIcon={<GroupIcon />}
-          >
-            Clientes Duplicados
-          </Button>
+
           <Button
             variant={vistaActual === 'pagos-sbc' ? 'contained' : 'outlined'}
             onClick={() => { setVistaActual('pagos-sbc'); cargarPedidosSBC(); }}
@@ -2985,16 +2986,17 @@ export default function CreditosAbonosPage() {
               <TableContainer>
                 <Table size='small'>
                   <TableHead>
-                    <TableRow>
-                      <TableCell>Pedido</TableCell>
-                      <TableCell>Cliente</TableCell>
-                      <TableCell>Ruta / Operador</TableCell>
-                      <TableCell>Método</TableCell>
-                      <TableCell>Folio</TableCell>
-                      <TableCell align='right'>Monto</TableCell>
-                      <TableCell>Fecha</TableCell>
-                      <TableCell>Estado</TableCell>
-                      <TableCell align='center'>Acciones</TableCell>
+                    <TableRow sx={{ bgcolor: 'background.default' }}>
+                      <TableCell><Typography variant='caption' fontWeight='bold'>Pedido</Typography></TableCell>
+                      <TableCell><Typography variant='caption' fontWeight='bold'>Cliente</Typography></TableCell>
+                      <TableCell><Typography variant='caption' fontWeight='bold'>Ruta / Operador</Typography></TableCell>
+                      <TableCell><Typography variant='caption' fontWeight='bold'>Método</Typography></TableCell>
+                      <TableCell><Typography variant='caption' fontWeight='bold'>Folio</Typography></TableCell>
+                      <TableCell align='right'><Typography variant='caption' fontWeight='bold'>Monto</Typography></TableCell>
+                      <TableCell><Typography variant='caption' fontWeight='bold'>Fecha</Typography></TableCell>
+                      <TableCell><Typography variant='caption' fontWeight='bold'>Estado / Quién</Typography></TableCell>
+                      <TableCell><Typography variant='caption' fontWeight='bold'>Observación</Typography></TableCell>
+                      <TableCell align='center'><Typography variant='caption' fontWeight='bold'>Acciones</Typography></TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -3006,12 +3008,18 @@ export default function CreditosAbonosPage() {
                       })
                       .map((p) => (
                       <TableRow key={p.id} hover
-                        sx={{ bgcolor: p.estadoSbc === 'rechazado' ? '#fff5f5' : p.estadoSbc === 'confirmado_sanluis' ? '#f0fff4' : p.estadoSbc === 'confirmado_oficina' ? '#f0f7ff' : 'inherit' }}>
+                        sx={{ borderLeft: '3px solid', borderLeftColor: p.estadoSbc === 'rechazado' ? 'error.main' : p.estadoSbc === 'confirmado_sanluis' ? 'success.main' : p.estadoSbc === 'confirmado_oficina' ? 'info.main' : 'warning.main' }}>
                         <TableCell>
-                          <Typography variant='caption' fontWeight='bold'>{p.numeroPedido}</Typography>
+                          <Typography variant='caption' fontWeight='bold' color='primary' sx={{ cursor: 'pointer' }}>
+                            {p.numeroPedido}
+                          </Typography>
+                          <Typography variant='caption' display='block' color='text.secondary'>
+                            <Chip label={p.tipoServicio === 'pipas' ? 'PIPA' : 'CIL'} size='small'
+                              sx={{ fontSize: 9, height: 16, bgcolor: p.tipoServicio === 'pipas' ? 'primary.light' : 'warning.light', color: p.tipoServicio === 'pipas' ? 'primary.dark' : 'warning.dark' }} />
+                          </Typography>
                         </TableCell>
                         <TableCell>
-                          <Typography variant='caption'>{p.cliente}</Typography>
+                          <Typography variant='caption' fontWeight='bold'>{p.cliente}</Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant='caption' display='block'>{p.ruta}</Typography>
@@ -3019,58 +3027,97 @@ export default function CreditosAbonosPage() {
                         </TableCell>
                         <TableCell>
                           <Chip label={p.metodoPago} size='small'
-                            color={p.metodoPago === 'TRANSFERENCIA' ? 'primary' : p.metodoPago === 'CHEQUE' ? 'warning' : 'default'} />
+                            sx={{ fontWeight: 'bold', fontSize: 10,
+                              bgcolor: p.metodoPago === 'TRANSFERENCIA' ? '#1565c0' : p.metodoPago === 'CHEQUE' ? '#e65100' : '#37474f',
+                              color: 'white' }} />
                         </TableCell>
                         <TableCell>
-                          <Typography variant='caption'>{p.folioConfirmado || p.folioOriginal || '—'}</Typography>
+                          <Typography variant='caption' fontWeight={p.folioConfirmado ? 'bold' : 'normal'}>
+                            {p.folioConfirmado || p.folioOriginal || '—'}
+                          </Typography>
+                          {p.folioConfirmado && p.folioOriginal && p.folioConfirmado !== p.folioOriginal && (
+                            <Typography variant='caption' color='text.secondary' display='block' sx={{ textDecoration: 'line-through' }}>
+                              {p.folioOriginal}
+                            </Typography>
+                          )}
                         </TableCell>
                         <TableCell align='right'>
-                          <Typography variant='caption' fontWeight='bold' color='primary'>
+                          <Typography variant='body2' fontWeight='bold' color='primary.main'>
                             ${p.monto?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant='caption'>
-                            {p.fechaPedido ? new Date(p.fechaPedido).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' }) : '—'}
+                            {p.fechaPedido ? new Date(p.fechaPedido).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
                           </Typography>
                         </TableCell>
-                        <TableCell>
-                          {p.estadoSbc === 'pendiente' || !p.estadoSbc ? (
-                            <Chip label='Pendiente' size='small' color='warning' />
+                        <TableCell sx={{ minWidth: 140 }}>
+                          {(p.estadoSbc === 'pendiente' || !p.estadoSbc) ? (
+                            <Chip label='Pendiente' size='small' color='warning' sx={{ fontWeight: 'bold' }} />
                           ) : p.estadoSbc === 'confirmado_oficina' ? (
-                            <Chip label='Conf. Oficina' size='small' color='info' />
+                            <Box>
+                              <Chip label='Conf. Oficina' size='small' color='info' sx={{ fontWeight: 'bold', mb: 0.5 }} />
+                              <Typography variant='caption' color='text.secondary' display='block'>
+                                {p.confirmadoPorOficina}
+                              </Typography>
+                              {p.fechaConfOficina && (
+                                <Typography variant='caption' color='text.disabled' display='block'>
+                                  {new Date(p.fechaConfOficina).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: '2-digit' })}
+                                </Typography>
+                              )}
+                            </Box>
                           ) : p.estadoSbc === 'confirmado_sanluis' ? (
-                            <Chip label='Conf. San Luis' size='small' color='success' />
+                            <Box>
+                              <Chip label='✓ San Luis' size='small' color='success' sx={{ fontWeight: 'bold', mb: 0.5 }} />
+                              <Typography variant='caption' color='text.secondary' display='block'>
+                                {p.confirmadoPorSanLuis}
+                              </Typography>
+                              {p.fechaConfSanLuis && (
+                                <Typography variant='caption' color='text.disabled' display='block'>
+                                  {new Date(p.fechaConfSanLuis).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: '2-digit' })}
+                                </Typography>
+                              )}
+                            </Box>
                           ) : (
-                            <Chip label='Rechazado' size='small' color='error' />
+                            <Box>
+                              <Chip label='Rechazado' size='small' color='error' sx={{ fontWeight: 'bold', mb: 0.5 }} />
+                              <Typography variant='caption' color='text.secondary' display='block'>
+                                {p.confirmadoPorOficina}
+                              </Typography>
+                            </Box>
+                          )}
+                        </TableCell>
+                        <TableCell sx={{ maxWidth: 160 }}>
+                          {p.notaConfirmacion ? (
+                            <Typography variant='caption' color='text.secondary'
+                              sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                              {p.notaConfirmacion}
+                            </Typography>
+                          ) : (
+                            <Typography variant='caption' color='text.disabled'>—</Typography>
                           )}
                         </TableCell>
                         <TableCell align='center'>
                           <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
                             {(p.estadoSbc === 'pendiente' || !p.estadoSbc) && (
                               <Tooltip title='Confirmar — Oficina DH'>
-                                <IconButton size='small' color='info' onClick={() => abrirModalSbc(p, 'oficina')}>
+                                <IconButton size='small' sx={{ color: 'info.main' }} onClick={() => abrirModalSbc(p, 'oficina')}>
                                   <CheckCircleIcon fontSize='small' />
                                 </IconButton>
                               </Tooltip>
                             )}
-                            {p.estadoSbc === 'confirmado_oficina' && (
-                              <Tooltip title='Confirmar — San Luis'>
-                                <IconButton size='small' color='success' onClick={() => abrirModalSbc(p, 'sanluis')}>
+                            {p.estadoSbc === 'confirmado_oficina' && ['superAdministrador', 'administrador'].includes(usuario?.rol || '') && (
+                              <Tooltip title='Confirmar — San Luis (Admin)'>
+                                <IconButton size='small' sx={{ color: 'success.main' }} onClick={() => abrirModalSbc(p, 'sanluis')}>
                                   <CheckCircleIcon fontSize='small' />
                                 </IconButton>
                               </Tooltip>
                             )}
                             {(p.estadoSbc === 'pendiente' || !p.estadoSbc || p.estadoSbc === 'confirmado_oficina') && (
                               <Tooltip title='Rechazar'>
-                                <IconButton size='small' color='error' onClick={() => abrirModalSbc(p, 'rechazar')}>
+                                <IconButton size='small' sx={{ color: 'error.main' }} onClick={() => abrirModalSbc(p, 'rechazar')}>
                                   <CancelIcon fontSize='small' />
                                 </IconButton>
-                              </Tooltip>
-                            )}
-                            {p.notaConfirmacion && (
-                              <Tooltip title={p.notaConfirmacion}>
-                                <IconButton size='small'><InfoIcon fontSize='small' /></IconButton>
                               </Tooltip>
                             )}
                           </Box>

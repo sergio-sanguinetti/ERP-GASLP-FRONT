@@ -2071,13 +2071,7 @@ export default function VentasPage() {
           >
             Categorías
           </Button>
-          <Button
-            variant={vistaActual === 'por-cobrar' ? 'contained' : 'outlined'}
-            onClick={() => setVistaActual('por-cobrar')}
-            startIcon={<AssignmentIcon />}
-          >
-            Ventas por Cobrar
-          </Button>
+
         </Box>
       </Box>
 
