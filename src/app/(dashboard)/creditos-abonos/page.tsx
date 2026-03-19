@@ -23,6 +23,7 @@ import {
   type Pedido,
   type ConfiguracionTicket
 } from '@/lib/api'
+import { generarHtmlTicketVenta } from '@/lib/ticketUtils'
 import { 
   Box, 
   Typography, 
@@ -219,11 +220,13 @@ export default function CreditosAbonosPage() {
   const [tipoAccionSbc, setTipoAccionSbc] = useState<'oficina' | 'sanluis' | 'rechazar'>('oficina')
   const [folioConfSbc, setFolioConfSbc] = useState('')
   const [notaConfSbc, setNotaConfSbc] = useState('')
+  const [filtroOperadorSbc, setFiltroOperadorSbc] = useState('')
+  const [filtroTipoSbc, setFiltroTipoSbc] = useState('')
   const [ticketSbcAbierto, setTicketSbcAbierto] = useState(false)
   const [pedidoTicketSbc, setPedidoTicketSbc] = useState<Pedido | null>(null)
   const [htmlTicketSbc, setHtmlTicketSbc] = useState('')
   const [loadingTicketSbc, setLoadingTicketSbc] = useState(false)
-  const [kpisSbc, setKpisSbc] = useState({ totalPendiente: 0, totalPendienteCount: 0, totalConfOficina: 0, totalConfSanLuis: 0, transferencia: 0, cheque: 0, deposito: 0 })
+  const [kpisSbc, setKpisSbc] = useState({ totalPendiente: 0, totalPendienteCount: 0, totalConfOficina: 0, totalConfSanLuis: 0, transferencia: 0, cheque: 0, deposito: 0, urgentes: 0, montoUrgentes: 0 })
   const [rutas, setRutas] = useState<Ruta[]>([])
   const [formasPagoDisponibles, setFormasPagoDisponibles] = useState<FormaPago[]>([])
   const [usuario, setUsuario] = useState<Usuario | null>(null)
@@ -305,6 +308,12 @@ export default function CreditosAbonosPage() {
       const pendientes = data.filter(p => !p.estadoSbc || p.estadoSbc === 'pendiente')
       const confOficina = data.filter(p => p.estadoSbc === 'confirmado_oficina')
       const confSanLuis = data.filter(p => p.estadoSbc === 'confirmado_sanluis')
+      const ahora = new Date()
+      const urgentes = pendientes.filter(p => {
+        if (!p.fechaPedido) return false
+        const dias = (ahora.getTime() - new Date(p.fechaPedido).getTime()) / 86400000
+        return dias >= 3
+      })
       setKpisSbc({
         totalPendiente: pendientes.reduce((s, p) => s + (p.monto || 0), 0),
         totalPendienteCount: pendientes.length,
@@ -313,6 +322,8 @@ export default function CreditosAbonosPage() {
         transferencia: data.filter(p => p.metodoPago === 'TRANSFERENCIA' && (!p.estadoSbc || p.estadoSbc === 'pendiente')).length,
         cheque: data.filter(p => p.metodoPago === 'CHEQUE' && (!p.estadoSbc || p.estadoSbc === 'pendiente')).length,
         deposito: data.filter(p => p.metodoPago === 'DEPOSITO' && (!p.estadoSbc || p.estadoSbc === 'pendiente')).length,
+        urgentes: urgentes.length,
+        montoUrgentes: urgentes.reduce((s, p) => s + (p.monto || 0), 0),
       })
       // Aplicar filtro de estado si hay
       const estadoFiltro = estado || filtroEstadoSbc
@@ -333,20 +344,7 @@ export default function CreditosAbonosPage() {
       try { config = await configuracionTicketsAPI.get('venta') }
       catch { config = { id: '', tipoTicket: 'venta', nombreEmpresa: 'GAS PROVIDENCIA', razonSocial: '', direccion: '', telefono: '', email: '', sitioWeb: '', rfc: '', logo: '', mostrarLogo: false, tamañoLogo: 'mediano', redesSociales: {}, mostrarRedesSociales: false, textos: { encabezado: '', piePagina: '', mostrarMensaje: false }, diseño: { mostrarFecha: true, mostrarHora: true, mostrarCajero: true, mostrarCliente: true, colorPrincipal: '#1976d2', alineacion: 'centro' }, urlQR: '', activo: true, fechaCreacion: '', fechaModificacion: '' } }
       // Generate simple HTML ticket for SBC context
-      const html = `<html><body style="font-family:monospace;font-size:12px;max-width:300px;margin:0 auto;padding:16px">
-        <h3 style="text-align:center">${config.nombreEmpresa || 'GAS PROVIDENCIA'}</h3>
-        <hr/>
-        <p><b>Folio:</b> ${pedido.numeroPedido}</p>
-        <p><b>Cliente:</b> ${pedido.cliente ? (pedido.cliente as any).nombre + ' ' + ((pedido.cliente as any).apellidoPaterno || '') : 'N/A'}</p>
-        <p><b>Fecha:</b> ${pedido.fechaPedido ? new Date(pedido.fechaPedido).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' }) : ''}</p>
-        <p><b>Tipo:</b> ${pedido.tipoServicio === 'pipas' ? 'PIPA' : 'CILINDROS'}</p>
-        <hr/>
-        <p><b>Formas de pago:</b></p>
-        ${(pedido.pagos || []).map((p: any) => `<p>• ${p.metodo?.nombre || p.tipo}: $${p.monto?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}${p.folio ? ' (Ref: ' + p.folio + ')' : ''}</p>`).join('')}
-        <hr/>
-        <p style="text-align:right"><b>Total: $${pedido.ventaTotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b></p>
-      </body></html>`
-      setHtmlTicketSbc(html)
+      setHtmlTicketSbc(generarHtmlTicketVenta(pedido, config))
     } catch (e: any) { setError('Error al cargar ticket: ' + e.message) }
     finally { setLoadingTicketSbc(false) }
   }
@@ -3046,6 +3044,24 @@ export default function CreditosAbonosPage() {
                 </CardContent>
               </Card>
             </Grid>
+            {kpisSbc.urgentes > 0 && (
+              <Grid item xs={12}>
+                <Card sx={{ bgcolor: '#fff3e0', border: '1px solid #ffb74d', cursor: 'pointer' }}
+                  onClick={() => setFiltroEstadoSbc('pendiente')}>
+                  <CardContent sx={{ pb: '12px !important', display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <WarningIcon sx={{ color: 'error.main', fontSize: 28 }} />
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant='body2' fontWeight='bold' color='error.main'>
+                        {kpisSbc.urgentes} PAGO{kpisSbc.urgentes > 1 ? 'S' : ''} CON MÁS DE 3 DÍAS SIN CONFIRMAR
+                      </Typography>
+                      <Typography variant='caption' color='error.dark'>
+                        ${kpisSbc.montoUrgentes.toLocaleString('es-MX', { minimumFractionDigits: 0 })} en riesgo — requieren atención inmediata
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
           </Grid>
 
           {/* Filtros */}
@@ -3071,6 +3087,21 @@ export default function CreditosAbonosPage() {
                     onChange={e => setFiltroBusquedaSbc(e.target.value)}
                     InputProps={{ startAdornment: <InputAdornment position='start'><SearchIcon fontSize='small' /></InputAdornment> }} />
                 </Grid>
+                <Grid item xs={12} sm={4} md={2}>
+                  <TextField fullWidth size='small' placeholder='Operador...'
+                    value={filtroOperadorSbc} onChange={e => setFiltroOperadorSbc(e.target.value)}
+                    InputProps={{ startAdornment: <InputAdornment position='start'><PersonIcon fontSize='small' /></InputAdornment> }} />
+                </Grid>
+                <Grid item xs={6} sm={3} md={2}>
+                  <FormControl fullWidth size='small'>
+                    <InputLabel>Tipo</InputLabel>
+                    <Select value={filtroTipoSbc} label='Tipo' onChange={e => setFiltroTipoSbc(e.target.value)}>
+                      <MenuItem value=''>Todos</MenuItem>
+                      <MenuItem value='pipas'>Pipas</MenuItem>
+                      <MenuItem value='cilindros'>Cilindros</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
                 <Grid item xs={6} sm={3} md={2}>
                   <Button variant='outlined' size='small' fullWidth onClick={() => cargarPedidosSBC()} disabled={loadingSBC}>
                     {loadingSBC ? 'Cargando...' : 'Actualizar'}
@@ -3084,16 +3115,24 @@ export default function CreditosAbonosPage() {
 
           {/* Tabla */}
           {(() => {
+            const ahora = new Date()
             const filtrados = pedidosSBC.filter(p => {
               const estadoOk = filtroEstadoSbc === 'todos' ? true
                 : filtroEstadoSbc === 'pendiente' ? (!p.estadoSbc || p.estadoSbc === 'pendiente')
                 : p.estadoSbc === filtroEstadoSbc
               if (!estadoOk) return false
+              if (filtroTipoSbc && p.tipoServicio !== filtroTipoSbc) return false
+              if (filtroOperadorSbc.trim() && !p.repartidor?.toLowerCase().includes(filtroOperadorSbc.toLowerCase())) return false
               if (!filtroBusquedaSbc.trim()) return true
               const b = filtroBusquedaSbc.toLowerCase()
               return p.cliente?.toLowerCase().includes(b) || p.numeroPedido?.toLowerCase().includes(b) || p.ruta?.toLowerCase().includes(b) || p.repartidor?.toLowerCase().includes(b)
             })
-            if (filtrados.length === 0 && !loadingSBC) return (
+            // Mark urgentes
+            const filtradosConUrgente = filtrados.map(p => ({
+              ...p,
+              esUrgente: (!p.estadoSbc || p.estadoSbc === 'pendiente') && p.fechaPedido && (ahora.getTime() - new Date(p.fechaPedido).getTime()) / 86400000 >= 3
+            }))
+            if (filtradosConUrgente.length === 0 && !loadingSBC) return (
               <Alert severity='info'>No hay pagos SBC para el filtro seleccionado.</Alert>
             )
             return (
@@ -3116,8 +3155,8 @@ export default function CreditosAbonosPage() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {filtrados.map((p) => (
-                        <TableRow key={p.id} hover sx={{ borderLeft: '3px solid', borderLeftColor: p.estadoSbc === 'rechazado' ? 'error.main' : p.estadoSbc === 'confirmado_sanluis' ? 'success.main' : p.estadoSbc === 'confirmado_oficina' ? 'info.main' : 'warning.main' }}>
+                      {filtradosConUrgente.map((p) => (
+                        <TableRow key={p.id} hover sx={{ borderLeft: '3px solid', borderLeftColor: (p as any).esUrgente ? 'error.main' : p.estadoSbc === 'rechazado' ? '#9e9e9e' : p.estadoSbc === 'confirmado_sanluis' ? 'success.main' : p.estadoSbc === 'confirmado_oficina' ? 'info.main' : 'warning.main', bgcolor: (p as any).esUrgente ? '#fff8f0' : 'inherit' }}>
                           <TableCell sx={{ p: 0.5 }}>
                             <Tooltip title='Ver ticket'>
                               <IconButton size='small' onClick={() => abrirTicketSbc(p.pedidoId)}>
