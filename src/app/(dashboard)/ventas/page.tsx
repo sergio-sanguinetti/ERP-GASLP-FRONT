@@ -138,14 +138,10 @@ interface ClienteAnalisis extends Cliente {
 }
 
 export default function VentasPage() {
-<<<<<<< Updated upstream
   const getFechaHoy = () =>
     new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
 
   const [vistaActual, setVistaActual] = useState<'dashboard' | 'catalogo' | 'listado-pedidos' | 'analisis-clientes' | 'categorias'>(
-=======
-  const [vistaActual, setVistaActual] = useState<'dashboard' | 'catalogo' | 'listado-pedidos' | 'analisis-clientes' | 'categorias' | 'por-cobrar'>(
->>>>>>> Stashed changes
     'dashboard'
   )
 
@@ -3282,22 +3278,9 @@ export default function VentasPage() {
                                   <ReceiptIcon fontSize='small' />
                                 </IconButton>
                               </Tooltip>
-<<<<<<< Updated upstream
                               <Tooltip title='Ver detalles'>
                                 <IconButton size='small' onClick={() => { setPedidoSeleccionado(pedido); setTipoDialogo('pedido-detalles'); setDialogoAbierto(true) }}>
                                   <VisibilityIcon fontSize='small' />
-=======
-                            )}
-
-                            {(pedido.estado === 'pendiente' || vistaActual === 'por-cobrar') && (
-                              <Tooltip title='Cerrar Venta (Registrar Pago)'>
-                                <IconButton
-                                  size='small'
-                                  color='primary'
-                                  onClick={() => abrirDialogoCerrarPedido(pedido)}
-                                >
-                                  <CheckCircleIcon />
->>>>>>> Stashed changes
                                 </IconButton>
                               </Tooltip>
                               {pedido.estado !== 'entregado' && pedido.estado !== 'cancelado' && (
