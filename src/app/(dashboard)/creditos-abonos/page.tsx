@@ -270,13 +270,22 @@ export default function CreditosAbonosPage() {
   const [rowsPerPageDuplicados, setRowsPerPageDuplicados] = useState(10)
 
 
+  const fetchSbc = async (path: string, options: RequestInit = {}) => {
+    const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+    const token = typeof window !== 'undefined' ? (localStorage.getItem('token') || sessionStorage.getItem('token') || '') : ''
+    return fetch(API + path, {
+      ...options,
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json', ...(options.headers || {}) }
+    })
+  }
+
   const cargarPedidosSBC = async (estado?: string) => {
     try {
       setLoadingSBC(true)
       const params = new URLSearchParams()
       if (estado || filtroEstadoSbc) params.append('estado', estado || filtroEstadoSbc)
       if (sedeId) params.append('sedeId', sedeId)
-      const res = await fetchWithAuth('/sbc/?' + params.toString())
+      const res = await fetchSbc('/sbc/?' + params.toString())
       if (!res.ok) throw new Error('Error al cargar pagos SBC')
       const data = await res.json()
       setPedidosSBC(Array.isArray(data) ? data : [])
@@ -300,7 +309,7 @@ export default function CreditosAbonosPage() {
         : tipoAccionSbc === 'sanluis' ? 'confirmar-sanluis' : 'rechazar'
       const body: any = { notaConfirmacion: notaConfSbc }
       if (tipoAccionSbc === 'oficina') body.folioConfirmado = folioConfSbc
-      const res = await fetchWithAuth('/sbc/' + pagoSbcSel.id + '/' + endpoint, {
+      const res = await fetchSbc('/sbc/' + pagoSbcSel.id + '/' + endpoint, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
