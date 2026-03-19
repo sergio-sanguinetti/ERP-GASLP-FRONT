@@ -1995,9 +1995,11 @@ export interface CorteRepartidor {
 }
 
 export const ventasAPI = {
-  getResumen: async (sedeId?: string): Promise<ResumenVentas> => {
+  getResumen: async (sedeId?: string, fechaDesde?: string, fechaHasta?: string): Promise<ResumenVentas> => {
     const queryParams = new URLSearchParams()
     if (sedeId) queryParams.append('sedeId', sedeId)
+    if (fechaDesde) queryParams.append('fechaDesde', fechaDesde)
+    if (fechaHasta) queryParams.append('fechaHasta', fechaHasta)
     const queryString = queryParams.toString()
     const url = `/ventas/resumen${queryString ? `?${queryString}` : ''}`
 
@@ -3298,9 +3300,11 @@ export interface ResumenRepartidores {
 }
 
 export const resumenRepartidoresAPI = {
-  get: async (sedeId?: string): Promise<ResumenRepartidores> => {
+  get: async (sedeId?: string, fechaDesde?: string, fechaHasta?: string): Promise<ResumenRepartidores> => {
     const queryParams = new URLSearchParams()
     if (sedeId) queryParams.append('sedeId', sedeId)
+    if (fechaDesde) queryParams.append('fechaDesde', fechaDesde)
+    if (fechaHasta) queryParams.append('fechaHasta', fechaHasta)
     const queryString = queryParams.toString()
     const url = `/ventas/resumen-repartidores${queryString ? `?${queryString}` : ''}`
     const response = await fetchWithAuth(url, { method: 'GET' })

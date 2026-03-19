@@ -151,6 +151,9 @@ export default function VentasPage() {
   const [cortePipas, setCortePipas] = useState<CorteRepartidor | null>(null)
   const [corteCilindros, setCorteCilindros] = useState<CorteRepartidor | null>(null)
   const [resumenRepartidores, setResumenRepartidores] = useState<ResumenRepartidores>({ pipas: [], cilindros: [] })
+  const [dashFechaDesde, setDashFechaDesde] = useState<string>(getFechaHoy())
+  const [dashFechaHasta, setDashFechaHasta] = useState<string>(getFechaHoy())
+  const [dashPeriodo, setDashPeriodo] = useState<string>('hoy')
   const [productos, setProductos] = useState<Producto[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [repartidores, setRepartidores] = useState<Usuario[]>([])
@@ -511,13 +514,15 @@ export default function VentasPage() {
     setSedeId(nuevaSedeId)
   }
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (fechaDesde?: string, fechaHasta?: string) => {
     try {
+      const fd = fechaDesde || undefined
+      const fh = fechaHasta || undefined
       const [resumen, pipas, cilindros, repartidores] = await Promise.all([
-        ventasAPI.getResumen(sedeId || undefined),
+        ventasAPI.getResumen(sedeId || undefined, fd, fh),
         ventasAPI.getCortePipas(sedeId || undefined),
         ventasAPI.getCorteCilindros(sedeId || undefined),
-        resumenRepartidoresAPI.get(sedeId || undefined)
+        resumenRepartidoresAPI.get(sedeId || undefined, fd, fh)
       ])
       setResumenVentas(resumen)
       setCortePipas(pipas)
@@ -2064,6 +2069,83 @@ export default function VentasPage() {
       {/* Dashboard Principal */}
       {vistaActual === 'dashboard' && (
         <Box>
+          {/* Filtro de fechas del Dashboard */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent sx={{ pb: '12px !important' }}>
+              <Grid container spacing={2} alignItems='center'>
+                <Grid item>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {[
+                      { label: 'Hoy', value: 'hoy' },
+                      { label: '7 días', value: '7dias' },
+                      { label: '15 días', value: '15dias' },
+                      { label: '30 días', value: '30dias' },
+                      { label: 'Personalizado', value: 'custom' },
+                    ].map(p => (
+                      <Chip key={p.value} label={p.label} size='small'
+                        variant={dashPeriodo === p.value ? 'filled' : 'outlined'}
+                        color={dashPeriodo === p.value ? 'primary' : 'default'}
+                        onClick={() => {
+                          setDashPeriodo(p.value)
+                          const hoy = getFechaHoy()
+                          let fd = hoy, fh = hoy
+                          if (p.value === '7dias') {
+                            const d = new Date(); d.setDate(d.getDate() - 6)
+                            fd = d.toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
+                          } else if (p.value === '15dias') {
+                            const d = new Date(); d.setDate(d.getDate() - 14)
+                            fd = d.toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
+                          } else if (p.value === '30dias') {
+                            const d = new Date(); d.setDate(d.getDate() - 29)
+                            fd = d.toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
+                          } else if (p.value === 'custom') {
+                            return // don't auto-load, wait for user to pick dates
+                          }
+                          setDashFechaDesde(fd)
+                          setDashFechaHasta(fh)
+                          if (p.value === 'hoy') {
+                            loadDashboardData()
+                          } else {
+                            loadDashboardData(fd, fh)
+                          }
+                        }}
+                        sx={{ cursor: 'pointer' }}
+                      />
+                    ))}
+                  </Box>
+                </Grid>
+                {dashPeriodo === 'custom' && (
+                  <>
+                    <Grid item>
+                      <TextField size='small' label='Desde' type='date' value={dashFechaDesde}
+                        onChange={e => setDashFechaDesde(e.target.value)}
+                        InputLabelProps={{ shrink: true }} sx={{ width: 160 }} />
+                    </Grid>
+                    <Grid item>
+                      <TextField size='small' label='Hasta' type='date' value={dashFechaHasta}
+                        onChange={e => setDashFechaHasta(e.target.value)}
+                        InputLabelProps={{ shrink: true }} sx={{ width: 160 }} />
+                    </Grid>
+                    <Grid item>
+                      <Button variant='contained' size='small' startIcon={<SearchIcon />}
+                        onClick={() => loadDashboardData(dashFechaDesde, dashFechaHasta)}>
+                        Buscar
+                      </Button>
+                    </Grid>
+                  </>
+                )}
+                <Grid item sx={{ ml: 'auto' }}>
+                  <Typography variant='caption' color='text.secondary'>
+                    {dashPeriodo === 'hoy' ? 'Mostrando: Hoy' :
+                     dashPeriodo === '7dias' ? 'Últimos 7 días' :
+                     dashPeriodo === '15dias' ? 'Últimos 15 días' :
+                     dashPeriodo === '30dias' ? 'Últimos 30 días' :
+                     `${dashFechaDesde} → ${dashFechaHasta}`}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
           {/* Tarjetas Dinámicas de Resumen */}
           <Grid container spacing={3} sx={{ mb: 4 }}>
             <Grid item xs={12} sm={6} md={3}>
