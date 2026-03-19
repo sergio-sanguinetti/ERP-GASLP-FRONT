@@ -93,7 +93,9 @@ import {
   Visibility as VisibilityIcon,
   Payment as PaymentIcon,
   Close as CloseIcon,
-  Group as GroupIcon
+  Group as GroupIcon,
+  SwapHoriz as SwapHorizIcon,
+  Cancel as CancelIcon
 } from '@mui/icons-material'
 
 // Tipos de datos (usando los de la API)
@@ -165,7 +167,7 @@ interface PagoPendienteAutorizacion {
 }
 
 export default function CreditosAbonosPage() {
-  const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'pagos-pendientes' | 'historial-pagos' | 'clientes-duplicados'>('dashboard')
+  const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'pagos-pendientes' | 'historial-pagos' | 'clientes-duplicados' | 'pagos-sbc'>('dashboard')
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteCredito | null>(null)
   const refFichaCliente = useRef<HTMLDivElement | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
@@ -201,6 +203,8 @@ export default function CreditosAbonosPage() {
   const [pagosPendientesAutorizacion, setPagosPendientesAutorizacion] = useState<PagoPendienteAutorizacion[]>([])
   const [historialPagos, setHistorialPagos] = useState<Pago[]>([])
   const [historialLimites, setHistorialLimites] = useState<HistorialLimite[]>([])
+  const [pedidosSBC, setPedidosSBC] = useState<any[]>([])
+  const [loadingSBC, setLoadingSBC] = useState(false)
   const [rutas, setRutas] = useState<Ruta[]>([])
   const [formasPagoDisponibles, setFormasPagoDisponibles] = useState<FormaPago[]>([])
   const [usuario, setUsuario] = useState<Usuario | null>(null)
@@ -256,6 +260,38 @@ export default function CreditosAbonosPage() {
   const [principalSel, setPrincipalSel] = useState<Record<number, string>>({})
   const [pageDuplicados, setPageDuplicados] = useState(0)
   const [rowsPerPageDuplicados, setRowsPerPageDuplicados] = useState(10)
+
+
+  const cargarPedidosSBC = async () => {
+    try {
+      setLoadingSBC(true)
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token') || ''
+      const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+      const res = await fetch(API + '/api/pedidos/sbc/pendientes', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      })
+      const data = await res.json()
+      setPedidosSBC(data.pedidos || [])
+    } catch (e: any) { setError(e.message) }
+    finally { setLoadingSBC(false) }
+  }
+
+  const confirmarSBC = async (pedidoId: string, estadoSBC: string) => {
+    try {
+      setSaving(true)
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token') || ''
+      const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+      await fetch(API + '/api/pedidos/' + pedidoId + '/sbc', {
+        method: 'PUT',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estadoSBC })
+      })
+      setSuccessMessage('Pago SBC ' + estadoSBC + ' exitosamente')
+      await cargarPedidosSBC()
+      setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (e: any) { setError(e.message) }
+    finally { setSaving(false) }
+  }
 
   const cargarDuplicados = async () => {
     try {
@@ -1154,6 +1190,14 @@ export default function CreditosAbonosPage() {
             startIcon={<GroupIcon />}
           >
             Clientes Duplicados
+          </Button>
+          <Button
+            variant={vistaActual === 'pagos-sbc' ? 'contained' : 'outlined'}
+            onClick={() => { setVistaActual('pagos-sbc'); cargarPedidosSBC(); }}
+            startIcon={<SwapHorizIcon />}
+            sx={{ bgcolor: vistaActual === 'pagos-sbc' ? '#e65100' : 'transparent', color: vistaActual === 'pagos-sbc' ? 'white' : '#e65100', borderColor: '#e65100', '&:hover': { bgcolor: '#e65100', color: 'white' } }}
+          >
+            Pagos SBC
           </Button>
         </Box>
       </Box>
@@ -2862,6 +2906,52 @@ export default function CreditosAbonosPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {vistaActual === 'pagos-sbc' && (
+        <Box>
+          <Typography variant='h6' gutterBottom>Pagos SBC — Salvo Buen Cobro</Typography>
+          <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
+            Pedidos con pago por transferencia, cheque o depósito pendientes de confirmación.
+          </Typography>
+          {loadingSBC && <LinearProgress sx={{ mb: 2 }} />}
+          <Button variant='outlined' size='small' onClick={cargarPedidosSBC} sx={{ mb: 2 }}>Actualizar</Button>
+          {pedidosSBC.length === 0 && !loadingSBC ? (
+            <Alert severity='success'>No hay pagos SBC pendientes.</Alert>
+          ) : (
+            <TableContainer component={Paper} variant='outlined'>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Pedido</TableCell>
+                    <TableCell>Cliente</TableCell>
+                    <TableCell>Ruta</TableCell>
+                    <TableCell>Tipo</TableCell>
+                    <TableCell align='right'>Monto</TableCell>
+                    <TableCell align='center'>Días</TableCell>
+                    <TableCell align='center'>Acciones</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {pedidosSBC.map((p) => (
+                    <TableRow key={p.id} sx={{ bgcolor: p.urgente ? '#fff3e0' : 'inherit' }}>
+                      <TableCell><Typography variant='subtitle2' fontWeight='bold'>{p.numeroPedido}</Typography></TableCell>
+                      <TableCell>{p.cliente}</TableCell>
+                      <TableCell>{p.ruta}</TableCell>
+                      <TableCell><Chip label={p.tipoServicio === 'pipas' ? 'PIPA' : 'CILINDRO'} size='small' color={p.tipoServicio === 'pipas' ? 'primary' : 'warning'} /></TableCell>
+                      <TableCell align='right'><Typography variant='h6' color='primary'>${p.ventaTotal.toLocaleString()}</Typography></TableCell>
+                      <TableCell align='center'><Chip label={String(p.diasPendiente) + ' días'} color={p.urgente ? 'error' : 'default'} size='small' /></TableCell>
+                      <TableCell align='center'>
+                        <Tooltip title='Confirmar'><IconButton size='small' color='success' onClick={() => confirmarSBC(p.id, 'confirmado')} disabled={saving}><CheckCircleIcon /></IconButton></Tooltip>
+                        <Tooltip title='Rechazar'><IconButton size='small' color='error' onClick={() => confirmarSBC(p.id, 'rechazado')} disabled={saving}><CancelIcon /></IconButton></Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </Box>
+      )}
 
       {/* Vista de Clientes Duplicados */}
       {vistaActual === 'clientes-duplicados' && (
