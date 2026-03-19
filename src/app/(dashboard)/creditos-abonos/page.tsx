@@ -93,7 +93,9 @@ import {
   Visibility as VisibilityIcon,
   Payment as PaymentIcon,
   Close as CloseIcon,
-  Group as GroupIcon
+  Group as GroupIcon,
+  SwapHoriz as SwapHorizIcon,
+  Cancel as CancelIcon
 } from '@mui/icons-material'
 
 // Tipos de datos (usando los de la API)
@@ -177,7 +179,7 @@ export default function CreditosAbonosPage() {
     nombre: '',
     ruta: '',
     estado: '',
-    deuda: '', // '' = todos, 'con-deuda' = solo con saldo > 0, 'sin-deuda' = al día
+    deuda: '', // '' = todos, 'con-deuda' = solo con saldo > 0, 'sin-deuda' = al dÃ­a
     saldoMin: '',
     saldoMax: '',
     diasVencimientoMin: '',
@@ -201,6 +203,8 @@ export default function CreditosAbonosPage() {
   const [pagosPendientesAutorizacion, setPagosPendientesAutorizacion] = useState<PagoPendienteAutorizacion[]>([])
   const [historialPagos, setHistorialPagos] = useState<Pago[]>([])
   const [historialLimites, setHistorialLimites] = useState<HistorialLimite[]>([])
+  const [pedidosSBC, setPedidosSBC] = useState<any[]>([])
+  const [loadingSBC, setLoadingSBC] = useState(false)
   const [rutas, setRutas] = useState<Ruta[]>([])
   const [formasPagoDisponibles, setFormasPagoDisponibles] = useState<FormaPago[]>([])
   const [usuario, setUsuario] = useState<Usuario | null>(null)
@@ -227,7 +231,7 @@ export default function CreditosAbonosPage() {
   const [rowsPerPageHistorial, setRowsPerPageHistorial] = useState(10)
   const [totalHistorial, setTotalHistorial] = useState(0)
 
-  // Buscador y filtro de ruta propios de la sección Límites Individuales por Cliente
+  // Buscador y filtro de ruta propios de la secciÃ³n LÃ­mites Individuales por Cliente
   const [filtroNombreLimites, setFiltroNombreLimites] = useState('')
 
   // Buscador y filtro por ruta en Pagos Pendientes e Historial de Pagos
@@ -244,7 +248,7 @@ export default function CreditosAbonosPage() {
   const [fechaDesdeDashboard, setFechaDesdeDashboard] = useState<string>('')
   const [fechaHastaDashboard, setFechaHastaDashboard] = useState<string>('')
 
-  // Paginación client-side: Pagos Pendientes e Historial de Pagos
+  // PaginaciÃ³n client-side: Pagos Pendientes e Historial de Pagos
   const [pagePagosPendientes, setPagePagosPendientes] = useState(0)
   const [rowsPerPagePagosPendientes, setRowsPerPagePagosPendientes] = useState(10)
   const [pageHistorialPagos, setPageHistorialPagos] = useState(0)
@@ -257,6 +261,42 @@ export default function CreditosAbonosPage() {
   const [pageDuplicados, setPageDuplicados] = useState(0)
   const [rowsPerPageDuplicados, setRowsPerPageDuplicados] = useState(10)
 
+  const cargarPedidosSBC = async () => {
+    try {
+      setLoadingSBC(true)
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token') || ''
+      const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+      const res = await fetch(API + '/api/pedidos/sbc/pendientes', {
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+      })
+      const data = await res.json()
+      setPedidosSBC(data.pedidos || [])
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setLoadingSBC(false)
+    }
+  }
+
+  const confirmarSBC = async (pedidoId: string, estadoSBC: string) => {
+    try {
+      setSaving(true)
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token') || ''
+      const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+      await fetch(API + '/api/pedidos/' + pedidoId + '/sbc', {
+        method: 'PUT',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estadoSBC })
+      })
+      setSuccessMessage('Pago SBC ' + estadoSBC + ' exitosamente')
+      await cargarPedidosSBC()
+      setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
   const cargarDuplicados = async () => {
     try {
       setLoadingDuplicados(true)
@@ -277,7 +317,7 @@ export default function CreditosAbonosPage() {
 
   const manejarUnificar = async (grupoIndex: number, principalId: string, secundariosIds: string[]) => {
     if (!principalId || secundariosIds.length === 0) {
-      setError('Seleccione un cliente principal. Asegúrese de que hay al menos 2 clientes para unificar.')
+      setError('Seleccione un cliente principal. AsegÃºrese de que hay al menos 2 clientes para unificar.')
       return
     }
     try {
@@ -380,7 +420,7 @@ export default function CreditosAbonosPage() {
         ? (sedeUsuarioId || sedesData[0]?.id || null)
         : sedeUsuarioId
 
-      // El useEffect que depende de sedeId se encargará de cargar rutas de la sede y luego clientes (primera ruta)
+      // El useEffect que depende de sedeId se encargarÃ¡ de cargar rutas de la sede y luego clientes (primera ruta)
       setSedeId(initialSedeId)
     } catch (err: any) {
       setError(err.message || 'Error al cargar datos iniciales')
@@ -418,7 +458,7 @@ export default function CreditosAbonosPage() {
         filtrosAPI.rutaId = primeraRutaId
       }
       // Solo enviar estadoCliente al API cuando es un valor del enum del backend (activo/suspendido/inactivo).
-      // Los valores buen-pagador, vencido, critico, bloqueado son estado de crédito y se filtran en cliente.
+      // Los valores buen-pagador, vencido, critico, bloqueado son estado de crÃ©dito y se filtran en cliente.
       const estadoClienteValidos = ['activo', 'suspendido', 'inactivo']
       if (filtros.estado && estadoClienteValidos.includes(filtros.estado)) {
         filtrosAPI.estadoCliente = filtros.estado
@@ -475,11 +515,11 @@ export default function CreditosAbonosPage() {
       setTotalClientes(clientesResp.total)
       
       // Convertir pagos pendientes al formato esperado
-      // Obtener nombres de usuarios únicos
+      // Obtener nombres de usuarios Ãºnicos
       const usuariosIds = [...new Set(pagos.map(p => p.usuarioRegistro).filter(Boolean))]
       const usuariosMap = new Map<string, Usuario>()
       
-      // Cargar información de usuarios en paralelo
+      // Cargar informaciÃ³n de usuarios en paralelo
       await Promise.all(
         usuariosIds.map(async (userId) => {
           try {
@@ -543,7 +583,7 @@ export default function CreditosAbonosPage() {
       setPagePagosPendientes(0)
       setPageHistorialPagos(0)
 
-      // Cargar historial de límites (paginado; misma ruta que el resto)
+      // Cargar historial de lÃ­mites (paginado; misma ruta que el resto)
       const historialLimitesResp = await creditosAbonosAPI.getHistorialLimites(
         rutaIdParaCarga
           ? { rutaId: rutaIdParaCarga, page: pageH + 1, pageSize: rppHistorial }
@@ -587,8 +627,8 @@ export default function CreditosAbonosPage() {
         alertas.push({
           id: `alerta-${cliente.id}-excede`,
           tipo: 'critica',
-          titulo: 'Cliente excede límite de crédito',
-          descripcion: `${cliente.nombre} ha excedido su límite de crédito en $${(cliente.saldoActual - cliente.limiteCredito).toLocaleString()}`,
+          titulo: 'Cliente excede lÃ­mite de crÃ©dito',
+          descripcion: `${cliente.nombre} ha excedido su lÃ­mite de crÃ©dito en $${(cliente.saldoActual - cliente.limiteCredito).toLocaleString()}`,
           fecha: new Date().toISOString().split('T')[0],
           cliente: cliente.nombre,
           monto: cliente.saldoActual - cliente.limiteCredito
@@ -601,8 +641,8 @@ export default function CreditosAbonosPage() {
           alertas.push({
             id: `alerta-${nota.id}-vencida`,
             tipo: 'critica',
-            titulo: 'Deuda vencida más de 60 días',
-            descripcion: `${cliente.nombre} tiene deuda vencida desde hace ${Math.abs(nota.diasVencimiento)} días`,
+            titulo: 'Deuda vencida mÃ¡s de 60 dÃ­as',
+            descripcion: `${cliente.nombre} tiene deuda vencida desde hace ${Math.abs(nota.diasVencimiento)} dÃ­as`,
             fecha: new Date().toISOString().split('T')[0],
             cliente: cliente.nombre,
             diasVencimiento: Math.abs(nota.diasVencimiento)
@@ -614,7 +654,7 @@ export default function CreditosAbonosPage() {
     return alertas
   }, [clientesCredito])
 
-  // Función helper para formatear fechas de manera consistente
+  // FunciÃ³n helper para formatear fechas de manera consistente
   const formatearFecha = (fecha: string) => {
     try {
       const date = new Date(fecha)
@@ -694,7 +734,7 @@ export default function CreditosAbonosPage() {
       await cargarDatos()
       cerrarDialogo()
     } catch (err: any) {
-      setError(err.message || 'Error al actualizar límite de crédito')
+      setError(err.message || 'Error al actualizar lÃ­mite de crÃ©dito')
     } finally {
       setSaving(false)
     }
@@ -708,14 +748,14 @@ export default function CreditosAbonosPage() {
       await creditosAbonosAPI.updateLimiteCredito(
         clienteSeleccionado.id,
         0,
-        'Crédito bloqueado desde Gestión de Créditos'
+        'CrÃ©dito bloqueado desde GestiÃ³n de CrÃ©ditos'
       )
-      setSuccessMessage(`Crédito bloqueado para ${clienteSeleccionado.nombre}`)
+      setSuccessMessage(`CrÃ©dito bloqueado para ${clienteSeleccionado.nombre}`)
       await cargarDatos()
       cerrarDialogo()
       setTimeout(() => setSuccessMessage(null), 4000)
     } catch (err: any) {
-      setError(err.message || 'Error al bloquear crédito')
+      setError(err.message || 'Error al bloquear crÃ©dito')
     } finally {
       setSaving(false)
     }
@@ -735,12 +775,12 @@ export default function CreditosAbonosPage() {
           <h1>Estado de Cuenta</h1>
           <p><strong>Cliente:</strong> ${clienteSeleccionado.nombre}</p>
           <p><strong>Fecha:</strong> ${fecha}</p>
-          <p><strong>Límite de crédito:</strong> $${(clienteSeleccionado.limiteCredito ?? 0).toLocaleString()}</p>
+          <p><strong>LÃ­mite de crÃ©dito:</strong> $${(clienteSeleccionado.limiteCredito ?? 0).toLocaleString()}</p>
           <p><strong>Saldo actual:</strong> $${(clienteSeleccionado.saldoActual ?? 0).toLocaleString()}</p>
-          <p><strong>Crédito disponible:</strong> $${(clienteSeleccionado.creditoDisponible ?? 0).toLocaleString()}</p>
+          <p><strong>CrÃ©dito disponible:</strong> $${(clienteSeleccionado.creditoDisponible ?? 0).toLocaleString()}</p>
           <h2>Notas pendientes</h2>
           <table>
-            <thead><tr><th>Número</th><th>Fecha venta</th><th>Vencimiento</th><th>Importe</th><th>Estado</th></tr></thead>
+            <thead><tr><th>NÃºmero</th><th>Fecha venta</th><th>Vencimiento</th><th>Importe</th><th>Estado</th></tr></thead>
             <tbody>
               ${notas.map((n: NotaCredito) => `<tr><td>${n.numeroNota ?? ''}</td><td>${formatearFecha(n.fechaVenta)}</td><td>${formatearFecha(n.fechaVencimiento)}</td><td>$${(n.importe ?? 0).toLocaleString()}</td><td>${n.estado ?? ''}</td></tr>`).join('')}
             </tbody>
@@ -767,7 +807,7 @@ export default function CreditosAbonosPage() {
   const actualizarLimiteCliente = async (clienteId: string) => {
     const datosLimite = limitesEditados[clienteId]
     if (!datosLimite || datosLimite.limite <= 0) {
-      setError('Por favor ingrese un límite válido')
+      setError('Por favor ingrese un lÃ­mite vÃ¡lido')
       return
     }
 
@@ -788,7 +828,7 @@ export default function CreditosAbonosPage() {
       await creditosAbonosAPI.updateLimiteCredito(
         clienteId,
         datosLimite.limite,
-        datosLimite.motivo || 'Actualización desde Control de Límites'
+        datosLimite.motivo || 'ActualizaciÃ³n desde Control de LÃ­mites'
       )
       
       // Limpiar el estado editado para este cliente
@@ -798,16 +838,16 @@ export default function CreditosAbonosPage() {
         return nuevo
       })
       
-      setSuccessMessage(`Límite de crédito actualizado exitosamente para ${cliente.nombre}`)
+      setSuccessMessage(`LÃ­mite de crÃ©dito actualizado exitosamente para ${cliente.nombre}`)
       
       await cargarDatos()
       
-      // Limpiar el mensaje de éxito después de 3 segundos
+      // Limpiar el mensaje de Ã©xito despuÃ©s de 3 segundos
       setTimeout(() => {
         setSuccessMessage(null)
       }, 3000)
     } catch (err: any) {
-      setError(err.message || 'Error al actualizar límite de crédito')
+      setError(err.message || 'Error al actualizar lÃ­mite de crÃ©dito')
     } finally {
       setSaving(false)
     }
@@ -845,7 +885,7 @@ export default function CreditosAbonosPage() {
       if (metodosRequierenFolio.includes(fp.metodo)) {
         if (!fp.referencia || fp.referencia.trim() === '') {
           const nombreMetodo = formasPagoDisponibles.find(f => f.tipo === fp.metodo)?.nombre || fp.metodo
-          setError(`El campo "Folio / Referencia" es obligatorio para el método de pago: ${nombreMetodo}`)
+          setError(`El campo "Folio / Referencia" es obligatorio para el mÃ©todo de pago: ${nombreMetodo}`)
           return
         }
       }
@@ -985,13 +1025,13 @@ export default function CreditosAbonosPage() {
 
   const clientesFiltrados = useMemo(() => {
     return clientesCredito.filter(cliente => {
-      // Solo deben aparecer los clientes con crédito utilizado (saldo pendiente mayor a 0)
+      // Solo deben aparecer los clientes con crÃ©dito utilizado (saldo pendiente mayor a 0)
       if ((cliente.saldoActual ?? 0) <= 0) return false
 
       const cumpleNombre = !filtros.nombre || cliente.nombre.toLowerCase().includes(filtros.nombre.toLowerCase())
       const cumpleRuta = !filtros.ruta || cliente.ruta === filtros.ruta
       const cumpleEstado = !filtros.estado || cliente.estado === filtros.estado
-      const tieneDeuda = true // Como el saldo siempre es mayor a 0 por la condición anterior
+      const tieneDeuda = true // Como el saldo siempre es mayor a 0 por la condiciÃ³n anterior
       const cumpleDeuda =
         !filtros.deuda ||
         (filtros.deuda === 'con-deuda' && tieneDeuda) ||
@@ -1011,7 +1051,7 @@ export default function CreditosAbonosPage() {
     return [...new Set([...rutasDeAPI, ...rutasDeClientes])].filter(r => r && r !== 'Sin ruta')
   }, [clientesCredito, rutas])
 
-  // Clientes filtrados por nombre dentro de Límites Individuales por Cliente (solo esta sección)
+  // Clientes filtrados por nombre dentro de LÃ­mites Individuales por Cliente (solo esta secciÃ³n)
   const clientesCreditoFiltradosLimites = useMemo(() => {
     if (!filtroNombreLimites.trim()) return clientesCredito
     const busqueda = filtroNombreLimites.toLowerCase().trim()
@@ -1046,7 +1086,7 @@ export default function CreditosAbonosPage() {
     })
   }, [historialPagos, filtroBusquedaHistorialPagos])
 
-  // Recargar datos cuando cambien los filtros (volver a página 1)
+  // Recargar datos cuando cambien los filtros (volver a pÃ¡gina 1)
   useEffect(() => {
     if (rutas.length === 0) return
     setPageClientes(0)
@@ -1063,7 +1103,7 @@ export default function CreditosAbonosPage() {
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant='h4' component='h1'>
-          Gestión de Créditos y Abonos
+          GestiÃ³n de CrÃ©ditos y Abonos
         </Typography>
         
         {/* Selector de Sede solo para superAdministrador; Administrador y Gestor solo ven el nombre de su sede */}
@@ -1110,7 +1150,7 @@ export default function CreditosAbonosPage() {
         </Box>
       )}
 
-      {/* Navegación */}
+      {/* NavegaciÃ³n */}
       <Box sx={{ mb: 3 }}>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Button
@@ -1125,14 +1165,14 @@ export default function CreditosAbonosPage() {
             onClick={() => setVistaActual('clientes')}
             startIcon={<PersonIcon />}
           >
-            Gestión por Cliente
+            GestiÃ³n por Cliente
           </Button>
           <Button
             variant={vistaActual === 'limites' ? 'contained' : 'outlined'}
             onClick={() => setVistaActual('limites')}
             startIcon={<CreditCardIcon />}
           >
-            Control de Límites
+            Control de LÃ­mites
           </Button>
           <Button
             variant={vistaActual === 'pagos-pendientes' ? 'contained' : 'outlined'}
@@ -1155,10 +1195,18 @@ export default function CreditosAbonosPage() {
           >
             Clientes Duplicados
           </Button>
+          <Button
+            variant={vistaActual === 'pagos-sbc' ? 'contained' : 'outlined'}
+            onClick={() => { setVistaActual('pagos-sbc'); cargarPedidosSBC(); }}
+            startIcon={<SwapHorizIcon />}
+            sx={{ bgcolor: vistaActual === 'pagos-sbc' ? '#e65100' : 'transparent', color: vistaActual === 'pagos-sbc' ? 'white' : '#e65100', borderColor: '#e65100', '&:hover': { bgcolor: '#e65100', color: 'white' } }}
+          >
+            Pagos SBC
+          </Button>
         </Box>
       </Box>
 
-      {/* Dashboard Principal */}
+      {/* Dashboard Principal */
       {vistaActual === 'dashboard' && (
         <Box>
           {/* Filtros del Dashboard: ruta y fechas */}
@@ -1232,7 +1280,7 @@ export default function CreditosAbonosPage() {
                         ${resumenCredito.carteraVencida.toLocaleString()}
                       </Typography>
                       <Typography variant='body2' color='text.secondary'>
-                        {resumenCredito.notasVencidas} notas • {resumenCredito.porcentajeVencida}%
+                        {resumenCredito.notasVencidas} notas â¢ {resumenCredito.porcentajeVencida}%
                       </Typography>
                     </Box>
                     <WarningIcon color='error' sx={{ fontSize: 40 }} />
@@ -1253,7 +1301,7 @@ export default function CreditosAbonosPage() {
                         ${resumenCredito.carteraPorVencer.toLocaleString()}
                       </Typography>
                       <Typography variant='body2' color='text.secondary'>
-                        {resumenCredito.notasPorVencer} notas • {resumenCredito.porcentajePorVencer}%
+                        {resumenCredito.notasPorVencer} notas â¢ {resumenCredito.porcentajePorVencer}%
                       </Typography>
                     </Box>
                     <ScheduleIcon color='warning' sx={{ fontSize: 40 }} />
@@ -1263,11 +1311,11 @@ export default function CreditosAbonosPage() {
             </Grid>
           </Grid>
 
-          {/* Sección de Alertas Críticas */}
+          {/* SecciÃ³n de Alertas CrÃ­ticas */}
           <Card>
             <CardContent>
               <Typography variant='h6' gutterBottom>
-                Alertas Críticas
+                Alertas CrÃ­ticas
               </Typography>
               
               <Grid container spacing={2}>
@@ -1297,14 +1345,14 @@ export default function CreditosAbonosPage() {
         </Box>
       )}
 
-      {/* Panel de Gestión por Cliente */}
+      {/* Panel de GestiÃ³n por Cliente */}
       {vistaActual === 'clientes' && (
         <Box>
-          {/* Filtros y Búsqueda Avanzada */}
+          {/* Filtros y BÃºsqueda Avanzada */}
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant='h6' gutterBottom>
-                Filtros y Búsqueda Avanzada
+                Filtros y BÃºsqueda Avanzada
               </Typography>
               
               <Grid container spacing={2}>
@@ -1356,7 +1404,7 @@ export default function CreditosAbonosPage() {
                       <MenuItem value='inactivo'>Inactivo</MenuItem>
                       <MenuItem value='buen-pagador'>Buen Pagador</MenuItem>
                       <MenuItem value='vencido'>Vencido</MenuItem>
-                      <MenuItem value='critico'>Crítico</MenuItem>
+                      <MenuItem value='critico'>CrÃ­tico</MenuItem>
                       <MenuItem value='bloqueado'>Bloqueado</MenuItem>
                     </Select>
                   </FormControl>
@@ -1372,7 +1420,7 @@ export default function CreditosAbonosPage() {
                     >
                       <MenuItem value=''>Todos</MenuItem>
                       <MenuItem value='con-deuda'>Con deuda</MenuItem>
-                      <MenuItem value='sin-deuda'>Sin deuda (al día)</MenuItem>
+                      <MenuItem value='sin-deuda'>Sin deuda (al dÃ­a)</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -1381,14 +1429,14 @@ export default function CreditosAbonosPage() {
                   <Box sx={{ display: 'flex', gap: 1 }}>
                     <TextField
                       fullWidth
-                      label='Saldo Mínimo'
+                      label='Saldo MÃ­nimo'
                       type='number'
                       value={filtros.saldoMin}
                       onChange={(e) => manejarCambioFiltros('saldoMin', e.target.value)}
                     />
                     <TextField
                       fullWidth
-                      label='Saldo Máximo'
+                      label='Saldo MÃ¡ximo'
                       type='number'
                       value={filtros.saldoMax}
                       onChange={(e) => manejarCambioFiltros('saldoMax', e.target.value)}
@@ -1412,9 +1460,9 @@ export default function CreditosAbonosPage() {
                     <TableRow>
                       <TableCell>Cliente</TableCell>
                       <TableCell>Ruta</TableCell>
-                      <TableCell align='right'>Límite Crédito</TableCell>
+                      <TableCell align='right'>LÃ­mite CrÃ©dito</TableCell>
                       <TableCell align='right'>Saldo Actual</TableCell>
-                      <TableCell align='right'>Crédito Disponible</TableCell>
+                      <TableCell align='right'>CrÃ©dito Disponible</TableCell>
                       <TableCell>Estado</TableCell>
                       <TableCell>Deuda</TableCell>
                       <TableCell align='center'>Acciones</TableCell>
@@ -1473,7 +1521,7 @@ export default function CreditosAbonosPage() {
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={(cliente.saldoActual ?? 0) > 0 ? 'Con deuda' : 'Al día'}
+                            label={(cliente.saldoActual ?? 0) > 0 ? 'Con deuda' : 'Al dÃ­a'}
                             color={((cliente.saldoActual ?? 0) > 0 ? 'warning' : 'success') as any}
                             size='small'
                             variant='outlined'
@@ -1486,7 +1534,7 @@ export default function CreditosAbonosPage() {
                                 <VisibilityIcon />
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title='Modificar límite'>
+                            <Tooltip title='Modificar lÃ­mite'>
                               <IconButton size='small' onClick={() => abrirDialogo('modificar-limite', cliente)}>
                                 <EditIcon />
                               </IconButton>
@@ -1518,7 +1566,7 @@ export default function CreditosAbonosPage() {
                     cargarDatos(undefined, { pageClientes: 0, rowsPerPageClientes: newRpp })
                   }}
                   rowsPerPageOptions={[5, 10, 25, 50]}
-                  labelRowsPerPage='Filas por página'
+                  labelRowsPerPage='Filas por pÃ¡gina'
                   labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
                 />
               </TableContainer>
@@ -1545,7 +1593,7 @@ export default function CreditosAbonosPage() {
                     </Box>
                   </Box>
                   <IconButton onClick={() => setClienteSeleccionado(null)}>
-                    ×
+                    Ã
                   </IconButton>
                 </Box>
 
@@ -1558,13 +1606,13 @@ export default function CreditosAbonosPage() {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                       <LocationOnIcon fontSize='small' color='action' />
                       <Typography variant='body2'>
-                        {clienteSeleccionado.direccion ?? '—'}
+                        {clienteSeleccionado.direccion ?? 'â'}
                       </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <PhoneIcon fontSize='small' color='action' />
                       <Typography variant='body2'>
-                        {clienteSeleccionado.telefono ?? '—'}
+                        {clienteSeleccionado.telefono ?? 'â'}
                       </Typography>
                     </Box>
                   </Grid>
@@ -1576,7 +1624,7 @@ export default function CreditosAbonosPage() {
                     <Grid container spacing={2}>
                       <Grid item xs={6}>
                         <Typography variant='body2' color='text.secondary'>
-                          Límite de Crédito
+                          LÃ­mite de CrÃ©dito
                         </Typography>
                         <Typography variant='h6' color='primary'>
                           ${clienteSeleccionado.limiteCredito.toLocaleString()}
@@ -1592,7 +1640,7 @@ export default function CreditosAbonosPage() {
                       </Grid>
                       <Grid item xs={6}>
                         <Typography variant='body2' color='text.secondary'>
-                          Crédito Disponible
+                          CrÃ©dito Disponible
                         </Typography>
                         <Typography 
                           variant='h6' 
@@ -1603,10 +1651,10 @@ export default function CreditosAbonosPage() {
                       </Grid>
                       <Grid item xs={6}>
                         <Typography variant='body2' color='text.secondary'>
-                          Días Promedio de Pago
+                          DÃ­as Promedio de Pago
                         </Typography>
                         <Typography variant='h6' color='text.primary'>
-                          {clienteSeleccionado.diasPromedioPago} días
+                          {clienteSeleccionado.diasPromedioPago} dÃ­as
                         </Typography>
                       </Grid>
                     </Grid>
@@ -1623,11 +1671,11 @@ export default function CreditosAbonosPage() {
                     <Table>
                       <TableHead>
                         <TableRow>
-                          <TableCell>Número de Nota</TableCell>
+                          <TableCell>NÃºmero de Nota</TableCell>
                           <TableCell>Fecha Venta</TableCell>
                           <TableCell>Fecha Vencimiento</TableCell>
                           <TableCell align='right'>Importe</TableCell>
-                          <TableCell align='right'>Días Vencimiento</TableCell>
+                          <TableCell align='right'>DÃ­as Vencimiento</TableCell>
                           <TableCell align='center'>Estado</TableCell>
                         </TableRow>
                       </TableHead>
@@ -1686,14 +1734,14 @@ export default function CreditosAbonosPage() {
                   </Alert>
                 )}
 
-                {/* Botones de Acción */}
+                {/* Botones de AcciÃ³n */}
                 <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   <Button
                     variant='contained'
                     startIcon={<EditIcon />}
                     onClick={() => abrirDialogo('modificar-limite', clienteSeleccionado)}
                   >
-                    Modificar Límite
+                    Modificar LÃ­mite
                   </Button>
                   <Button
                     variant='contained'
@@ -1717,7 +1765,7 @@ export default function CreditosAbonosPage() {
                     startIcon={<BlockIcon />}
                     onClick={() => abrirDialogo('bloquear', clienteSeleccionado)}
                   >
-                    Bloquear Crédito
+                    Bloquear CrÃ©dito
                   </Button>
                   <Button
                     variant='outlined'
@@ -1734,21 +1782,21 @@ export default function CreditosAbonosPage() {
         </Box>
       )}
 
-      {/* Panel de Control de Límites de Crédito */}
+      {/* Panel de Control de LÃ­mites de CrÃ©dito */}
       {vistaActual === 'limites' && (
         <Box>
-          {/* Configuración Masiva */}
+          {/* ConfiguraciÃ³n Masiva */}
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant='h6' gutterBottom>
-                Configuración Masiva de Límites
+                ConfiguraciÃ³n Masiva de LÃ­mites
               </Typography>
               
               <Grid container spacing={3}>
                 <Grid item xs={12} md={6}>
                   <TextField
                     fullWidth
-                    label='Límite para Clientes Nuevos'
+                    label='LÃ­mite para Clientes Nuevos'
                     type='number'
                     defaultValue='25000'
                     InputProps={{
@@ -1756,16 +1804,16 @@ export default function CreditosAbonosPage() {
                     }}
                   />
                   <Typography variant='caption' color='text.secondary'>
-                    Se aplicará automáticamente a todos los clientes nuevos
+                    Se aplicarÃ¡ automÃ¡ticamente a todos los clientes nuevos
                   </Typography>
                 </Grid>
                 
                 <Grid item xs={12} md={6}>
                   <Box sx={{ display: 'flex', gap: 2 }}>
                     <FormControl fullWidth>
-                      <InputLabel>Ruta Específica</InputLabel>
+                      <InputLabel>Ruta EspecÃ­fica</InputLabel>
                       <Select
-                        label='Ruta Específica'
+                        label='Ruta EspecÃ­fica'
                         value={filtros.ruta}
                         onChange={(e) => manejarCambioFiltros('ruta', e.target.value)}
                       >
@@ -1778,7 +1826,7 @@ export default function CreditosAbonosPage() {
                       </Select>
                     </FormControl>
                     <TextField
-                      label='Nuevo Límite'
+                      label='Nuevo LÃ­mite'
                       type='number'
                       defaultValue='30000'
                       InputProps={{
@@ -1791,20 +1839,20 @@ export default function CreditosAbonosPage() {
               
               <Box sx={{ mt: 2 }}>
                 <Button variant='contained' startIcon={<AddIcon />}>
-                  Aplicar Configuración Masiva
+                  Aplicar ConfiguraciÃ³n Masiva
                 </Button>
               </Box>
             </CardContent>
           </Card>
 
-          {/* Tabla de Límites Individuales */}
+          {/* Tabla de LÃ­mites Individuales */}
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant='h6' gutterBottom>
-                Límites Individuales por Cliente
+                LÃ­mites Individuales por Cliente
               </Typography>
 
-              {/* Filtros propios de esta sección: buscador y ruta (no usan el filtro de arriba) */}
+              {/* Filtros propios de esta secciÃ³n: buscador y ruta (no usan el filtro de arriba) */}
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
                 <TextField
                   size='small'
@@ -1843,8 +1891,8 @@ export default function CreditosAbonosPage() {
                     <TableRow>
                       <TableCell>Cliente</TableCell>
                       <TableCell>Ruta</TableCell>
-                      <TableCell align='right'>Límite Actual</TableCell>
-                      <TableCell align='right'>Nuevo Límite</TableCell>
+                      <TableCell align='right'>LÃ­mite Actual</TableCell>
+                      <TableCell align='right'>Nuevo LÃ­mite</TableCell>
                       <TableCell align='center' sx={{ minWidth: 400 }}>Acciones</TableCell>
                     </TableRow>
                   </TableHead>
@@ -1927,7 +1975,7 @@ export default function CreditosAbonosPage() {
                   cargarDatos(undefined, { pageClientes: 0, rowsPerPageClientes: newRpp })
                 }}
                 rowsPerPageOptions={[5, 10, 25, 50, 100]}
-                labelRowsPerPage='Filas por página'
+                labelRowsPerPage='Filas por pÃ¡gina'
                 labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
               />
             </CardContent>
@@ -1937,7 +1985,7 @@ export default function CreditosAbonosPage() {
           <Card>
             <CardContent>
               <Typography variant='h6' gutterBottom>
-                Historial de Cambios de Límites (solo primera ruta)
+                Historial de Cambios de LÃ­mites (solo primera ruta)
               </Typography>
               
               <List>
@@ -1953,7 +2001,7 @@ export default function CreditosAbonosPage() {
                             {cambio.cliente}
                           </Typography>
                           <Chip 
-                            label={`$${cambio.limiteAnterior.toLocaleString()} → $${cambio.limiteNuevo.toLocaleString()}`}
+                            label={`$${cambio.limiteAnterior.toLocaleString()} â $${cambio.limiteNuevo.toLocaleString()}`}
                             size='small'
                             color={cambio.limiteNuevo > cambio.limiteAnterior ? 'success' : 'warning'}
                           />
@@ -1965,7 +2013,7 @@ export default function CreditosAbonosPage() {
                             {cambio.motivo}
                           </Typography>
                           <Typography variant='caption' color='text.secondary'>
-                            {cambio.usuario} • {formatearFecha(cambio.fecha)}
+                            {cambio.usuario} â¢ {formatearFecha(cambio.fecha)}
                           </Typography>
                         </Box>
                       }
@@ -1989,7 +2037,7 @@ export default function CreditosAbonosPage() {
                   cargarDatos(undefined, { pageHistorial: 0, rowsPerPageHistorial: newRpp })
                 }}
                 rowsPerPageOptions={[5, 10, 25, 50]}
-                labelRowsPerPage='Filas por página'
+                labelRowsPerPage='Filas por pÃ¡gina'
                 labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
               />
             </CardContent>
@@ -1997,11 +2045,11 @@ export default function CreditosAbonosPage() {
         </Box>
       )}
 
-      {/* Vista de Pagos Pendientes de Autorización */}
+      {/* Vista de Pagos Pendientes de AutorizaciÃ³n */}
       {vistaActual === 'pagos-pendientes' && (
         <Box>
           <Typography variant='h6' gutterBottom>
-            Pagos Pendientes de Autorización
+            Pagos Pendientes de AutorizaciÃ³n
           </Typography>
           
           <Card>
@@ -2129,7 +2177,7 @@ export default function CreditosAbonosPage() {
                                         setUsuarioAutorizacionNombre(`${usuarioAut.nombres} ${usuarioAut.apellidoPaterno}`)
                                       }
                                     } catch (err) {
-                                      console.error('Error al cargar información de usuarios:', err)
+                                      console.error('Error al cargar informaciÃ³n de usuarios:', err)
                                       setUsuarioRegistroNombre(pago.pagoCompleto.usuarioRegistro)
                                       if (pago.pagoCompleto.usuarioAutorizacion) {
                                         setUsuarioAutorizacionNombre(pago.pagoCompleto.usuarioAutorizacion)
@@ -2169,7 +2217,7 @@ export default function CreditosAbonosPage() {
                   setPagePagosPendientes(0)
                 }}
                 rowsPerPageOptions={[5, 10, 25, 50, 100]}
-                labelRowsPerPage='Filas por página'
+                labelRowsPerPage='Filas por pÃ¡gina'
                 labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
               />
             </CardContent>
@@ -2350,7 +2398,7 @@ export default function CreditosAbonosPage() {
                   setPageHistorialPagos(0)
                 }}
                 rowsPerPageOptions={[5, 10, 25, 50, 100]}
-                labelRowsPerPage='Filas por página'
+                labelRowsPerPage='Filas por pÃ¡gina'
                 labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
               />
             </CardContent>
@@ -2361,8 +2409,8 @@ export default function CreditosAbonosPage() {
       {/* Modales */}
       <Dialog open={dialogoAbierto} onClose={cerrarDialogo} maxWidth='sm' fullWidth>
         <DialogTitle>
-          {tipoDialogo === 'modificar-limite' && 'Modificar Límite de Crédito'}
-          {tipoDialogo === 'bloquear' && 'Bloquear Crédito'}
+          {tipoDialogo === 'modificar-limite' && 'Modificar LÃ­mite de CrÃ©dito'}
+          {tipoDialogo === 'bloquear' && 'Bloquear CrÃ©dito'}
           {tipoDialogo === 'estado-cuenta' && 'Generar Estado de Cuenta'}
           {tipoDialogo === 'registrar-pago' && 'Registrar Pago'}
           {tipoDialogo === 'registrar-abono' && 'Registrar Abono General'}
@@ -2377,11 +2425,11 @@ export default function CreditosAbonosPage() {
               {tipoDialogo === 'modificar-limite' && (
                 <Box>
                   <Typography variant='body2' color='text.secondary' gutterBottom>
-                    Límite actual: ${clienteSeleccionado.limiteCredito.toLocaleString()}
+                    LÃ­mite actual: ${clienteSeleccionado.limiteCredito.toLocaleString()}
                   </Typography>
                   <TextField
                     fullWidth
-                    label='Nuevo Límite de Crédito'
+                    label='Nuevo LÃ­mite de CrÃ©dito'
                     type='number'
                     value={nuevoLimite}
                     onChange={(e) => setNuevoLimite(Number(e.target.value))}
@@ -2406,14 +2454,14 @@ export default function CreditosAbonosPage() {
               {tipoDialogo === 'bloquear' && (
                 <Alert severity='warning' sx={{ mb: 2 }}>
                   <AlertTitle>Advertencia</AlertTitle>
-                  Esta acción bloqueará el crédito del cliente inmediatamente.
+                  Esta acciÃ³n bloquearÃ¡ el crÃ©dito del cliente inmediatamente.
                 </Alert>
               )}
               
               {tipoDialogo === 'estado-cuenta' && (
                 <Box>
                   <Typography variant='body2' color='text.secondary' gutterBottom>
-                    Se generará un estado de cuenta detallado para este cliente (imprimir o ver en nueva pestaña).
+                    Se generarÃ¡ un estado de cuenta detallado para este cliente (imprimir o ver en nueva pestaÃ±a).
                   </Typography>
                   <FormControl fullWidth sx={{ mt: 2 }}>
                     <InputLabel>Formato</InputLabel>
@@ -2452,11 +2500,11 @@ export default function CreditosAbonosPage() {
                         <Grid container spacing={2} alignItems='center'>
                           <Grid item xs={12} sm={3}>
                             <FormControl fullWidth>
-                              <InputLabel>Método</InputLabel>
+                              <InputLabel>MÃ©todo</InputLabel>
                               <Select
                                 value={forma.metodo}
                                 onChange={(e) => actualizarFormaPago(forma.id, 'metodo', e.target.value)}
-                                label='Método'
+                                label='MÃ©todo'
                               >
                                 {formasPagoDisponibles
                                   .filter(fp => fp.tipo !== 'credito')
@@ -2576,8 +2624,8 @@ export default function CreditosAbonosPage() {
           >
             {saving ? 'Guardando...' : (
               <>
-                {tipoDialogo === 'modificar-limite' && 'Actualizar Límite'}
-                {tipoDialogo === 'bloquear' && 'Bloquear Crédito'}
+                {tipoDialogo === 'modificar-limite' && 'Actualizar LÃ­mite'}
+                {tipoDialogo === 'bloquear' && 'Bloquear CrÃ©dito'}
                 {tipoDialogo === 'estado-cuenta' && 'Generar Estado'}
                 {tipoDialogo === 'registrar-pago' && 'Registrar Pago'}
                 {tipoDialogo === 'registrar-abono' && 'Registrar Abono'}
@@ -2621,12 +2669,12 @@ export default function CreditosAbonosPage() {
         <DialogContent>
           {pagoSeleccionadoDetalle && (
             <Box sx={{ mt: 2 }}>
-              {/* Información del Cliente */}
+              {/* InformaciÃ³n del Cliente */}
               <Card variant="outlined" sx={{ mb: 3 }}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <PersonIcon />
-                    Información del Cliente
+                    InformaciÃ³n del Cliente
                   </Typography>
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
@@ -2641,7 +2689,7 @@ export default function CreditosAbonosPage() {
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="body2" color="text.secondary">
-                        Teléfono
+                        TelÃ©fono
                       </Typography>
                       <Typography variant="body1">
                         {pagoSeleccionadoDetalle.cliente?.telefono || 'N/A'}
@@ -2651,17 +2699,17 @@ export default function CreditosAbonosPage() {
                 </CardContent>
               </Card>
 
-              {/* Información del Pago */}
+              {/* InformaciÃ³n del Pago */}
               <Card variant="outlined" sx={{ mb: 3 }}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <PaymentIcon />
-                    Información del Pago
+                    InformaciÃ³n del Pago
                   </Typography>
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="body2" color="text.secondary">
-                        Número de Nota
+                        NÃºmero de Nota
                       </Typography>
                       <Typography variant="body1" fontWeight="bold">
                         {pagoSeleccionadoDetalle.notaCredito?.numeroNota || 'Abono general'}
@@ -2672,7 +2720,7 @@ export default function CreditosAbonosPage() {
                         Tipo de Pago
                       </Typography>
                       <Chip
-                        label={pagoSeleccionadoDetalle.tipo === 'nota_especifica' ? 'Nota Específica' : 'Abono General'}
+                        label={pagoSeleccionadoDetalle.tipo === 'nota_especifica' ? 'Nota EspecÃ­fica' : 'Abono General'}
                         color={pagoSeleccionadoDetalle.tipo === 'nota_especifica' ? 'primary' : 'secondary'}
                         size="small"
                       />
@@ -2735,7 +2783,7 @@ export default function CreditosAbonosPage() {
                       <Table size="small">
                         <TableHead>
                           <TableRow>
-                            <TableCell>Método</TableCell>
+                            <TableCell>MÃ©todo</TableCell>
                             <TableCell align="right">Monto</TableCell>
                             <TableCell>Referencia</TableCell>
                             <TableCell>Banco</TableCell>
@@ -2775,12 +2823,12 @@ export default function CreditosAbonosPage() {
                 </Card>
               )}
 
-              {/* Información de Registro */}
+              {/* InformaciÃ³n de Registro */}
               <Card variant="outlined" sx={{ mb: 3 }}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <HistoryIcon />
-                    Información de Registro
+                    InformaciÃ³n de Registro
                   </Typography>
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
@@ -2803,7 +2851,7 @@ export default function CreditosAbonosPage() {
                     )}
                     <Grid item xs={12} sm={6}>
                       <Typography variant="body2" color="text.secondary">
-                        Fecha de Creación
+                        Fecha de CreaciÃ³n
                       </Typography>
                       <Typography variant="body1">
                         {new Date(pagoSeleccionadoDetalle.fechaCreacion).toLocaleDateString('es-MX', {
@@ -2817,7 +2865,7 @@ export default function CreditosAbonosPage() {
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="body2" color="text.secondary">
-                        Última Modificación
+                        Ãltima ModificaciÃ³n
                       </Typography>
                       <Typography variant="body1">
                         {new Date(pagoSeleccionadoDetalle.fechaModificacion).toLocaleDateString('es-MX', {
@@ -2863,12 +2911,90 @@ export default function CreditosAbonosPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Vista de Clientes Duplicados */}
+      {/* Vista Pagos SBC */}
+      {vistaActual === 'pagos-sbc' && (
+        <Box>
+          <Typography variant='h6' gutterBottom>
+            Pagos SBC — Salvo Buen Cobro
+          </Typography>
+          <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
+            Pedidos entregados con pago por transferencia, cheque o depósito pendientes de confirmación bancaria.
+          </Typography>
+          {loadingSBC && <LinearProgress sx={{ mb: 2 }} />}
+          <Button variant='outlined' size='small' onClick={cargarPedidosSBC} sx={{ mb: 2 }}>
+            Actualizar lista
+          </Button>
+          {pedidosSBC.length === 0 && !loadingSBC ? (
+            <Alert severity='success'>No hay pagos SBC pendientes de confirmación.</Alert>
+          ) : (
+            <TableContainer component={Paper} variant='outlined'>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Pedido</TableCell>
+                    <TableCell>Cliente</TableCell>
+                    <TableCell>Ruta / Repartidor</TableCell>
+                    <TableCell>Tipo</TableCell>
+                    <TableCell align='right'>Monto</TableCell>
+                    <TableCell align='center'>Días Pendiente</TableCell>
+                    <TableCell align='center'>Acciones</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {pedidosSBC.map((p) => (
+                    <TableRow key={p.id} hover sx={{ bgcolor: p.urgente ? '#fff3e0' : 'inherit' }}>
+                      <TableCell>
+                        <Typography variant='subtitle2' fontWeight='bold'>{p.numeroPedido}</Typography>
+                        <Typography variant='caption' color='text.secondary'>{new Date(p.fechaPedido).toLocaleDateString('es-MX')}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant='subtitle2'>{p.cliente}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant='body2'>{p.ruta}</Typography>
+                        <Typography variant='caption' color='text.secondary'>{p.repartidor}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={p.tipoServicio === 'pipas' ? 'PIPA' : 'CILINDRO'} size='small' color={p.tipoServicio === 'pipas' ? 'primary' : 'warning'} />
+                      </TableCell>
+                      <TableCell align='right'>
+                        <Typography variant='h6' color='primary'>${p.ventaTotal.toLocaleString()}</Typography>
+                      </TableCell>
+                      <TableCell align='center'>
+                        <Chip
+                          label={p.diasPendiente + (p.diasPendiente === 1 ? ' día' : ' días')}
+                          color={p.urgente ? 'error' : 'default'}
+                          size='small'
+                        />
+                      </TableCell>
+                      <TableCell align='center'>
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <Tooltip title='Confirmar pago recibido'>
+                            <IconButton size='small' color='success' onClick={() => confirmarSBC(p.id, 'confirmado')} disabled={saving}>
+                              <CheckCircleIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title='Rechazar / no recibido'>
+                            <IconButton size='small' color='error' onClick={() => confirmarSBC(p.id, 'rechazado')} disabled={saving}>
+                              <CancelIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </Box>
+      )}
+      {/* Vista de Clientes Duplicados */
       {vistaActual === 'clientes-duplicados' && (
         <Box>
-          <Typography variant="h6" gutterBottom>Unificación de Clientes Duplicados</Typography>
+          <Typography variant="h6" gutterBottom>UnificaciÃ³n de Clientes Duplicados</Typography>
           {loadingDuplicados ? <LinearProgress /> : clientesDuplicados.length === 0 ? (
-            <Alert severity="info">No se encontraron clientes duplicados (por tener nombre y apellidos idénticos).</Alert>
+            <Alert severity="info">No se encontraron clientes duplicados (por tener nombre y apellidos idÃ©nticos).</Alert>
           ) : (
             <Box>
               <Grid container spacing={3}>
@@ -2886,7 +3012,7 @@ export default function CreditosAbonosPage() {
                             Grupo {idx + 1}: {grupo[0].nombre} {grupo[0].apellidoPaterno} {grupo[0].apellidoMaterno}
                           </Typography>
                           <Typography variant="body2" color="text.secondary" gutterBottom>
-                            Seleccione LA CUENTA PRINCIPAL a conservar (las demás se unificarán a ésta y desaparecerán).
+                            Seleccione LA CUENTA PRINCIPAL a conservar (las demÃ¡s se unificarÃ¡n a Ã©sta y desaparecerÃ¡n).
                           </Typography>
                           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
                             {grupo.map(cliente => (
@@ -2897,7 +3023,7 @@ export default function CreditosAbonosPage() {
                                 />
                                 <Box sx={{ flex: 1 }}>
                                   <Typography fontWeight="bold">Email: {cliente.email || 'N/A'}</Typography>
-                                  <Typography variant="body2">Tel: {cliente.telefono || 'N/A'} · Domicilio: {cliente.calle} {cliente.numeroExterior}</Typography>
+                                  <Typography variant="body2">Tel: {cliente.telefono || 'N/A'} Â· Domicilio: {cliente.calle} {cliente.numeroExterior}</Typography>
                                   <Typography variant="body2" color="error" fontWeight="bold">Saldo: ${cliente.saldoActual.toLocaleString()}</Typography>
                                 </Box>
                                 <Chip label={pId === cliente.id ? "Principal" : "A unificar"} color={pId === cliente.id ? "primary" : "default"} />
@@ -2926,7 +3052,7 @@ export default function CreditosAbonosPage() {
                   setPageDuplicados(0);
                 }}
                 rowsPerPageOptions={[5, 10, 25, 50]}
-                labelRowsPerPage="Grupos por página"
+                labelRowsPerPage="Grupos por pÃ¡gina"
                 labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
               />
             </Box>
