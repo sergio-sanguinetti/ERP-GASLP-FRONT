@@ -17,7 +17,11 @@ import {
   type Usuario,
   type Sede,
   type Ruta,
-  type FormaPago
+  type FormaPago,
+  pedidosAPI,
+  configuracionTicketsAPI,
+  type Pedido,
+  type ConfiguracionTicket
 } from '@/lib/api'
 import { 
   Box, 
@@ -96,7 +100,9 @@ import {
   Group as GroupIcon,
   SwapHoriz as SwapHorizIcon,
   Cancel as CancelIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  Receipt as ReceiptIcon,
+  LocalAtm as LocalAtmIcon
 } from '@mui/icons-material'
 
 // Tipos de datos (usando los de la API)
@@ -213,6 +219,11 @@ export default function CreditosAbonosPage() {
   const [tipoAccionSbc, setTipoAccionSbc] = useState<'oficina' | 'sanluis' | 'rechazar'>('oficina')
   const [folioConfSbc, setFolioConfSbc] = useState('')
   const [notaConfSbc, setNotaConfSbc] = useState('')
+  const [ticketSbcAbierto, setTicketSbcAbierto] = useState(false)
+  const [pedidoTicketSbc, setPedidoTicketSbc] = useState<Pedido | null>(null)
+  const [htmlTicketSbc, setHtmlTicketSbc] = useState('')
+  const [loadingTicketSbc, setLoadingTicketSbc] = useState(false)
+  const [kpisSbc, setKpisSbc] = useState({ totalPendiente: 0, totalPendienteCount: 0, totalConfOficina: 0, totalConfSanLuis: 0, transferencia: 0, cheque: 0, deposito: 0 })
   const [rutas, setRutas] = useState<Ruta[]>([])
   const [formasPagoDisponibles, setFormasPagoDisponibles] = useState<FormaPago[]>([])
   const [usuario, setUsuario] = useState<Usuario | null>(null)
@@ -282,15 +293,62 @@ export default function CreditosAbonosPage() {
   const cargarPedidosSBC = async (estado?: string) => {
     try {
       setLoadingSBC(true)
+      // Cargar siempre todos para calcular KPIs, filtrar en frontend
       const params = new URLSearchParams()
-      if (estado || filtroEstadoSbc) params.append('estado', estado || filtroEstadoSbc)
+      params.append('estado', 'todos')
       if (sedeId) params.append('sedeId', sedeId)
       const res = await fetchSbc('/sbc/?' + params.toString())
       if (!res.ok) throw new Error('Error al cargar pagos SBC')
-      const data = await res.json()
+      const data: any[] = await res.json()
       setPedidosSBC(Array.isArray(data) ? data : [])
+      // Calcular KPIs
+      const pendientes = data.filter(p => !p.estadoSbc || p.estadoSbc === 'pendiente')
+      const confOficina = data.filter(p => p.estadoSbc === 'confirmado_oficina')
+      const confSanLuis = data.filter(p => p.estadoSbc === 'confirmado_sanluis')
+      setKpisSbc({
+        totalPendiente: pendientes.reduce((s, p) => s + (p.monto || 0), 0),
+        totalPendienteCount: pendientes.length,
+        totalConfOficina: confOficina.reduce((s, p) => s + (p.monto || 0), 0),
+        totalConfSanLuis: confSanLuis.reduce((s, p) => s + (p.monto || 0), 0),
+        transferencia: data.filter(p => p.metodoPago === 'TRANSFERENCIA' && (!p.estadoSbc || p.estadoSbc === 'pendiente')).length,
+        cheque: data.filter(p => p.metodoPago === 'CHEQUE' && (!p.estadoSbc || p.estadoSbc === 'pendiente')).length,
+        deposito: data.filter(p => p.metodoPago === 'DEPOSITO' && (!p.estadoSbc || p.estadoSbc === 'pendiente')).length,
+      })
+      // Aplicar filtro de estado si hay
+      const estadoFiltro = estado || filtroEstadoSbc
+      if (estadoFiltro && estadoFiltro !== 'todos') {
+        // Filter is handled in the UI rendering
+      }
     } catch (e: any) { setError(e.message) }
     finally { setLoadingSBC(false) }
+  }
+
+  const abrirTicketSbc = async (pedidoId: string) => {
+    try {
+      setLoadingTicketSbc(true)
+      setTicketSbcAbierto(true)
+      const pedido = await pedidosAPI.getById(pedidoId)
+      setPedidoTicketSbc(pedido)
+      let config: ConfiguracionTicket
+      try { config = await configuracionTicketsAPI.get('venta') }
+      catch { config = { id: '', tipoTicket: 'venta', nombreEmpresa: 'GAS PROVIDENCIA', razonSocial: '', direccion: '', telefono: '', email: '', sitioWeb: '', rfc: '', logo: '', mostrarLogo: false, tamañoLogo: 'mediano', redesSociales: {}, mostrarRedesSociales: false, textos: { encabezado: '', piePagina: '', mostrarMensaje: false }, diseño: { mostrarFecha: true, mostrarHora: true, mostrarCajero: true, mostrarCliente: true, colorPrincipal: '#1976d2', alineacion: 'centro' }, urlQR: '', activo: true, fechaCreacion: '', fechaModificacion: '' } }
+      // Generate simple HTML ticket for SBC context
+      const html = `<html><body style="font-family:monospace;font-size:12px;max-width:300px;margin:0 auto;padding:16px">
+        <h3 style="text-align:center">${config.nombreEmpresa || 'GAS PROVIDENCIA'}</h3>
+        <hr/>
+        <p><b>Folio:</b> ${pedido.numeroPedido}</p>
+        <p><b>Cliente:</b> ${pedido.cliente ? (pedido.cliente as any).nombre + ' ' + ((pedido.cliente as any).apellidoPaterno || '') : 'N/A'}</p>
+        <p><b>Fecha:</b> ${pedido.fechaPedido ? new Date(pedido.fechaPedido).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' }) : ''}</p>
+        <p><b>Tipo:</b> ${pedido.tipoServicio === 'pipas' ? 'PIPA' : 'CILINDROS'}</p>
+        <hr/>
+        <p><b>Formas de pago:</b></p>
+        ${(pedido.pagos || []).map((p: any) => `<p>• ${p.metodo?.nombre || p.tipo}: $${p.monto?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}${p.folio ? ' (Ref: ' + p.folio + ')' : ''}</p>`).join('')}
+        <hr/>
+        <p style="text-align:right"><b>Total: $${pedido.ventaTotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b></p>
+      </body></html>`
+      setHtmlTicketSbc(html)
+    } catch (e: any) { setError('Error al cargar ticket: ' + e.message) }
+    finally { setLoadingTicketSbc(false) }
   }
 
   const abrirModalSbc = (pago: any, accion: 'oficina' | 'sanluis' | 'rechazar') => {
@@ -2941,15 +2999,64 @@ export default function CreditosAbonosPage() {
 
       {vistaActual === 'pagos-sbc' && (
         <Box>
+          {/* Mini Dashboard KPIs */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={6} sm={3}>
+              <Card sx={{ bgcolor: 'warning.50', border: '1px solid', borderColor: 'warning.200' }}>
+                <CardContent sx={{ pb: '12px !important' }}>
+                  <Typography variant='caption' color='warning.dark' fontWeight='bold'>POR CONFIRMAR</Typography>
+                  <Typography variant='h5' fontWeight='bold' color='warning.dark'>
+                    ${kpisSbc.totalPendiente.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </Typography>
+                  <Typography variant='caption' color='warning.dark'>{kpisSbc.totalPendienteCount} pagos</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Card sx={{ bgcolor: 'info.50', border: '1px solid', borderColor: 'info.200' }}>
+                <CardContent sx={{ pb: '12px !important' }}>
+                  <Typography variant='caption' color='info.dark' fontWeight='bold'>CONF. OFICINA</Typography>
+                  <Typography variant='h5' fontWeight='bold' color='info.dark'>
+                    ${kpisSbc.totalConfOficina.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </Typography>
+                  <Typography variant='caption' color='info.dark'>Esperando San Luis</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Card sx={{ bgcolor: 'success.50', border: '1px solid', borderColor: 'success.200' }}>
+                <CardContent sx={{ pb: '12px !important' }}>
+                  <Typography variant='caption' color='success.dark' fontWeight='bold'>CONFIRMADO</Typography>
+                  <Typography variant='h5' fontWeight='bold' color='success.dark'>
+                    ${kpisSbc.totalConfSanLuis.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </Typography>
+                  <Typography variant='caption' color='success.dark'>San Luis validó</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Card sx={{ bgcolor: 'background.default' }}>
+                <CardContent sx={{ pb: '12px !important' }}>
+                  <Typography variant='caption' color='text.secondary' fontWeight='bold'>PENDIENTES POR TIPO</Typography>
+                  <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
+                    <Chip label={`Transf. ${kpisSbc.transferencia}`} size='small' sx={{ bgcolor: '#1565c0', color: 'white', fontWeight: 'bold' }} />
+                    <Chip label={`Cheque ${kpisSbc.cheque}`} size='small' sx={{ bgcolor: '#e65100', color: 'white', fontWeight: 'bold' }} />
+                    <Chip label={`Depós. ${kpisSbc.deposito}`} size='small' sx={{ bgcolor: '#37474f', color: 'white', fontWeight: 'bold' }} />
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
           {/* Filtros */}
-          <Card sx={{ mb: 3 }}>
+          <Card sx={{ mb: 2 }}>
             <CardContent sx={{ pb: '12px !important' }}>
               <Grid container spacing={2} alignItems='center'>
                 <Grid item xs={12} sm={4} md={3}>
                   <FormControl fullWidth size='small'>
                     <InputLabel>Estado</InputLabel>
                     <Select value={filtroEstadoSbc} label='Estado'
-                      onChange={e => { setFiltroEstadoSbc(e.target.value); cargarPedidosSBC(e.target.value); }}>
+                      onChange={e => setFiltroEstadoSbc(e.target.value)}>
                       <MenuItem value='pendiente'>Pendientes</MenuItem>
                       <MenuItem value='confirmado_oficina'>Confirmado Oficina</MenuItem>
                       <MenuItem value='confirmado_sanluis'>Confirmado San Luis</MenuItem>
@@ -2959,176 +3066,178 @@ export default function CreditosAbonosPage() {
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} sm={5} md={4}>
-                  <TextField fullWidth size='small' placeholder='Buscar cliente, pedido, ruta...'
+                  <TextField fullWidth size='small' placeholder='Buscar cliente, pedido, ruta, operador...'
                     value={filtroBusquedaSbc}
                     onChange={e => setFiltroBusquedaSbc(e.target.value)}
-                    InputProps={{ startAdornment: <InputAdornment position='start'><SearchIcon /></InputAdornment> }} />
+                    InputProps={{ startAdornment: <InputAdornment position='start'><SearchIcon fontSize='small' /></InputAdornment> }} />
                 </Grid>
-                <Grid item xs={12} sm={3} md={2}>
-                  <Button variant='outlined' size='small' onClick={() => cargarPedidosSBC()} disabled={loadingSBC}>
-                    Actualizar
+                <Grid item xs={6} sm={3} md={2}>
+                  <Button variant='outlined' size='small' fullWidth onClick={() => cargarPedidosSBC()} disabled={loadingSBC}>
+                    {loadingSBC ? 'Cargando...' : 'Actualizar'}
                   </Button>
                 </Grid>
               </Grid>
             </CardContent>
           </Card>
 
-          {loadingSBC && <LinearProgress sx={{ mb: 2 }} />}
+          {loadingSBC && <LinearProgress sx={{ mb: 1 }} />}
 
-          {pedidosSBC.filter(p => {
-            if (!filtroBusquedaSbc.trim()) return true
-            const b = filtroBusquedaSbc.toLowerCase()
-            return p.cliente?.toLowerCase().includes(b) || p.numeroPedido?.toLowerCase().includes(b) || p.ruta?.toLowerCase().includes(b) || p.repartidor?.toLowerCase().includes(b)
-          }).length === 0 && !loadingSBC ? (
-            <Alert severity='info'>No hay pagos SBC para el filtro seleccionado.</Alert>
-          ) : (
-            <Card>
-              <TableContainer>
-                <Table size='small'>
-                  <TableHead>
-                    <TableRow sx={{ bgcolor: 'background.default' }}>
-                      <TableCell><Typography variant='caption' fontWeight='bold'>Pedido</Typography></TableCell>
-                      <TableCell><Typography variant='caption' fontWeight='bold'>Cliente</Typography></TableCell>
-                      <TableCell><Typography variant='caption' fontWeight='bold'>Ruta / Operador</Typography></TableCell>
-                      <TableCell><Typography variant='caption' fontWeight='bold'>Método</Typography></TableCell>
-                      <TableCell><Typography variant='caption' fontWeight='bold'>Folio</Typography></TableCell>
-                      <TableCell align='right'><Typography variant='caption' fontWeight='bold'>Monto</Typography></TableCell>
-                      <TableCell><Typography variant='caption' fontWeight='bold'>Fecha</Typography></TableCell>
-                      <TableCell><Typography variant='caption' fontWeight='bold'>Estado / Quién</Typography></TableCell>
-                      <TableCell><Typography variant='caption' fontWeight='bold'>Observación</Typography></TableCell>
-                      <TableCell align='center'><Typography variant='caption' fontWeight='bold'>Acciones</Typography></TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {pedidosSBC
-                      .filter(p => {
-                        if (!filtroBusquedaSbc.trim()) return true
-                        const b = filtroBusquedaSbc.toLowerCase()
-                        return p.cliente?.toLowerCase().includes(b) || p.numeroPedido?.toLowerCase().includes(b) || p.ruta?.toLowerCase().includes(b) || p.repartidor?.toLowerCase().includes(b)
-                      })
-                      .map((p) => (
-                      <TableRow key={p.id} hover
-                        sx={{ borderLeft: '3px solid', borderLeftColor: p.estadoSbc === 'rechazado' ? 'error.main' : p.estadoSbc === 'confirmado_sanluis' ? 'success.main' : p.estadoSbc === 'confirmado_oficina' ? 'info.main' : 'warning.main' }}>
-                        <TableCell>
-                          <Typography variant='caption' fontWeight='bold' color='primary' sx={{ cursor: 'pointer' }}>
-                            {p.numeroPedido}
-                          </Typography>
-                          <Typography variant='caption' display='block' color='text.secondary'>
-                            <Chip label={p.tipoServicio === 'pipas' ? 'PIPA' : 'CIL'} size='small'
-                              sx={{ fontSize: 9, height: 16, bgcolor: p.tipoServicio === 'pipas' ? 'primary.light' : 'warning.light', color: p.tipoServicio === 'pipas' ? 'primary.dark' : 'warning.dark' }} />
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='caption' fontWeight='bold'>{p.cliente}</Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='caption' display='block'>{p.ruta}</Typography>
-                          <Typography variant='caption' color='text.secondary'>{p.repartidor}</Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip label={p.metodoPago} size='small'
-                            sx={{ fontWeight: 'bold', fontSize: 10,
-                              bgcolor: p.metodoPago === 'TRANSFERENCIA' ? '#1565c0' : p.metodoPago === 'CHEQUE' ? '#e65100' : '#37474f',
-                              color: 'white' }} />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='caption' fontWeight={p.folioConfirmado ? 'bold' : 'normal'}>
-                            {p.folioConfirmado || p.folioOriginal || '—'}
-                          </Typography>
-                          {p.folioConfirmado && p.folioOriginal && p.folioConfirmado !== p.folioOriginal && (
-                            <Typography variant='caption' color='text.secondary' display='block' sx={{ textDecoration: 'line-through' }}>
-                              {p.folioOriginal}
-                            </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell align='right'>
-                          <Typography variant='body2' fontWeight='bold' color='primary.main'>
-                            ${p.monto?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='caption'>
-                            {p.fechaPedido ? new Date(p.fechaPedido).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={{ minWidth: 140 }}>
-                          {(p.estadoSbc === 'pendiente' || !p.estadoSbc) ? (
-                            <Chip label='Pendiente' size='small' color='warning' sx={{ fontWeight: 'bold' }} />
-                          ) : p.estadoSbc === 'confirmado_oficina' ? (
-                            <Box>
-                              <Chip label='Conf. Oficina' size='small' color='info' sx={{ fontWeight: 'bold', mb: 0.5 }} />
-                              <Typography variant='caption' color='text.secondary' display='block'>
-                                {p.confirmadoPorOficina}
-                              </Typography>
-                              {p.fechaConfOficina && (
-                                <Typography variant='caption' color='text.disabled' display='block'>
-                                  {new Date(p.fechaConfOficina).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: '2-digit' })}
-                                </Typography>
-                              )}
-                            </Box>
-                          ) : p.estadoSbc === 'confirmado_sanluis' ? (
-                            <Box>
-                              <Chip label='✓ San Luis' size='small' color='success' sx={{ fontWeight: 'bold', mb: 0.5 }} />
-                              <Typography variant='caption' color='text.secondary' display='block'>
-                                {p.confirmadoPorSanLuis}
-                              </Typography>
-                              {p.fechaConfSanLuis && (
-                                <Typography variant='caption' color='text.disabled' display='block'>
-                                  {new Date(p.fechaConfSanLuis).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: '2-digit' })}
-                                </Typography>
-                              )}
-                            </Box>
-                          ) : (
-                            <Box>
-                              <Chip label='Rechazado' size='small' color='error' sx={{ fontWeight: 'bold', mb: 0.5 }} />
-                              <Typography variant='caption' color='text.secondary' display='block'>
-                                {p.confirmadoPorOficina}
-                              </Typography>
-                            </Box>
-                          )}
-                        </TableCell>
-                        <TableCell sx={{ maxWidth: 160 }}>
-                          {p.notaConfirmacion ? (
-                            <Typography variant='caption' color='text.secondary'
-                              sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                              {p.notaConfirmacion}
-                            </Typography>
-                          ) : (
-                            <Typography variant='caption' color='text.disabled'>—</Typography>
-                          )}
-                        </TableCell>
-                        <TableCell align='center'>
-                          <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                            {(p.estadoSbc === 'pendiente' || !p.estadoSbc) && (
-                              <Tooltip title='Confirmar — Oficina DH'>
-                                <IconButton size='small' sx={{ color: 'info.main' }} onClick={() => abrirModalSbc(p, 'oficina')}>
-                                  <CheckCircleIcon fontSize='small' />
-                                </IconButton>
-                              </Tooltip>
-                            )}
-                            {p.estadoSbc === 'confirmado_oficina' && ['superAdministrador', 'administrador'].includes(usuario?.rol || '') && (
-                              <Tooltip title='Confirmar — San Luis (Admin)'>
-                                <IconButton size='small' sx={{ color: 'success.main' }} onClick={() => abrirModalSbc(p, 'sanluis')}>
-                                  <CheckCircleIcon fontSize='small' />
-                                </IconButton>
-                              </Tooltip>
-                            )}
-                            {(p.estadoSbc === 'pendiente' || !p.estadoSbc || p.estadoSbc === 'confirmado_oficina') && (
-                              <Tooltip title='Rechazar'>
-                                <IconButton size='small' sx={{ color: 'error.main' }} onClick={() => abrirModalSbc(p, 'rechazar')}>
-                                  <CancelIcon fontSize='small' />
-                                </IconButton>
-                              </Tooltip>
-                            )}
-                          </Box>
-                        </TableCell>
+          {/* Tabla */}
+          {(() => {
+            const filtrados = pedidosSBC.filter(p => {
+              const estadoOk = filtroEstadoSbc === 'todos' ? true
+                : filtroEstadoSbc === 'pendiente' ? (!p.estadoSbc || p.estadoSbc === 'pendiente')
+                : p.estadoSbc === filtroEstadoSbc
+              if (!estadoOk) return false
+              if (!filtroBusquedaSbc.trim()) return true
+              const b = filtroBusquedaSbc.toLowerCase()
+              return p.cliente?.toLowerCase().includes(b) || p.numeroPedido?.toLowerCase().includes(b) || p.ruta?.toLowerCase().includes(b) || p.repartidor?.toLowerCase().includes(b)
+            })
+            if (filtrados.length === 0 && !loadingSBC) return (
+              <Alert severity='info'>No hay pagos SBC para el filtro seleccionado.</Alert>
+            )
+            return (
+              <Card>
+                <TableContainer>
+                  <Table size='small'>
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: 'background.default' }}>
+                        <TableCell sx={{ width: 32 }}></TableCell>
+                        <TableCell><Typography variant='caption' fontWeight='bold'>Pedido</Typography></TableCell>
+                        <TableCell><Typography variant='caption' fontWeight='bold'>Cliente</Typography></TableCell>
+                        <TableCell><Typography variant='caption' fontWeight='bold'>Ruta / Operador</Typography></TableCell>
+                        <TableCell><Typography variant='caption' fontWeight='bold'>Método / Folio</Typography></TableCell>
+                        <TableCell align='right'><Typography variant='caption' fontWeight='bold'>Monto SBC</Typography></TableCell>
+                        <TableCell><Typography variant='caption' fontWeight='bold'>Otros pagos</Typography></TableCell>
+                        <TableCell><Typography variant='caption' fontWeight='bold'>Fecha</Typography></TableCell>
+                        <TableCell sx={{ minWidth: 130 }}><Typography variant='caption' fontWeight='bold'>Estado / Quién</Typography></TableCell>
+                        <TableCell sx={{ maxWidth: 140 }}><Typography variant='caption' fontWeight='bold'>Observación</Typography></TableCell>
+                        <TableCell align='center'><Typography variant='caption' fontWeight='bold'>Acciones</Typography></TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Card>
-          )}
+                    </TableHead>
+                    <TableBody>
+                      {filtrados.map((p) => (
+                        <TableRow key={p.id} hover sx={{ borderLeft: '3px solid', borderLeftColor: p.estadoSbc === 'rechazado' ? 'error.main' : p.estadoSbc === 'confirmado_sanluis' ? 'success.main' : p.estadoSbc === 'confirmado_oficina' ? 'info.main' : 'warning.main' }}>
+                          <TableCell sx={{ p: 0.5 }}>
+                            <Tooltip title='Ver ticket'>
+                              <IconButton size='small' onClick={() => abrirTicketSbc(p.pedidoId)}>
+                                <ReceiptIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant='caption' fontWeight='bold'>{p.numeroPedido}</Typography>
+                            <Box sx={{ mt: 0.3 }}>
+                              <Chip label={p.tipoServicio === 'pipas' ? 'PIPA' : 'CIL'} size='small'
+                                sx={{ fontSize: 9, height: 16, bgcolor: p.tipoServicio === 'pipas' ? 'primary.light' : 'warning.light', color: p.tipoServicio === 'pipas' ? 'primary.dark' : 'warning.dark' }} />
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant='caption' fontWeight='bold'>{p.cliente}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant='caption' display='block'>{p.ruta}</Typography>
+                            <Typography variant='caption' color='text.secondary'>{p.repartidor}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip label={p.metodoPago} size='small'
+                              sx={{ fontWeight: 'bold', fontSize: 10, mb: 0.5,
+                                bgcolor: p.metodoPago === 'TRANSFERENCIA' ? '#1565c0' : p.metodoPago === 'CHEQUE' ? '#e65100' : '#37474f',
+                                color: 'white' }} />
+                            <Typography variant='caption' display='block' color={p.folioConfirmado ? 'primary.main' : 'text.secondary'} fontWeight={p.folioConfirmado ? 'bold' : 'normal'}>
+                              {p.folioConfirmado || p.folioOriginal || '—'}
+                            </Typography>
+                            {p.folioConfirmado && p.folioOriginal && p.folioConfirmado !== p.folioOriginal && (
+                              <Typography variant='caption' color='text.disabled' sx={{ textDecoration: 'line-through' }}>{p.folioOriginal}</Typography>
+                            )}
+                          </TableCell>
+                          <TableCell align='right'>
+                            <Typography variant='body2' fontWeight='bold' color='primary.main'>
+                              ${p.monto?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                            </Typography>
+                          </TableCell>
+                          <TableCell sx={{ maxWidth: 120 }}>
+                            {p.ventaTotal && p.monto && Math.abs(p.ventaTotal - p.monto) > 1 ? (
+                              <Box>
+                                <Typography variant='caption' color='success.main' fontWeight='bold'>
+                                  + ${(p.ventaTotal - p.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })} efectivo
+                                </Typography>
+                                <Typography variant='caption' color='text.disabled' display='block'>
+                                  Total: ${p.ventaTotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                </Typography>
+                              </Box>
+                            ) : (
+                              <Typography variant='caption' color='text.disabled'>—</Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant='caption'>
+                              {p.fechaPedido ? new Date(p.fechaPedido).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            {(!p.estadoSbc || p.estadoSbc === 'pendiente') ? (
+                              <Chip label='Pendiente' size='small' color='warning' sx={{ fontWeight: 'bold' }} />
+                            ) : p.estadoSbc === 'confirmado_oficina' ? (
+                              <Box>
+                                <Chip label='Conf. Oficina' size='small' color='info' sx={{ fontWeight: 'bold', mb: 0.3 }} />
+                                <Typography variant='caption' color='text.secondary' display='block'>{p.confirmadoPorOficina}</Typography>
+                                {p.fechaConfOficina && <Typography variant='caption' color='text.disabled' display='block'>{new Date(p.fechaConfOficina).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: '2-digit' })}</Typography>}
+                              </Box>
+                            ) : p.estadoSbc === 'confirmado_sanluis' ? (
+                              <Box>
+                                <Chip label='✓ San Luis' size='small' color='success' sx={{ fontWeight: 'bold', mb: 0.3 }} />
+                                <Typography variant='caption' color='text.secondary' display='block'>{p.confirmadoPorSanLuis}</Typography>
+                                {p.fechaConfSanLuis && <Typography variant='caption' color='text.disabled' display='block'>{new Date(p.fechaConfSanLuis).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: '2-digit' })}</Typography>}
+                              </Box>
+                            ) : (
+                              <Box>
+                                <Chip label='Rechazado' size='small' color='error' sx={{ fontWeight: 'bold', mb: 0.3 }} />
+                                <Typography variant='caption' color='text.secondary' display='block'>{p.confirmadoPorOficina}</Typography>
+                              </Box>
+                            )}
+                          </TableCell>
+                          <TableCell sx={{ maxWidth: 140 }}>
+                            {p.notaConfirmacion ? (
+                              <Typography variant='caption' color='text.secondary'
+                                sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                {p.notaConfirmacion}
+                              </Typography>
+                            ) : <Typography variant='caption' color='text.disabled'>—</Typography>}
+                          </TableCell>
+                          <TableCell align='center'>
+                            <Box sx={{ display: 'flex', gap: 0.3, justifyContent: 'center' }}>
+                              {(!p.estadoSbc || p.estadoSbc === 'pendiente') && (
+                                <Tooltip title='Confirmar — Oficina'>
+                                  <IconButton size='small' sx={{ color: 'info.main' }} onClick={() => abrirModalSbc(p, 'oficina')}>
+                                    <CheckCircleIcon sx={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              {p.estadoSbc === 'confirmado_oficina' && ['superAdministrador', 'administrador'].includes(usuario?.rol || '') && (
+                                <Tooltip title='Confirmar — San Luis'>
+                                  <IconButton size='small' sx={{ color: 'success.main' }} onClick={() => abrirModalSbc(p, 'sanluis')}>
+                                    <CheckCircleIcon sx={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              {(!p.estadoSbc || p.estadoSbc === 'pendiente' || p.estadoSbc === 'confirmado_oficina') && (
+                                <Tooltip title='Rechazar'>
+                                  <IconButton size='small' sx={{ color: 'error.main' }} onClick={() => abrirModalSbc(p, 'rechazar')}>
+                                    <CancelIcon sx={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Card>
+            )
+          })()}
 
           {/* Modal confirmar/rechazar SBC */}
           <Dialog open={modalSbc} onClose={() => setModalSbc(false)} maxWidth='sm' fullWidth>
@@ -3139,37 +3248,55 @@ export default function CreditosAbonosPage() {
             </DialogTitle>
             <DialogContent>
               {pagoSbcSel && (
-                <Box sx={{ mb: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+                <Box sx={{ mb: 2, p: 1.5, bgcolor: 'background.default', borderRadius: 1 }}>
                   <Typography variant='subtitle2' fontWeight='bold'>{pagoSbcSel.cliente}</Typography>
                   <Typography variant='caption' color='text.secondary'>
                     {pagoSbcSel.numeroPedido} · {pagoSbcSel.metodoPago} · ${pagoSbcSel.monto?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                   </Typography>
+                  {pagoSbcSel.ventaTotal && pagoSbcSel.monto && Math.abs(pagoSbcSel.ventaTotal - pagoSbcSel.monto) > 1 && (
+                    <Typography variant='caption' color='success.main' display='block'>
+                      + ${(pagoSbcSel.ventaTotal - pagoSbcSel.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })} cobrado en efectivo
+                    </Typography>
+                  )}
                 </Box>
               )}
               {tipoAccionSbc === 'oficina' && (
                 <TextField fullWidth size='small' label='Folio / Referencia de confirmación'
-                  value={folioConfSbc}
-                  onChange={e => setFolioConfSbc(e.target.value)}
-                  sx={{ mb: 2 }}
-                  helperText='Puedes modificar o confirmar el folio que mandó el repartidor' />
+                  value={folioConfSbc} onChange={e => setFolioConfSbc(e.target.value)}
+                  sx={{ mb: 2 }} helperText='Puedes confirmar o modificar el folio que mandó el operador' />
               )}
               <TextField fullWidth size='small' multiline rows={2}
-                label={tipoAccionSbc === 'rechazar' ? 'Motivo del rechazo' : 'Nota de confirmación (opcional)'}
-                value={notaConfSbc}
-                onChange={e => setNotaConfSbc(e.target.value)}
-                placeholder={tipoAccionSbc === 'rechazar' ? 'Ej: No se recibió el depósito, el cheque rebotó...' : 'Ej: Confirmado con Gustavo, depósito visto en cuenta...'} />
+                label={tipoAccionSbc === 'rechazar' ? 'Motivo del rechazo' : 'Nota (opcional)'}
+                value={notaConfSbc} onChange={e => setNotaConfSbc(e.target.value)}
+                placeholder={tipoAccionSbc === 'rechazar' ? 'Ej: No se recibió el depósito...' : 'Ej: Confirmado con Gustavo, visto en cuenta...'} />
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setModalSbc(false)}>Cancelar</Button>
-              <Button variant='contained'
-                color={tipoAccionSbc === 'rechazar' ? 'error' : 'primary'}
+              <Button variant='contained' color={tipoAccionSbc === 'rechazar' ? 'error' : 'primary'}
                 onClick={ejecutarAccionSbc} disabled={saving}>
                 {tipoAccionSbc === 'rechazar' ? 'Rechazar' : 'Confirmar'}
               </Button>
             </DialogActions>
           </Dialog>
+
+          {/* Modal ticket SBC */}
+          <Dialog open={ticketSbcAbierto} onClose={() => { setTicketSbcAbierto(false); setPedidoTicketSbc(null); setHtmlTicketSbc('') }} maxWidth='sm' fullWidth>
+            <DialogTitle>Ticket — {pedidoTicketSbc?.numeroPedido}</DialogTitle>
+            <DialogContent>
+              {loadingTicketSbc ? <LinearProgress /> : htmlTicketSbc ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                  <iframe title='Ticket' srcDoc={htmlTicketSbc}
+                    style={{ width: '280px', minHeight: '400px', border: '1px solid #e0e0e0', borderRadius: 4 }} />
+                </Box>
+              ) : null}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => { setTicketSbcAbierto(false); setPedidoTicketSbc(null); setHtmlTicketSbc('') }}>Cerrar</Button>
+            </DialogActions>
+          </Dialog>
         </Box>
       )}
+
 
       {/* Vista de Clientes Duplicados */}
       {vistaActual === 'clientes-duplicados' && (
