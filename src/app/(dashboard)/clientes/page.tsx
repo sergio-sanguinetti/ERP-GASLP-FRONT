@@ -2464,7 +2464,7 @@ export default function ClientesPage() {
                     onChange={e => manejarCambioFormulario('pagosEspecialesAutorizados', e.target.checked)}
                   />
                 }
-                label='Pagos Especiales Autorizados'
+                label='Crédito autorizado'
               />
             </Grid>
 

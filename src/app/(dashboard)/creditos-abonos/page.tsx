@@ -61,7 +61,8 @@ import {
   Badge,
   Tabs,
   Tab,
-  InputAdornment
+  InputAdornment,
+  Radio
 } from '@mui/material'
 import { 
   TrendingUp as TrendingUpIcon,
@@ -91,7 +92,8 @@ import {
   Remove as RemoveIcon,
   Visibility as VisibilityIcon,
   Payment as PaymentIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  Group as GroupIcon
 } from '@mui/icons-material'
 
 // Tipos de datos (usando los de la API)
@@ -163,7 +165,7 @@ interface PagoPendienteAutorizacion {
 }
 
 export default function CreditosAbonosPage() {
-  const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'pagos-pendientes' | 'historial-pagos'>('dashboard')
+  const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'pagos-pendientes' | 'historial-pagos' | 'clientes-duplicados'>('dashboard')
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteCredito | null>(null)
   const refFichaCliente = useRef<HTMLDivElement | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
@@ -247,6 +249,48 @@ export default function CreditosAbonosPage() {
   const [rowsPerPagePagosPendientes, setRowsPerPagePagosPendientes] = useState(10)
   const [pageHistorialPagos, setPageHistorialPagos] = useState(0)
   const [rowsPerPageHistorialPagos, setRowsPerPageHistorialPagos] = useState(10)
+
+  // Clientes duplicados
+  const [clientesDuplicados, setClientesDuplicados] = useState<any[][]>([])
+  const [loadingDuplicados, setLoadingDuplicados] = useState(false)
+  const [principalSel, setPrincipalSel] = useState<Record<number, string>>({})
+  const [pageDuplicados, setPageDuplicados] = useState(0)
+  const [rowsPerPageDuplicados, setRowsPerPageDuplicados] = useState(10)
+
+  const cargarDuplicados = async () => {
+    try {
+      setLoadingDuplicados(true)
+      const data = await clientesAPI.getDuplicados()
+      setClientesDuplicados(data)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setLoadingDuplicados(false)
+    }
+  }
+
+  useEffect(() => {
+    if (vistaActual === 'clientes-duplicados') {
+      cargarDuplicados()
+    }
+  }, [vistaActual])
+
+  const manejarUnificar = async (grupoIndex: number, principalId: string, secundariosIds: string[]) => {
+    if (!principalId || secundariosIds.length === 0) {
+      setError('Seleccione un cliente principal. Asegúrese de que hay al menos 2 clientes para unificar.')
+      return
+    }
+    try {
+      setSaving(true)
+      await clientesAPI.unificar(principalId, secundariosIds)
+      setSuccessMessage('Clientes unificados correctamente')
+      cargarDuplicados()
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   // Mapa ID usuario -> nombre para mostrar en historial de pagos (Registrado por / Autorizado por)
   const [usuariosNombresMapHistorial, setUsuariosNombresMapHistorial] = useState<Map<string, string>>(new Map())
@@ -1103,6 +1147,13 @@ export default function CreditosAbonosPage() {
             startIcon={<HistoryIcon />}
           >
             Historial de Pagos
+          </Button>
+          <Button
+            variant={vistaActual === 'clientes-duplicados' ? 'contained' : 'outlined'}
+            onClick={() => setVistaActual('clientes-duplicados')}
+            startIcon={<GroupIcon />}
+          >
+            Clientes Duplicados
           </Button>
         </Box>
       </Box>
@@ -2811,6 +2862,77 @@ export default function CreditosAbonosPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Vista de Clientes Duplicados */}
+      {vistaActual === 'clientes-duplicados' && (
+        <Box>
+          <Typography variant="h6" gutterBottom>Unificación de Clientes Duplicados</Typography>
+          {loadingDuplicados ? <LinearProgress /> : clientesDuplicados.length === 0 ? (
+            <Alert severity="info">No se encontraron clientes duplicados (por tener nombre y apellidos idénticos).</Alert>
+          ) : (
+            <Box>
+              <Grid container spacing={3}>
+                {clientesDuplicados
+                  .slice(pageDuplicados * rowsPerPageDuplicados, pageDuplicados * rowsPerPageDuplicados + rowsPerPageDuplicados)
+                  .map((grupo, idxLocal) => {
+                  const idx = pageDuplicados * rowsPerPageDuplicados + idxLocal;
+                  const pId = principalSel[idx] || grupo[0].id;
+                  const secIds = grupo.filter(c => c.id !== pId).map(c => c.id);
+                  return (
+                    <Grid item xs={12} key={idx}>
+                      <Card sx={{ border: '2px solid #ed6c02' }}>
+                        <CardContent>
+                          <Typography variant="subtitle1" fontWeight="bold">
+                            Grupo {idx + 1}: {grupo[0].nombre} {grupo[0].apellidoPaterno} {grupo[0].apellidoMaterno}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" gutterBottom>
+                            Seleccione LA CUENTA PRINCIPAL a conservar (las demás se unificarán a ésta y desaparecerán).
+                          </Typography>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+                            {grupo.map(cliente => (
+                              <Box key={cliente.id} sx={{ p: 2, border: '1px solid #ccc', borderRadius: 1, bgcolor: pId === cliente.id ? '#fcf0e3' : 'white', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                <Radio
+                                  checked={pId === cliente.id}
+                                  onChange={() => setPrincipalSel(prev => ({ ...prev, [idx]: cliente.id }))}
+                                />
+                                <Box sx={{ flex: 1 }}>
+                                  <Typography fontWeight="bold">Email: {cliente.email || 'N/A'}</Typography>
+                                  <Typography variant="body2">Tel: {cliente.telefono || 'N/A'} · Domicilio: {cliente.calle} {cliente.numeroExterior}</Typography>
+                                  <Typography variant="body2" color="error" fontWeight="bold">Saldo: ${cliente.saldoActual.toLocaleString()}</Typography>
+                                </Box>
+                                <Chip label={pId === cliente.id ? "Principal" : "A unificar"} color={pId === cliente.id ? "primary" : "default"} />
+                              </Box>
+                            ))}
+                          </Box>
+                          <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                            <Button variant="contained" color="warning" onClick={() => manejarUnificar(idx, pId, secIds)}>
+                              Unificar seleccionados
+                            </Button>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  )
+                })}
+              </Grid>
+              <TablePagination
+                component="div"
+                count={clientesDuplicados.length}
+                page={pageDuplicados}
+                onPageChange={(_, newPage) => setPageDuplicados(newPage)}
+                rowsPerPage={rowsPerPageDuplicados}
+                onRowsPerPageChange={(e) => {
+                  setRowsPerPageDuplicados(parseInt(e.target.value, 10));
+                  setPageDuplicados(0);
+                }}
+                rowsPerPageOptions={[5, 10, 25, 50]}
+                labelRowsPerPage="Grupos por página"
+                labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+              />
+            </Box>
+          )}
+        </Box>
+      )}
     </Box>
   )
 }

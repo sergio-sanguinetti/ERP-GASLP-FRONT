@@ -138,10 +138,14 @@ interface ClienteAnalisis extends Cliente {
 }
 
 export default function VentasPage() {
+<<<<<<< Updated upstream
   const getFechaHoy = () =>
     new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
 
   const [vistaActual, setVistaActual] = useState<'dashboard' | 'catalogo' | 'listado-pedidos' | 'analisis-clientes' | 'categorias'>(
+=======
+  const [vistaActual, setVistaActual] = useState<'dashboard' | 'catalogo' | 'listado-pedidos' | 'analisis-clientes' | 'categorias' | 'por-cobrar'>(
+>>>>>>> Stashed changes
     'dashboard'
   )
 
@@ -1139,7 +1143,11 @@ export default function VentasPage() {
     if (!pedidoACerrar) return
     let cancelled = false
     const filtrarActivas = (list: FormaPago[]) =>
-      (list || []).filter((f) => f.tipo !== 'credito' && f.activa !== false)
+      (list || []).filter((f) => {
+        if (f.tipo === 'credito' || f.activa === false) return false
+        if (vistaActual === 'por-cobrar' && (f.nombre?.toLowerCase() === 'por cobrar' || f.tipo === 'por_cobrar')) return false
+        return true
+      })
     const aplicar = (list: FormaPago[]) => {
       if (cancelled) return
       setFormasPagoCerrar(filtrarActivas(list))
@@ -1164,7 +1172,7 @@ export default function VentasPage() {
         })
       })
     return () => { cancelled = true }
-  }, [pedidoACerrar])
+  }, [pedidoACerrar, vistaActual])
 
   const registrarPagoYCerrarPedido = async () => {
     if (!pedidoACerrar || !usuario) return
@@ -1233,7 +1241,7 @@ export default function VentasPage() {
       await pedidosAPI.delete(pedidoAEliminar.id)
       cerrarDialogoEliminar()
       // Recargar la lista de pedidos
-      if (vistaActual === 'listado-pedidos') {
+      if (vistaActual === 'listado-pedidos' || vistaActual === 'por-cobrar') {
         loadPedidos()
       }
     } catch (err: any) {
@@ -1946,6 +1954,9 @@ export default function VentasPage() {
       })
     })()
 
+    const esPorCobrar = pedido.pagos?.some(p => p.metodo?.tipo === 'por_cobrar' || p.tipo === 'por_cobrar');
+    if (vistaActual === 'por-cobrar' && !esPorCobrar) return false;
+
     return (
       cumpleFechaDesde &&
       cumpleFechaHasta &&
@@ -2063,6 +2074,13 @@ export default function VentasPage() {
             startIcon={<GasMeterIcon />}
           >
             Categorías
+          </Button>
+          <Button
+            variant={vistaActual === 'por-cobrar' ? 'contained' : 'outlined'}
+            onClick={() => setVistaActual('por-cobrar')}
+            startIcon={<AssignmentIcon />}
+          >
+            Ventas por Cobrar
           </Button>
         </Box>
       </Box>
@@ -2929,13 +2947,17 @@ export default function VentasPage() {
       )}
 
       {/* Listado Completo de Pedidos/Ventas */}
-      {vistaActual === 'listado-pedidos' && (
+      {(vistaActual === 'listado-pedidos' || vistaActual === 'por-cobrar') && (
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Typography variant='h6'>Listado Completo de Pedidos/Ventas</Typography>
-            <Button variant='contained' startIcon={<AddIcon />} onClick={() => abrirDialogo('pedido')}>
-              Nuevo Pedido
-            </Button>
+            <Typography variant='h6'>
+              {vistaActual === 'por-cobrar' ? 'Ventas por Cobrar' : 'Listado Completo de Pedidos/Ventas'}
+            </Typography>
+            {vistaActual === 'listado-pedidos' && (
+              <Button variant='contained' startIcon={<AddIcon />} onClick={() => abrirDialogo('pedido')}>
+                Nuevo Pedido
+              </Button>
+            )}
           </Box>
 
           {/* Filtros colapsables */}
@@ -3260,9 +3282,22 @@ export default function VentasPage() {
                                   <ReceiptIcon fontSize='small' />
                                 </IconButton>
                               </Tooltip>
+<<<<<<< Updated upstream
                               <Tooltip title='Ver detalles'>
                                 <IconButton size='small' onClick={() => { setPedidoSeleccionado(pedido); setTipoDialogo('pedido-detalles'); setDialogoAbierto(true) }}>
                                   <VisibilityIcon fontSize='small' />
+=======
+                            )}
+
+                            {(pedido.estado === 'pendiente' || vistaActual === 'por-cobrar') && (
+                              <Tooltip title='Cerrar Venta (Registrar Pago)'>
+                                <IconButton
+                                  size='small'
+                                  color='primary'
+                                  onClick={() => abrirDialogoCerrarPedido(pedido)}
+                                >
+                                  <CheckCircleIcon />
+>>>>>>> Stashed changes
                                 </IconButton>
                               </Tooltip>
                               {pedido.estado !== 'entregado' && pedido.estado !== 'cancelado' && (

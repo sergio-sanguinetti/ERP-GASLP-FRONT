@@ -1315,6 +1315,33 @@ export const clientesAPI = {
     }
   },
 
+  getDuplicados: async (): Promise<Cliente[][]> => {
+    const response = await fetchWithAuth('/clientes/duplicados', {
+      method: 'GET',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al obtener clientes duplicados')
+    }
+
+    return response.json()
+  },
+
+  unificar: async (principalId: string, secundariosIds: string[]): Promise<any> => {
+    const response = await fetchWithAuth('/clientes/unificar', {
+      method: 'POST',
+      body: JSON.stringify({ principalId, secundariosIds }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || 'Error al unificar clientes')
+    }
+
+    return response.json()
+  },
+
   importarMasivo: async (archivo: File): Promise<{
     total: number
     exitosos: number
