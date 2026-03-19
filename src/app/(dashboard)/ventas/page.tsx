@@ -121,6 +121,7 @@ interface FiltrosPedidos {
   repartidorId: string
   estado: string
   tipoServicio: string
+  formaPago: string
   mostrarTodos: boolean
 }
 
@@ -204,6 +205,7 @@ export default function VentasPage() {
     repartidorId: '',
     estado: '',
     tipoServicio: '',
+    formaPago: '',
     mostrarTodos: false
   })
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteAnalisis | null>(null)
@@ -1928,6 +1930,15 @@ export default function VentasPage() {
       !filtrosPedidos.rutaId || pedido.rutaId === filtrosPedidos.rutaId || pedido.ruta?.id === filtrosPedidos.rutaId
     const cumpleEstado = !filtrosPedidos.estado || pedido.estado === filtrosPedidos.estado
     const cumpleMostrarTodos = filtrosPedidos.mostrarTodos || pedido.estado !== 'cancelado'
+    const cumpleFormaPago = !filtrosPedidos.formaPago || (() => {
+      if (!pedido.pagos || pedido.pagos.length === 0) return false
+      const filtro = filtrosPedidos.formaPago.toLowerCase()
+      return pedido.pagos.some((p: any) => {
+        if (filtro === 'credito') return p.tipo === 'credito'
+        const nombreMetodo = (p.metodo?.nombre || '').toLowerCase()
+        return nombreMetodo.includes(filtro)
+      })
+    })()
 
     return (
       cumpleFechaDesde &&
@@ -1936,7 +1947,8 @@ export default function VentasPage() {
       cumpleZona &&
       cumpleRuta &&
       cumpleEstado &&
-      cumpleMostrarTodos
+      cumpleMostrarTodos &&
+      cumpleFormaPago
     )
   })
 
@@ -2919,13 +2931,26 @@ export default function VentasPage() {
                     </FormControl>
                   </Grid>
                   <Grid item xs={12} sm={6} md={3}>
+                    <FormControl fullWidth size='small'>
+                      <InputLabel>Forma de Pago</InputLabel>
+                      <Select value={filtrosPedidos.formaPago} onChange={e => manejarCambioFiltros('formaPago', e.target.value)} label='Forma de Pago'>
+                        <MenuItem value=''>Todas</MenuItem>
+                        <MenuItem value='efectivo'>Efectivo</MenuItem>
+                        <MenuItem value='tarjeta'>Tarjeta</MenuItem>
+                        <MenuItem value='transferencia'>Transferencia</MenuItem>
+                        <MenuItem value='deposito'>Depósito</MenuItem>
+                        <MenuItem value='credito'>Crédito</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', height: '100%' }}>
                       <Button variant='contained' size='small' startIcon={<SearchIcon />} onClick={() => loadPedidos()}>
                         Buscar
                       </Button>
                       <Button variant='outlined' size='small' onClick={() => {
                         const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
-                        const f: FiltrosPedidos = { fechaDesde: hoy, fechaHasta: hoy, cliente: '', tipoCliente: '', zona: '', rutaId: '', repartidorId: '', estado: '', tipoServicio: '', mostrarTodos: false }
+                        const f: FiltrosPedidos = { fechaDesde: hoy, fechaHasta: hoy, cliente: '', tipoCliente: '', zona: '', rutaId: '', repartidorId: '', estado: '', tipoServicio: '', formaPago: '', mostrarTodos: false }
                         setFiltrosPedidos(f)
                         loadPedidos(f)
                       }}>
