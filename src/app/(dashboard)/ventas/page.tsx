@@ -138,6 +138,9 @@ interface ClienteAnalisis extends Cliente {
 }
 
 export default function VentasPage() {
+  const getFechaHoy = () =>
+    new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
+
   const [vistaActual, setVistaActual] = useState<'dashboard' | 'catalogo' | 'listado-pedidos' | 'analisis-clientes' | 'categorias'>(
     'dashboard'
   )
@@ -151,8 +154,8 @@ export default function VentasPage() {
   const [cortePipas, setCortePipas] = useState<CorteRepartidor | null>(null)
   const [corteCilindros, setCorteCilindros] = useState<CorteRepartidor | null>(null)
   const [resumenRepartidores, setResumenRepartidores] = useState<ResumenRepartidores>({ pipas: [], cilindros: [] })
-  const [dashFechaDesde, setDashFechaDesde] = useState<string>(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' }))
-  const [dashFechaHasta, setDashFechaHasta] = useState<string>(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' }))
+  const [dashFechaDesde, setDashFechaDesde] = useState<string>(getFechaHoy())
+  const [dashFechaHasta, setDashFechaHasta] = useState<string>(getFechaHoy())
   const [dashPeriodo, setDashPeriodo] = useState<string>('hoy')
   const [productos, setProductos] = useState<Producto[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
@@ -196,8 +199,6 @@ export default function VentasPage() {
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState<Pedido | null>(null)
   const [pedidoEditando, setPedidoEditando] = useState<Pedido | null>(null)
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<CategoriaProducto | null>(null)
-  const getFechaHoy = () =>
-    new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
   const [filtrosPedidos, setFiltrosPedidos] = useState<FiltrosPedidos>({
     fechaDesde: getFechaHoy(),
     fechaHasta: getFechaHoy(),
