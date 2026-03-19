@@ -167,7 +167,6 @@ export default function VentasPage() {
   const [filtroAnalisisFechaDesde, setFiltroAnalisisFechaDesde] = useState('')
   const [filtroAnalisisFechaHasta, setFiltroAnalisisFechaHasta] = useState('')
   const [rutas, setRutas] = useState<Ruta[]>([])
-  const [clienteBuscado, setClienteBuscado] = useState<Cliente | null>(null)
   const [mostrarCrearCliente, setMostrarCrearCliente] = useState(false)
   const [formularioClienteRapido, setFormularioClienteRapido] = useState({
     nombre: '',
@@ -765,48 +764,6 @@ export default function VentasPage() {
       setHistorialCliente(data)
     } catch(e) { console.error('Error loading historial:', e) }
     finally { setLoadingHistorial(false) }
-  }
-      // Calcular estadísticas para cada cliente
-      const clientesConAnalisis: ClienteAnalisis[] = await Promise.all(
-        data.map(async cliente => {
-          const pedidosCliente = await pedidosAPI.getAll({ clienteId: cliente.id })
-          const totalComprasHistorico = pedidosCliente
-            .filter(p => p.estado === 'entregado')
-            .reduce((sum, p) => sum + p.ventaTotal, 0)
-
-          const hoy = new Date()
-          const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
-          const inicioAno = new Date(hoy.getFullYear(), 0, 1)
-
-          const totalComprasMes = pedidosCliente
-            .filter(p => p.estado === 'entregado' && new Date(p.fechaPedido) >= inicioMes)
-            .reduce((sum, p) => sum + p.ventaTotal, 0)
-
-          const totalComprasAno = pedidosCliente
-            .filter(p => p.estado === 'entregado' && new Date(p.fechaPedido) >= inicioAno)
-            .reduce((sum, p) => sum + p.ventaTotal, 0)
-
-          const pedidosEntregados = pedidosCliente.filter(p => p.estado === 'entregado')
-          const ticketPromedio = pedidosEntregados.length > 0 ? totalComprasHistorico / pedidosEntregados.length : 0
-
-          return {
-            ...cliente,
-            totalComprasMes,
-            totalComprasAno,
-            totalComprasHistorico,
-            ticketPromedio,
-            frecuenciaCompra: 15, // Calcular basado en fechas de pedidos
-            ultimaCompra: pedidosCliente.length > 0 ? pedidosCliente[0].fechaPedido : '',
-            productosMasComprados: [],
-            estadoCredito: cliente.saldoActual > cliente.limiteCredito ? 'vencido' : 'buen-pagador',
-            pedidos: pedidosCliente
-          }
-        })
-      )
-      setClientesAnalisis(clientesConAnalisis)
-    } catch (err: any) {
-      console.error('Error loading clientes analisis:', err)
-    }
   }
 
   const abrirDialogo = async (tipo: 'precios' | 'descuentos' | 'pedido' | 'producto' | 'categoria', item?: any) => {
