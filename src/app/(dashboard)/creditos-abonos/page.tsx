@@ -218,7 +218,7 @@ export default function CreditosAbonosPage() {
   const [filtroBusquedaSbc, setFiltroBusquedaSbc] = useState('')
   const [modalSbc, setModalSbc] = useState(false)
   const [pagoSbcSel, setPagoSbcSel] = useState<any | null>(null)
-  const [tipoAccionSbc, setTipoAccionSbc] = useState<'oficina' | 'sanluis' | 'rechazar'>('oficina')
+  const [tipoAccionSbc, setTipoAccionSbc] = useState<'oficina' | 'sanluis' | 'rechazar' | 'reactivar'>('oficina')
   const [folioConfSbc, setFolioConfSbc] = useState('')
   const [notaConfSbc, setNotaConfSbc] = useState('')
   const [filtroOperadorSbc, setFiltroOperadorSbc] = useState('')
@@ -355,7 +355,7 @@ export default function CreditosAbonosPage() {
     finally { setLoadingTicketSbc(false) }
   }
 
-  const abrirModalSbc = (pago: any, accion: 'oficina' | 'sanluis' | 'rechazar') => {
+  const abrirModalSbc = (pago: any, accion: 'oficina' | 'sanluis' | 'rechazar' | 'reactivar') => {
     setPagoSbcSel(pago)
     setTipoAccionSbc(accion)
     setFolioConfSbc(pago.folioConfirmado || pago.folioOriginal || '')
@@ -375,7 +375,8 @@ export default function CreditosAbonosPage() {
     try {
       setSaving(true)
       const endpoint = tipoAccionSbc === 'oficina' ? 'confirmar-oficina'
-        : tipoAccionSbc === 'sanluis' ? 'confirmar-sanluis' : 'rechazar'
+        : tipoAccionSbc === 'sanluis' ? 'confirmar-sanluis'
+        : tipoAccionSbc === 'reactivar' ? 'reactivar' : 'rechazar'
       const body: any = { notaConfirmacion: notaConfSbc }
       if (tipoAccionSbc === 'oficina') body.folioConfirmado = folioConfSbc
       const res = await fetchSbc('/sbc/' + pagoSbcSel.id + '/' + endpoint, {
@@ -384,7 +385,7 @@ export default function CreditosAbonosPage() {
         body: JSON.stringify(body)
       })
       if (!res.ok) throw new Error('Error al actualizar pago SBC')
-      setSuccessMessage(tipoAccionSbc === 'rechazar' ? 'Pago rechazado' : 'Pago confirmado correctamente')
+      setSuccessMessage(tipoAccionSbc === 'rechazar' ? 'Pago rechazado' : tipoAccionSbc === 'reactivar' ? 'Pago reactivado — vuelve a Pendiente' : 'Pago confirmado correctamente')
       setModalSbc(false)
       setPagoSbcSel(null)
       await cargarPedidosSBC()
@@ -3081,9 +3082,9 @@ export default function CreditosAbonosPage() {
                     <Select value={filtroEstadoSbc} label='Estado'
                       onChange={e => setFiltroEstadoSbc(e.target.value)}>
                       <MenuItem value='pendiente'>Pendientes</MenuItem>
+                      <MenuItem value='rechazado'>Rechazados</MenuItem>
                       <MenuItem value='confirmado_oficina'>En Revisión</MenuItem>
                       <MenuItem value='confirmado_sanluis'>Autorizados</MenuItem>
-                      <MenuItem value='rechazado'>Rechazados</MenuItem>
                       <MenuItem value='todos'>Todos</MenuItem>
                     </Select>
                   </FormControl>
@@ -3273,10 +3274,18 @@ export default function CreditosAbonosPage() {
                                   </IconButton>
                                 </Tooltip>
                               )}
-                              {(!p.estadoSbc || p.estadoSbc === 'pendiente' || p.estadoSbc === 'confirmado_oficina') && ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '') && (
+                              {((!p.estadoSbc || p.estadoSbc === 'pendiente') && ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '') ||
+                                (p.estadoSbc === 'confirmado_oficina' && ['superAdministrador', 'administrador'].includes(usuario?.rol || ''))) && (
                                 <Tooltip title='Rechazar'>
                                   <IconButton size='small' sx={{ color: 'error.main' }} onClick={() => abrirModalSbc(p, 'rechazar')}>
                                     <CancelIcon sx={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              {p.estadoSbc === 'rechazado' && ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '') && (
+                                <Tooltip title='Reactivar — volver a Pendiente'>
+                                  <IconButton size='small' sx={{ color: 'warning.main' }} onClick={() => abrirModalSbc(p, 'reactivar')}>
+                                    <RefreshIcon sx={{ fontSize: 18 }} />
                                   </IconButton>
                                 </Tooltip>
                               )}
@@ -3318,15 +3327,15 @@ export default function CreditosAbonosPage() {
                   sx={{ mb: 2 }} helperText='Puedes confirmar o modificar el folio que mandó el operador' />
               )}
               <TextField fullWidth size='small' multiline rows={2}
-                label={tipoAccionSbc === 'rechazar' ? 'Motivo del rechazo' : 'Nota (opcional)'}
+                label={tipoAccionSbc === 'rechazar' ? 'Motivo del rechazo' : tipoAccionSbc === 'reactivar' ? 'Motivo de reactivación (opcional)' : 'Nota (opcional)'}
                 value={notaConfSbc} onChange={e => setNotaConfSbc(e.target.value)}
-                placeholder={tipoAccionSbc === 'rechazar' ? 'Ej: No se recibió el depósito...' : 'Ej: Confirmado con Gustavo, visto en cuenta...'} />
+                placeholder={tipoAccionSbc === 'rechazar' ? 'Ej: No se recibió el depósito...' : tipoAccionSbc === 'reactivar' ? 'Ej: Error al rechazar, sí llegó el pago...' : 'Ej: Confirmado con Gustavo, visto en cuenta...'} />
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setModalSbc(false)}>Cancelar</Button>
-              <Button variant='contained' color={tipoAccionSbc === 'rechazar' ? 'error' : 'primary'}
+              <Button variant='contained' color={tipoAccionSbc === 'rechazar' ? 'error' : tipoAccionSbc === 'reactivar' ? 'warning' : 'primary'}
                 onClick={ejecutarAccionSbc} disabled={saving}>
-                {tipoAccionSbc === 'rechazar' ? 'Rechazar' : 'Confirmar'}
+                {tipoAccionSbc === 'rechazar' ? 'Rechazar' : tipoAccionSbc === 'reactivar' ? 'Reactivar' : 'Confirmar'}
               </Button>
             </DialogActions>
           </Dialog>
