@@ -3040,6 +3040,39 @@ export default function VentasPage() {
                       ${pedidosFiltrados.reduce((sum, p) => sum + (parseFloat(String(p.ventaTotal)) || 0), 0).toLocaleString('es-MX', { maximumFractionDigits: 2 })}
                     </Typography>
                   </Box>
+                  <Box sx={{ borderLeft: '1px solid rgba(255,255,255,0.3)', pl: 2, minWidth: 100 }}>
+                    <Typography variant='caption' sx={{ color: 'rgba(255,255,255,0.7)' }}>Efectivo</Typography>
+                    <Typography variant='body1' fontWeight='bold' sx={{ color: 'white' }}>
+                      {(() => {
+                        const total = pedidosFiltrados.reduce((sum, p) => {
+                          return sum + (p.pagos || []).filter((pg: any) => (pg.metodo?.nombre || '').toLowerCase().includes('efectivo')).reduce((s: number, pg: any) => s + (parseFloat(String(pg.monto)) || 0), 0)
+                        }, 0)
+                        return `$${total.toLocaleString('es-MX', { maximumFractionDigits: 2 })}`
+                      })()}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ minWidth: 100 }}>
+                    <Typography variant='caption' sx={{ color: 'rgba(255,255,255,0.7)' }}>Tarjeta</Typography>
+                    <Typography variant='body1' fontWeight='bold' sx={{ color: 'white' }}>
+                      {(() => {
+                        const total = pedidosFiltrados.reduce((sum, p) => {
+                          return sum + (p.pagos || []).filter((pg: any) => (pg.metodo?.nombre || '').toLowerCase().includes('tarjeta')).reduce((s: number, pg: any) => s + (parseFloat(String(pg.monto)) || 0), 0)
+                        }, 0)
+                        return `$${total.toLocaleString('es-MX', { maximumFractionDigits: 2 })}`
+                      })()}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ minWidth: 100 }}>
+                    <Typography variant='caption' sx={{ color: 'rgba(255,255,255,0.7)' }}>Crédito</Typography>
+                    <Typography variant='body1' fontWeight='bold' sx={{ color: 'white' }}>
+                      {(() => {
+                        const total = pedidosFiltrados.reduce((sum, p) => {
+                          return sum + (p.pagos || []).filter((pg: any) => pg.tipo === 'credito').reduce((s: number, pg: any) => s + (parseFloat(String(pg.monto)) || 0), 0)
+                        }, 0)
+                        return `$${total.toLocaleString('es-MX', { maximumFractionDigits: 2 })}`
+                      })()}
+                    </Typography>
+                  </Box>
                 </Box>
               )}
 
