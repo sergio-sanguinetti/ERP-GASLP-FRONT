@@ -1206,7 +1206,7 @@ export default function CreditosAbonosPage() {
         </Box>
       </Box>
 
-      {/* Dashboard Principal */
+      {/* Dashboard Principal */}
       {vistaActual === 'dashboard' && (
         <Box>
           {/* Filtros del Dashboard: ruta y fechas */}
@@ -2989,7 +2989,7 @@ export default function CreditosAbonosPage() {
           )}
         </Box>
       )}
-      {/* Vista de Clientes Duplicados */
+      {/* Vista de Clientes Duplicados */}
       {vistaActual === 'clientes-duplicados' && (
         <Box>
           <Typography variant="h6" gutterBottom>UnificaciÃ³n de Clientes Duplicados</Typography>
