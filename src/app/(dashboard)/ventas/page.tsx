@@ -3359,7 +3359,7 @@ export default function VentasPage() {
                     </Typography>
                     <Typography variant='h4' fontWeight='bold' color='info.main'>
                       {tabAnalisis === 'cilindros'
-                        ? `$${(rankingData.kpis?.ticketPromedio * rankingData.kpis?.clientesActivos || 0).toLocaleString()}`
+                        ? `$${(rankingData.kpis?.totalVendido || 0).toLocaleString()}`
                         : `${(rankingData.kpis?.litrosTotales || 0).toLocaleString()} L`}
                     </Typography>
                   </CardContent>
