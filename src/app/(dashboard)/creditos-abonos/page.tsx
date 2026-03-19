@@ -167,7 +167,7 @@ interface PagoPendienteAutorizacion {
 }
 
 export default function CreditosAbonosPage() {
-  const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'pagos-pendientes' | 'historial-pagos' | 'clientes-duplicados'>('dashboard')
+  const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'pagos-pendientes' | 'historial-pagos' | 'clientes-duplicados' | 'pagos-sbc'>('dashboard')
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteCredito | null>(null)
   const refFichaCliente = useRef<HTMLDivElement | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
