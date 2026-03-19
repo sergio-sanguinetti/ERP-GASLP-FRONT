@@ -103,7 +103,8 @@ import {
   Cancel as CancelIcon,
   Info as InfoIcon,
   Receipt as ReceiptIcon,
-  LocalAtm as LocalAtmIcon
+  LocalAtm as LocalAtmIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material'
 
 // Tipos de datos (usando los de la API)
