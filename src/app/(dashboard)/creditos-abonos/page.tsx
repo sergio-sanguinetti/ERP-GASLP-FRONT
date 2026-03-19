@@ -213,6 +213,7 @@ export default function CreditosAbonosPage() {
   const [historialLimites, setHistorialLimites] = useState<HistorialLimite[]>([])
   const [pedidosSBC, setPedidosSBC] = useState<any[]>([])
   const [loadingSBC, setLoadingSBC] = useState(false)
+  const [errorSbc, setErrorSbc] = useState<string | null>(null)
   const [filtroEstadoSbc, setFiltroEstadoSbc] = useState<string>('pendiente')
   const [filtroBusquedaSbc, setFiltroBusquedaSbc] = useState('')
   const [modalSbc, setModalSbc] = useState(false)
@@ -222,6 +223,7 @@ export default function CreditosAbonosPage() {
   const [notaConfSbc, setNotaConfSbc] = useState('')
   const [filtroOperadorSbc, setFiltroOperadorSbc] = useState('')
   const [filtroTipoSbc, setFiltroTipoSbc] = useState('')
+  const [filtroMetodoPagoSbc, setFiltroMetodoPagoSbc] = useState('')
   const [ticketSbcAbierto, setTicketSbcAbierto] = useState(false)
   const [pedidoTicketSbc, setPedidoTicketSbc] = useState<Pedido | null>(null)
   const [htmlTicketSbc, setHtmlTicketSbc] = useState('')
@@ -296,6 +298,7 @@ export default function CreditosAbonosPage() {
   const cargarPedidosSBC = async (estado?: string) => {
     try {
       setLoadingSBC(true)
+      setErrorSbc(null)
       // Cargar siempre todos para calcular KPIs, filtrar en frontend
       const params = new URLSearchParams()
       params.append('estado', 'todos')
@@ -330,8 +333,11 @@ export default function CreditosAbonosPage() {
       if (estadoFiltro && estadoFiltro !== 'todos') {
         // Filter is handled in the UI rendering
       }
-    } catch (e: any) { setError(e.message) }
-    finally { setLoadingSBC(false) }
+    } catch (e: any) {
+      setErrorSbc(e.message || 'Error al cargar pagos SBC')
+    } finally {
+      setLoadingSBC(false)
+    }
   }
 
   const abrirTicketSbc = async (pedidoId: string) => {
@@ -3002,7 +3008,7 @@ export default function CreditosAbonosPage() {
             <Grid item xs={6} sm={3}>
               <Card sx={{ bgcolor: 'warning.50', border: '1px solid', borderColor: 'warning.200' }}>
                 <CardContent sx={{ pb: '12px !important' }}>
-                  <Typography variant='caption' color='warning.dark' fontWeight='bold'>POR CONFIRMAR</Typography>
+                  <Typography variant='caption' color='warning.dark' fontWeight='bold'>PENDIENTE</Typography>
                   <Typography variant='h5' fontWeight='bold' color='warning.dark'>
                     ${kpisSbc.totalPendiente.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </Typography>
@@ -3013,22 +3019,22 @@ export default function CreditosAbonosPage() {
             <Grid item xs={6} sm={3}>
               <Card sx={{ bgcolor: 'info.50', border: '1px solid', borderColor: 'info.200' }}>
                 <CardContent sx={{ pb: '12px !important' }}>
-                  <Typography variant='caption' color='info.dark' fontWeight='bold'>CONF. OFICINA</Typography>
+                  <Typography variant='caption' color='info.dark' fontWeight='bold'>EN REVISIÓN</Typography>
                   <Typography variant='h5' fontWeight='bold' color='info.dark'>
                     ${kpisSbc.totalConfOficina.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </Typography>
-                  <Typography variant='caption' color='info.dark'>Esperando San Luis</Typography>
+                  <Typography variant='caption' color='info.dark'>Revisado por sucursal</Typography>
                 </CardContent>
               </Card>
             </Grid>
             <Grid item xs={6} sm={3}>
               <Card sx={{ bgcolor: 'success.50', border: '1px solid', borderColor: 'success.200' }}>
                 <CardContent sx={{ pb: '12px !important' }}>
-                  <Typography variant='caption' color='success.dark' fontWeight='bold'>CONFIRMADO</Typography>
+                  <Typography variant='caption' color='success.dark' fontWeight='bold'>AUTORIZADO</Typography>
                   <Typography variant='h5' fontWeight='bold' color='success.dark'>
                     ${kpisSbc.totalConfSanLuis.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </Typography>
-                  <Typography variant='caption' color='success.dark'>San Luis validó</Typography>
+                  <Typography variant='caption' color='success.dark'>Pago verificado</Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -3037,10 +3043,11 @@ export default function CreditosAbonosPage() {
                 <CardContent sx={{ pb: '12px !important' }}>
                   <Typography variant='caption' color='text.secondary' fontWeight='bold'>PENDIENTES POR TIPO</Typography>
                   <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
-                    <Chip label={`Transf. ${kpisSbc.transferencia}`} size='small' sx={{ bgcolor: '#1565c0', color: 'white', fontWeight: 'bold' }} />
-                    <Chip label={`Cheque ${kpisSbc.cheque}`} size='small' sx={{ bgcolor: '#e65100', color: 'white', fontWeight: 'bold' }} />
-                    <Chip label={`Depós. ${kpisSbc.deposito}`} size='small' sx={{ bgcolor: '#37474f', color: 'white', fontWeight: 'bold' }} />
+                    <Chip label={`Transf. ${kpisSbc.transferencia}`} size='small' onClick={() => setFiltroMetodoPagoSbc(filtroMetodoPagoSbc === 'TRANSFERENCIA' ? '' : 'TRANSFERENCIA')} sx={{ bgcolor: filtroMetodoPagoSbc === 'TRANSFERENCIA' ? '#0d47a1' : '#1565c0', color: 'white', fontWeight: 'bold', cursor: 'pointer', outline: filtroMetodoPagoSbc === 'TRANSFERENCIA' ? '2px solid #90caf9' : 'none' }} />
+                    <Chip label={`Cheque ${kpisSbc.cheque}`} size='small' onClick={() => setFiltroMetodoPagoSbc(filtroMetodoPagoSbc === 'CHEQUE' ? '' : 'CHEQUE')} sx={{ bgcolor: filtroMetodoPagoSbc === 'CHEQUE' ? '#bf360c' : '#e65100', color: 'white', fontWeight: 'bold', cursor: 'pointer', outline: filtroMetodoPagoSbc === 'CHEQUE' ? '2px solid #ffcc80' : 'none' }} />
+                    <Chip label={`Depós. ${kpisSbc.deposito}`} size='small' onClick={() => setFiltroMetodoPagoSbc(filtroMetodoPagoSbc === 'DEPOSITO' ? '' : 'DEPOSITO')} sx={{ bgcolor: filtroMetodoPagoSbc === 'DEPOSITO' ? '#263238' : '#37474f', color: 'white', fontWeight: 'bold', cursor: 'pointer', outline: filtroMetodoPagoSbc === 'DEPOSITO' ? '2px solid #b0bec5' : 'none' }} />
                   </Box>
+                  {filtroMetodoPagoSbc && <Typography variant='caption' color='text.secondary' sx={{ mt: 0.5, display: 'block' }}>Filtrando por {filtroMetodoPagoSbc.toLowerCase()} — <span style={{cursor:'pointer',textDecoration:'underline'}} onClick={() => setFiltroMetodoPagoSbc('')}>limpiar</span></Typography>}
                 </CardContent>
               </Card>
             </Grid>
@@ -3074,8 +3081,8 @@ export default function CreditosAbonosPage() {
                     <Select value={filtroEstadoSbc} label='Estado'
                       onChange={e => setFiltroEstadoSbc(e.target.value)}>
                       <MenuItem value='pendiente'>Pendientes</MenuItem>
-                      <MenuItem value='confirmado_oficina'>Confirmado Oficina</MenuItem>
-                      <MenuItem value='confirmado_sanluis'>Confirmado San Luis</MenuItem>
+                      <MenuItem value='confirmado_oficina'>En Revisión</MenuItem>
+                      <MenuItem value='confirmado_sanluis'>Autorizados</MenuItem>
                       <MenuItem value='rechazado'>Rechazados</MenuItem>
                       <MenuItem value='todos'>Todos</MenuItem>
                     </Select>
@@ -3112,6 +3119,11 @@ export default function CreditosAbonosPage() {
           </Card>
 
           {loadingSBC && <LinearProgress sx={{ mb: 1 }} />}
+          {errorSbc && !loadingSBC && (
+            <Alert severity='error' sx={{ mb: 2 }} onClose={() => setErrorSbc(null)}>
+              Error al cargar pagos SBC: {errorSbc}
+            </Alert>
+          )}
 
           {/* Tabla */}
           {(() => {
@@ -3122,6 +3134,7 @@ export default function CreditosAbonosPage() {
                 : p.estadoSbc === filtroEstadoSbc
               if (!estadoOk) return false
               if (filtroTipoSbc && p.tipoServicio !== filtroTipoSbc) return false
+              if (filtroMetodoPagoSbc && p.metodoPago !== filtroMetodoPagoSbc) return false
               if (filtroOperadorSbc.trim() && !p.repartidor?.toLowerCase().includes(filtroOperadorSbc.toLowerCase())) return false
               if (!filtroBusquedaSbc.trim()) return true
               const b = filtroBusquedaSbc.toLowerCase()
@@ -3219,13 +3232,13 @@ export default function CreditosAbonosPage() {
                               <Chip label='Pendiente' size='small' color='warning' sx={{ fontWeight: 'bold' }} />
                             ) : p.estadoSbc === 'confirmado_oficina' ? (
                               <Box>
-                                <Chip label='Conf. Oficina' size='small' color='info' sx={{ fontWeight: 'bold', mb: 0.3 }} />
+                                <Chip label='En Revisión' size='small' color='info' sx={{ fontWeight: 'bold', mb: 0.3 }} />
                                 <Typography variant='caption' color='text.secondary' display='block'>{p.confirmadoPorOficina}</Typography>
                                 {p.fechaConfOficina && <Typography variant='caption' color='text.disabled' display='block'>{new Date(p.fechaConfOficina).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: '2-digit' })}</Typography>}
                               </Box>
                             ) : p.estadoSbc === 'confirmado_sanluis' ? (
                               <Box>
-                                <Chip label='✓ San Luis' size='small' color='success' sx={{ fontWeight: 'bold', mb: 0.3 }} />
+                                <Chip label='✓ Autorizado' size='small' color='success' sx={{ fontWeight: 'bold', mb: 0.3 }} />
                                 <Typography variant='caption' color='text.secondary' display='block'>{p.confirmadoPorSanLuis}</Typography>
                                 {p.fechaConfSanLuis && <Typography variant='caption' color='text.disabled' display='block'>{new Date(p.fechaConfSanLuis).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: '2-digit' })}</Typography>}
                               </Box>
@@ -3246,21 +3259,21 @@ export default function CreditosAbonosPage() {
                           </TableCell>
                           <TableCell align='center'>
                             <Box sx={{ display: 'flex', gap: 0.3, justifyContent: 'center' }}>
-                              {(!p.estadoSbc || p.estadoSbc === 'pendiente') && (
-                                <Tooltip title='Confirmar — Oficina'>
+                              {(!p.estadoSbc || p.estadoSbc === 'pendiente') && ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '') && (
+                                <Tooltip title='Marcar En Revisión'>
                                   <IconButton size='small' sx={{ color: 'info.main' }} onClick={() => abrirModalSbc(p, 'oficina')}>
                                     <CheckCircleIcon sx={{ fontSize: 18 }} />
                                   </IconButton>
                                 </Tooltip>
                               )}
                               {p.estadoSbc === 'confirmado_oficina' && ['superAdministrador', 'administrador'].includes(usuario?.rol || '') && (
-                                <Tooltip title='Confirmar — San Luis'>
+                                <Tooltip title='Autorizar pago'>
                                   <IconButton size='small' sx={{ color: 'success.main' }} onClick={() => abrirModalSbc(p, 'sanluis')}>
                                     <CheckCircleIcon sx={{ fontSize: 18 }} />
                                   </IconButton>
                                 </Tooltip>
                               )}
-                              {(!p.estadoSbc || p.estadoSbc === 'pendiente' || p.estadoSbc === 'confirmado_oficina') && (
+                              {(!p.estadoSbc || p.estadoSbc === 'pendiente' || p.estadoSbc === 'confirmado_oficina') && ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '') && (
                                 <Tooltip title='Rechazar'>
                                   <IconButton size='small' sx={{ color: 'error.main' }} onClick={() => abrirModalSbc(p, 'rechazar')}>
                                     <CancelIcon sx={{ fontSize: 18 }} />
