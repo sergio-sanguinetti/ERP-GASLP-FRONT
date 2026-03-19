@@ -160,7 +160,6 @@ interface PagoPendienteAutorizacion {
   registradoPor: string
   registradoPorNombre?: string
   fechaHora: string
-  fechaHora: string
   observaciones: string
   ruta?: string
   pagoCompleto?: PagoAPI
