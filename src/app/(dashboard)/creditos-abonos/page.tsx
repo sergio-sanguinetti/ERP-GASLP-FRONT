@@ -2065,9 +2065,8 @@ export default function CreditosAbonosPage() {
                                         const pedidoId = (nota as any).pedidoId
                                         if (!pedidoId) { alert('Esta nota no tiene pedido asociado'); return }
                                         const res = await fetch(API + '/pedidos/' + pedidoId, { headers: { 'Authorization': 'Bearer ' + token } })
-                                        if (!res.ok) { alert('No se pudo cargar el pedido'); return }
+                                        if (!res.ok) { setError('No se pudo cargar el pedido'); return }
                                         const pedido = await res.json()
-                                        const { generarHtmlTicketVenta } = await import('@/lib/ticketUtils')
                                         const html = generarHtmlTicketVenta(pedido, null)
                                         const w = window.open('', '_blank', 'width=420,height=650')
                                         if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 600) }
