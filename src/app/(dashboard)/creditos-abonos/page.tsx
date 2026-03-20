@@ -2041,8 +2041,11 @@ export default function CreditosAbonosPage() {
                                   : dias === null ? nota.estado
                                   : dias < 0 ? 'vencida' : dias <= 5 ? 'por_vencer' : 'vigente'
                                 const colorChip = estadoReal === 'pagada' ? 'success' : estadoReal === 'vencida' ? 'error' : estadoReal === 'por_vencer' ? 'warning' : 'info'
-                                const labelChip = estadoReal === 'pagada' ? 'Pagada' : estadoReal === 'vencida' ? 'Vencida' : estadoReal === 'por_vencer' ? 'Por vencer' : 'Vigente'
-                                return <Chip label={labelChip} color={colorChip as any} size='small' sx={{ fontWeight: 'bold', fontSize: 10, height: 20 }} />
+                                // Si la nota tiene un pago en revisión, mostrar ese estado
+                                const pagoEnRevision = pagosPendientesAutorizacion.find(p => p.nota === nota.numeroNota && (p.pagoCompleto?.estado === 'en_revision' || p.pagoCompleto?.estado === 'pendiente'))
+                                const labelChip = nota.estado === 'pagada' ? 'Pagada' : pagoEnRevision ? 'En Revisión' : estadoReal === 'vencida' ? 'Vencida' : estadoReal === 'por_vencer' ? 'Por vencer' : 'Vigente'
+                                const colorChipFinal = nota.estado === 'pagada' ? 'success' : pagoEnRevision ? 'info' : estadoReal === 'vencida' ? 'error' : estadoReal === 'por_vencer' ? 'warning' : 'success'
+                                return <Chip label={labelChip} color={colorChipFinal as any} size='small' sx={{ fontWeight: 'bold', fontSize: 10, height: 20 }} />
                               })()}
                           </TableCell>
                           <TableCell align='center'>
@@ -2131,12 +2134,10 @@ export default function CreditosAbonosPage() {
           {/* KPIs con monto */}
           <Grid container spacing={2} sx={{ mb: 2 }}>
             {(() => {
-              const pendientes = pagosPendientesAutorizacion.filter(p => !p.pagoCompleto?.estado || p.pagoCompleto?.estado === 'pendiente')
-              const enRevision = pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'en_revision')
+              const enRevision = pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'en_revision' || !p.pagoCompleto?.estado || p.pagoCompleto?.estado === 'pendiente')
               const autorizados = pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'autorizado')
               const rechazados = pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'rechazado')
               const kpis = [
-                { label: 'Pendientes', count: pendientes.length, monto: pendientes.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'warning.main', val: 'pendiente', desc: 'Sin revisar' },
                 { label: 'En Revisión', count: enRevision.length, monto: enRevision.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'info.main', val: 'en_revision', desc: 'Esperando autorización' },
                 { label: 'Autorizados', count: autorizados.length, monto: autorizados.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'success.main', val: 'autorizado', desc: 'Confirmados' },
                 { label: 'Rechazados', count: rechazados.length, monto: rechazados.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'error.main', val: 'rechazado', desc: 'Requieren atención' },
@@ -2166,7 +2167,6 @@ export default function CreditosAbonosPage() {
                     <InputLabel>Estado</InputLabel>
                     <Select value={filtroEstadoPagos} label='Estado' onChange={e => setFiltroEstadoPagos(e.target.value)}>
                       <MenuItem value='en_revision'>En Revisión</MenuItem>
-                      <MenuItem value='pendiente'>Pendientes</MenuItem>
                       <MenuItem value='autorizado'>Autorizados</MenuItem>
                       <MenuItem value='rechazado'>Rechazados</MenuItem>
                       <MenuItem value='todos'>Todos</MenuItem>
@@ -2288,9 +2288,9 @@ export default function CreditosAbonosPage() {
                         <Typography variant='caption'>{pago.fechaHora}</Typography>
                       </TableCell>
                       <TableCell>
-                        {(!pago.pagoCompleto?.estado || pago.pagoCompleto?.estado === 'pendiente') ? (
-                          <Chip label='Pendiente' size='small' color='warning' sx={{ fontWeight: 'bold', fontSize: 10 }} />
-                        ) : pago.pagoCompleto?.estado === 'en_revision' ? (
+                        {(!pago.pagoCompleto?.estado || pago.pagoCompleto?.estado === 'pendiente' || pago.pagoCompleto?.estado === 'en_revision') ? (
+                          <Chip label='En Revisión' size='small' color='info' sx={{ fontWeight: 'bold', fontSize: 10 }} />
+                        ) : pago.pagoCompleto?.estado === 'en_revision_skip' ? (
                           <Box>
                             <Chip label='En Revisión' size='small' color='info' sx={{ fontWeight: 'bold', fontSize: 10, mb: 0.3 }} />
                             {pago.pagoCompleto?.revisadoPor && <Typography variant='caption' color='text.secondary' display='block'>{pago.pagoCompleto.revisadoPor}</Typography>}
@@ -2644,71 +2644,70 @@ export default function CreditosAbonosPage() {
         </DialogTitle>
         <DialogContent>
           {pagoSeleccionadoDetalle && (
-            <Box sx={{ mt: 2 }}>
-              {/* Información del Cliente */}
-              <Card variant="outlined" sx={{ mb: 3 }}>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <PersonIcon />
-                    Información del Cliente
-                  </Typography>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Cliente
-                      </Typography>
-                      <Typography variant="body1" fontWeight="bold">
-                        {pagoSeleccionadoDetalle.cliente 
-                          ? `${pagoSeleccionadoDetalle.cliente.nombre} ${pagoSeleccionadoDetalle.cliente.apellidoPaterno} ${pagoSeleccionadoDetalle.cliente.apellidoMaterno}`
-                          : 'N/A'}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Teléfono
-                      </Typography>
-                      <Typography variant="body1">
-                        {pagoSeleccionadoDetalle.cliente?.telefono || 'N/A'}
-                      </Typography>
-                    </Grid>
+            <Box sx={{ mt: 1 }}>
+              {/* SECCIÓN 1: La venta */}
+              <Box sx={{ mb: 2, pb: 2, borderBottom: '1px solid #f0f0f0' }}>
+                <Typography variant='caption' color='text.secondary' fontWeight='bold' textTransform='uppercase' display='block' sx={{ mb: 1 }}>📦 La Venta</Typography>
+                <Grid container spacing={1.5}>
+                  <Grid item xs={6}>
+                    <Typography variant='caption' color='text.secondary'>Cliente</Typography>
+                    <Typography variant='body2' fontWeight='bold'>
+                      {pagoSeleccionadoDetalle.cliente
+                        ? `${pagoSeleccionadoDetalle.cliente.nombre} ${pagoSeleccionadoDetalle.cliente.apellidoPaterno || ''}`
+                        : 'N/A'}
+                    </Typography>
                   </Grid>
-                </CardContent>
-              </Card>
+                  <Grid item xs={6}>
+                    <Typography variant='caption' color='text.secondary'>Ruta / Repartidor</Typography>
+                    <Typography variant='body2' fontWeight='bold'>{pagoSeleccionadoDetalle.cliente?.ruta?.nombre || '—'}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant='caption' color='text.secondary'>Nota de crédito</Typography>
+                    <Typography variant='body2' fontWeight='bold'>{pagoSeleccionadoDetalle.notaCredito?.numeroNota || 'Abono general'}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant='caption' color='text.secondary'>Tipo</Typography>
+                    <Chip label={pagoSeleccionadoDetalle.tipo === 'nota_especifica' ? 'Nota específica' : 'Abono general'}
+                      size='small' color={pagoSeleccionadoDetalle.tipo === 'nota_especifica' ? 'primary' : 'secondary'} sx={{ fontSize: 10 }} />
+                  </Grid>
+                </Grid>
+              </Box>
 
-              {/* Información del Pago */}
-              <Card variant="outlined" sx={{ mb: 3 }}>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <PaymentIcon />
-                    Información del Pago
-                  </Typography>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Número de Nota
-                      </Typography>
-                      <Typography variant="body1" fontWeight="bold">
-                        {pagoSeleccionadoDetalle.notaCredito?.numeroNota || 'Abono general'}
-                      </Typography>
+              {/* SECCIÓN 2: El cobro */}
+              <Box sx={{ mb: 2, pb: 2, borderBottom: '1px solid #f0f0f0' }}>
+                <Typography variant='caption' color='text.secondary' fontWeight='bold' textTransform='uppercase' display='block' sx={{ mb: 1 }}>💰 El Cobro</Typography>
+                <Grid container spacing={1.5}>
+                  <Grid item xs={6}>
+                    <Typography variant='caption' color='text.secondary'>Monto cobrado</Typography>
+                    <Typography variant='h5' color='primary.main' fontWeight='bold'>${pagoSeleccionadoDetalle.montoTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant='caption' color='text.secondary'>Estado actual</Typography>
+                    <Box sx={{ mt: 0.3 }}>
+                    <Chip
+                      label={
+                        pagoSeleccionadoDetalle.estado === 'autorizado' ? '✅ Autorizado' :
+                        pagoSeleccionadoDetalle.estado === 'en_revision' ? '🔍 En Revisión' :
+                        pagoSeleccionadoDetalle.estado === 'pendiente' ? '🔍 En Revisión' : '❌ Rechazado'
+                      }
+                      color={pagoSeleccionadoDetalle.estado === 'autorizado' ? 'success' : pagoSeleccionadoDetalle.estado === 'rechazado' ? 'error' : 'info'}
+                      size='small' sx={{ fontWeight: 'bold' }} />
+                    </Box>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant='caption' color='text.secondary'>Registrado por (Oficina/Planta)</Typography>
+                    <Typography variant='body2' fontWeight='bold'>{usuarioRegistroNombre || '—'}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant='caption' color='text.secondary'>Fecha y hora</Typography>
+                    <Typography variant='body2'>{new Date(pagoSeleccionadoDetalle.fechaPago).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', dateStyle: 'medium' })} {pagoSeleccionadoDetalle.horaPago}</Typography>
+                  </Grid>
+                  {pagoSeleccionadoDetalle.observaciones && (
+                    <Grid item xs={12}>
+                      <Typography variant='caption' color='text.secondary'>Notas del cobrador</Typography>
+                      <Typography variant='body2' sx={{ bgcolor: '#fff8e1', p: 0.8, borderRadius: 0.5, mt: 0.3 }}>{pagoSeleccionadoDetalle.observaciones}</Typography>
                     </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Tipo de Pago
-                      </Typography>
-                      <Chip
-                        label={pagoSeleccionadoDetalle.tipo === 'nota_especifica' ? 'Nota Específica' : 'Abono General'}
-                        color={pagoSeleccionadoDetalle.tipo === 'nota_especifica' ? 'primary' : 'secondary'}
-                        size="small"
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Monto Total
-                      </Typography>
-                      <Typography variant="h5" color="primary" fontWeight="bold">
-                        ${pagoSeleccionadoDetalle.montoTotal.toLocaleString()}
-                      </Typography>
-                    </Grid>
+                  )}
                     <Grid item xs={12} sm={6}>
                       <Typography variant="body2" color="text.secondary">Estado</Typography>
                       <Chip
