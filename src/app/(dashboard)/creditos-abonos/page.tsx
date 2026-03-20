@@ -2926,22 +2926,26 @@ export default function CreditosAbonosPage() {
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.3 }}>
                               <Tooltip title='Ver detalle del pago SBC'>
                                 <IconButton size='small' onClick={() => {
-                                  // Construir un objeto compatible con pagoSeleccionadoDetalle
+                                  // Construir objeto SBC para el modal de detalle
+                                  const esOfi = p.estadoSbc === 'confirmado_oficina'
+                                  const esSL = p.estadoSbc === 'confirmado_sanluis'
                                   const detalle: any = {
+                                    _esSBC: true,
+                                    _numeroPedido: p.numeroPedido,
                                     cliente: { nombre: p.cliente, apellidoPaterno: '', ruta: { nombre: p.ruta } },
-                                    notaCredito: { numeroNota: p.numeroPedido },
+                                    notaCredito: null,
                                     tipo: 'nota_especifica',
                                     montoTotal: p.monto,
-                                    estado: p.estadoSbc === 'confirmado_sanluis' ? 'autorizado' : p.estadoSbc === 'confirmado_oficina' ? 'en_revision' : p.estadoSbc === 'rechazado' ? 'rechazado' : 'pendiente',
-                                    formasPago: [{ formaPago: { tipo: p.metodoPago }, monto: p.monto, referencia: p.folioConfirmado || p.folioOriginal }],
-                                    fechaPago: p.fechaPedido || new Date().toISOString(),
-                                    horaPago: p.fechaPedido ? new Date(p.fechaPedido).toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit' }) : '—',
-                                    observaciones: p.notaConfirmacion,
-                                    revisadoPor: p.estadoSbc === 'confirmado_oficina' || p.estadoSbc === 'confirmado_sanluis' ? p.confirmadoPorOficina : null,
-                                    fechaRevision: p.fechaConfOficina,
-                                    autorizadoPorNombre: p.confirmadoPorSanLuis || null,
-                                    fechaAutorizacionReal: p.fechaConfSanLuis,
-                                    notaAutorizacion: p.confirmadoPorSanLuis ? p.notaConfirmacion : null,
+                                    estado: esSL ? 'autorizado' : esOfi ? 'en_revision' : (!p.estadoSbc || p.estadoSbc === 'pendiente') ? 'en_revision' : 'rechazado',
+                                    formasPago: [{ formaPago: { tipo: (p.metodoPago || '').toLowerCase() }, monto: p.monto, referencia: p.folioConfirmado || p.folioOriginal }],
+                                    fechaPago: p.fechaConfOficina || p.fechaPedido || new Date().toISOString(),
+                                    horaPago: p.fechaConfOficina ? new Date(p.fechaConfOficina).toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit' }) : '—',
+                                    observaciones: p.notaConfirmacion || null,
+                                    revisadoPor: (esOfi || esSL) ? p.confirmadoPorOficina : null,
+                                    fechaRevision: p.fechaConfOficina || null,
+                                    autorizadoPorNombre: esSL ? (p.confirmadoPorSanLuis || null) : null,
+                                    fechaAutorizacionReal: esSL ? p.fechaConfSanLuis : null,
+                                    notaAutorizacion: esSL ? p.notaConfirmacion : null,
                                   }
                                   setPagoSeleccionadoDetalle(detalle)
                                   setUsuarioRegistroNombre(p.repartidor || '—')
