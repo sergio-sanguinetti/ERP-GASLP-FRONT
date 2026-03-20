@@ -2134,7 +2134,7 @@ export default function CreditosAbonosPage() {
           {/* KPIs con monto */}
           <Grid container spacing={2} sx={{ mb: 2 }}>
             {(() => {
-              const enRevision = pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'en_revision' || !p.pagoCompleto?.estado || p.pagoCompleto?.estado === 'pendiente')
+              const enRevision = pagosPendientesAutorizacion.filter(p => ['en_revision','pendiente',undefined,null,''].includes(p.pagoCompleto?.estado as any))
               const autorizados = pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'autorizado')
               const rechazados = pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'rechazado')
               const kpis = [
@@ -2612,41 +2612,22 @@ export default function CreditosAbonosPage() {
       </Dialog>
 
       {/* Modal de Detalles del Pago */}
-      <Dialog 
-        open={modalDetallePago} 
-        onClose={() => {
-          setModalDetallePago(false)
-          setPagoSeleccionadoDetalle(null)
-        }} 
-        maxWidth="md" 
-        fullWidth
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <PaymentIcon />
-              <Typography variant="h6">
-                Detalles del Pago
-              </Typography>
-            </Box>
-            <IconButton 
-              onClick={() => {
-                setModalDetallePago(false)
-                setPagoSeleccionadoDetalle(null)
-                setUsuarioRegistroNombre('')
-                setUsuarioAutorizacionNombre('')
-              }} 
-              size="small"
-            >
-              <CloseIcon />
-            </IconButton>
+      <Dialog open={modalDetallePago} onClose={() => { setModalDetallePago(false); setPagoSeleccionadoDetalle(null); setUsuarioRegistroNombre(''); setUsuarioAutorizacionNombre('') }}
+        maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PaymentIcon />
+            <Typography variant="h6">Detalle del Pago</Typography>
           </Box>
+          <IconButton size="small" onClick={() => { setModalDetallePago(false); setPagoSeleccionadoDetalle(null) }}>
+            <CloseIcon />
+          </IconButton>
         </DialogTitle>
         <DialogContent>
           {pagoSeleccionadoDetalle && (
             <Box sx={{ mt: 1 }}>
               {/* SECCIÓN 1: La venta */}
-              <Box sx={{ mb: 2, pb: 2, borderBottom: '1px solid #f0f0f0' }}>
+              <Box sx={{ mb: 2, pb: 2, borderBottom: '2px solid #f0f0f0' }}>
                 <Typography variant='caption' color='text.secondary' fontWeight='bold' textTransform='uppercase' display='block' sx={{ mb: 1 }}>📦 La Venta</Typography>
                 <Grid container spacing={1.5}>
                   <Grid item xs={6}>
@@ -2674,7 +2655,7 @@ export default function CreditosAbonosPage() {
               </Box>
 
               {/* SECCIÓN 2: El cobro */}
-              <Box sx={{ mb: 2, pb: 2, borderBottom: '1px solid #f0f0f0' }}>
+              <Box sx={{ mb: 2, pb: 2, borderBottom: '2px solid #f0f0f0' }}>
                 <Typography variant='caption' color='text.secondary' fontWeight='bold' textTransform='uppercase' display='block' sx={{ mb: 1 }}>💰 El Cobro</Typography>
                 <Grid container spacing={1.5}>
                   <Grid item xs={6}>
@@ -2682,17 +2663,25 @@ export default function CreditosAbonosPage() {
                     <Typography variant='h5' color='primary.main' fontWeight='bold'>${pagoSeleccionadoDetalle.montoTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Typography>
                   </Grid>
                   <Grid item xs={6}>
-                    <Typography variant='caption' color='text.secondary'>Estado actual</Typography>
+                    <Typography variant='caption' color='text.secondary'>Estado</Typography>
                     <Box sx={{ mt: 0.3 }}>
-                    <Chip
-                      label={
+                      <Chip label={
                         pagoSeleccionadoDetalle.estado === 'autorizado' ? '✅ Autorizado' :
-                        pagoSeleccionadoDetalle.estado === 'en_revision' ? '🔍 En Revisión' :
-                        pagoSeleccionadoDetalle.estado === 'pendiente' ? '🔍 En Revisión' : '❌ Rechazado'
-                      }
-                      color={pagoSeleccionadoDetalle.estado === 'autorizado' ? 'success' : pagoSeleccionadoDetalle.estado === 'rechazado' ? 'error' : 'info'}
+                        (pagoSeleccionadoDetalle.estado === 'en_revision' || pagoSeleccionadoDetalle.estado === 'pendiente') ? '🔍 En Revisión' : '❌ Rechazado'
+                      } color={pagoSeleccionadoDetalle.estado === 'autorizado' ? 'success' : pagoSeleccionadoDetalle.estado === 'rechazado' ? 'error' : 'info'}
                       size='small' sx={{ fontWeight: 'bold' }} />
                     </Box>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant='caption' color='text.secondary'>Formas de pago</Typography>
+                    {pagoSeleccionadoDetalle.formasPago?.map((fp: any, i: number) => (
+                      <Box key={i} sx={{ display: 'flex', gap: 2, mt: 0.5, p: 1, bgcolor: '#f9f6f2', borderRadius: 1 }}>
+                        <Chip label={fp.formaPago?.tipo || fp.formaPago?.nombre || '—'} size='small' sx={{ fontSize: 10 }} />
+                        <Typography variant='body2' fontWeight='bold'>${fp.monto?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Typography>
+                        {fp.referencia && <Typography variant='caption' color='text.secondary'>Folio: <strong>{fp.referencia}</strong></Typography>}
+                        {fp.banco && <Typography variant='caption' color='text.secondary'>Banco: {fp.banco}</Typography>}
+                      </Box>
+                    ))}
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant='caption' color='text.secondary'>Registrado por (Oficina/Planta)</Typography>
@@ -2708,212 +2697,46 @@ export default function CreditosAbonosPage() {
                       <Typography variant='body2' sx={{ bgcolor: '#fff8e1', p: 0.8, borderRadius: 0.5, mt: 0.3 }}>{pagoSeleccionadoDetalle.observaciones}</Typography>
                     </Grid>
                   )}
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">Estado</Typography>
-                      <Chip
-                        label={
-                          pagoSeleccionadoDetalle.estado === 'autorizado' ? '✅ Autorizado' :
-                          pagoSeleccionadoDetalle.estado === 'en_revision' ? '🔍 En Revisión' :
-                          pagoSeleccionadoDetalle.estado === 'pendiente' ? '⏳ Pendiente' : '❌ Rechazado'
-                        }
-                        color={
-                          pagoSeleccionadoDetalle.estado === 'autorizado' ? 'success' :
-                          pagoSeleccionadoDetalle.estado === 'en_revision' ? 'info' :
-                          pagoSeleccionadoDetalle.estado === 'pendiente' ? 'warning' : 'error'
-                        }
-                        size="small" sx={{ fontWeight: 'bold' }}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">Registrado por</Typography>
-                      <Typography variant="body1" fontWeight="bold">{usuarioRegistroNombre || '—'}</Typography>
-                    </Grid>
+                </Grid>
+              </Box>
+
+              {/* SECCIÓN 3: La autorización */}
+              {((pagoSeleccionadoDetalle as any).revisadoPor || (pagoSeleccionadoDetalle as any).autorizadoPorNombre || pagoSeleccionadoDetalle.estado === 'autorizado') && (
+                <Box sx={{ mb: 1 }}>
+                  <Typography variant='caption' color='text.secondary' fontWeight='bold' textTransform='uppercase' display='block' sx={{ mb: 1 }}>✅ La Autorización</Typography>
+                  <Grid container spacing={1.5}>
                     {(pagoSeleccionadoDetalle as any).revisadoPor && (
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="body2" color="text.secondary">Revisado por (Oficina)</Typography>
-                        <Typography variant="body1" color="info.main" fontWeight="bold">{(pagoSeleccionadoDetalle as any).revisadoPor}</Typography>
+                      <Grid item xs={6}>
+                        <Typography variant='caption' color='text.secondary'>Revisado por (Oficina)</Typography>
+                        <Typography variant='body2' fontWeight='bold' color='info.main'>{(pagoSeleccionadoDetalle as any).revisadoPor}</Typography>
                         {(pagoSeleccionadoDetalle as any).fechaRevision && (
-                          <Typography variant="caption" color="text.secondary">{new Date((pagoSeleccionadoDetalle as any).fechaRevision).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', dateStyle: 'medium' })}</Typography>
+                          <Typography variant='caption' color='text.disabled'>{new Date((pagoSeleccionadoDetalle as any).fechaRevision).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', dateStyle: 'medium' })}</Typography>
                         )}
                       </Grid>
                     )}
                     {(pagoSeleccionadoDetalle as any).autorizadoPorNombre && (
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="body2" color="text.secondary">Autorizado por</Typography>
-                        <Typography variant="body1" color="success.main" fontWeight="bold">{(pagoSeleccionadoDetalle as any).autorizadoPorNombre}</Typography>
+                      <Grid item xs={6}>
+                        <Typography variant='caption' color='text.secondary'>Autorizado por (San Luis)</Typography>
+                        <Typography variant='body2' fontWeight='bold' color='success.main'>{(pagoSeleccionadoDetalle as any).autorizadoPorNombre}</Typography>
                         {(pagoSeleccionadoDetalle as any).fechaAutorizacionReal && (
-                          <Typography variant="caption" color="text.secondary">{new Date((pagoSeleccionadoDetalle as any).fechaAutorizacionReal).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', dateStyle: 'medium' })}</Typography>
+                          <Typography variant='caption' color='text.disabled'>{new Date((pagoSeleccionadoDetalle as any).fechaAutorizacionReal).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', dateStyle: 'medium' })}</Typography>
                         )}
                       </Grid>
                     )}
                     {(pagoSeleccionadoDetalle as any).notaAutorizacion && (
                       <Grid item xs={12}>
-                        <Typography variant="body2" color="text.secondary">Observación</Typography>
-                        <Typography variant="body2" sx={{ bgcolor: '#f5f5f5', p: 1, borderRadius: 1, mt: 0.5 }}>{(pagoSeleccionadoDetalle as any).notaAutorizacion}</Typography>
+                        <Typography variant='caption' color='text.secondary'>Observación de autorización</Typography>
+                        <Typography variant='body2' sx={{ bgcolor: '#e8f5e9', p: 0.8, borderRadius: 0.5, mt: 0.3 }}>{(pagoSeleccionadoDetalle as any).notaAutorizacion}</Typography>
                       </Grid>
                     )}
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Fecha de Pago
-                      </Typography>
-                      <Typography variant="body1">
-                        {new Date(pagoSeleccionadoDetalle.fechaPago).toLocaleDateString('es-MX', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                          timeZone: 'America/Mexico_City'
-                        })}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Hora de Pago
-                      </Typography>
-                      <Typography variant="body1">
-                        {pagoSeleccionadoDetalle.horaPago}
-                      </Typography>
-                    </Grid>
                   </Grid>
-                </CardContent>
-              </Card>
-
-              {/* Formas de Pago */}
-              {pagoSeleccionadoDetalle.formasPago && pagoSeleccionadoDetalle.formasPago.length > 0 && (
-                <Card variant="outlined" sx={{ mb: 3 }}>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <AttachMoneyIcon />
-                      Formas de Pago
-                    </Typography>
-                    <TableContainer component={Paper} variant="outlined">
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Método</TableCell>
-                            <TableCell align="right">Monto</TableCell>
-                            <TableCell>Referencia</TableCell>
-                            <TableCell>Banco</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {pagoSeleccionadoDetalle.formasPago.map((forma, index) => (
-                            <TableRow key={index}>
-                              <TableCell>
-                                <Chip
-                                  label={forma.formaPago?.nombre || forma.formaPago?.tipo || 'N/A'}
-                                  color={getMetodoPagoColor(forma.formaPago?.tipo || 'efectivo') as any}
-                                  size="small"
-                                />
-                              </TableCell>
-                              <TableCell align="right">
-                                <Typography variant="body1" fontWeight="bold">
-                                  ${forma.monto.toLocaleString()}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <Typography variant="body2">
-                                  {forma.referencia || '-'}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <Typography variant="body2">
-                                  {forma.banco || '-'}
-                                </Typography>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Información de Registro */}
-              <Card variant="outlined" sx={{ mb: 3 }}>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <HistoryIcon />
-                    Información de Registro
-                  </Typography>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Registrado por
-                      </Typography>
-                      <Typography variant="body1" fontWeight="bold">
-                        {usuarioRegistroNombre || pagoSeleccionadoDetalle.usuarioRegistro || 'N/A'}
-                      </Typography>
-                    </Grid>
-                    {pagoSeleccionadoDetalle.usuarioAutorizacion && (
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="body2" color="text.secondary">
-                          Autorizado por
-                        </Typography>
-                        <Typography variant="body1" fontWeight="bold">
-                          {usuarioAutorizacionNombre || pagoSeleccionadoDetalle.usuarioAutorizacion}
-                        </Typography>
-                      </Grid>
-                    )}
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Fecha de Creación
-                      </Typography>
-                      <Typography variant="body1">
-                        {new Date(pagoSeleccionadoDetalle.fechaCreacion).toLocaleDateString('es-MX', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Última Modificación
-                      </Typography>
-                      <Typography variant="body1">
-                        {new Date(pagoSeleccionadoDetalle.fechaModificacion).toLocaleDateString('es-MX', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </Typography>
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-
-              {/* Observaciones */}
-              {pagoSeleccionadoDetalle.observaciones && (
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      Observaciones
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {pagoSeleccionadoDetalle.observaciones}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                </Box>
               )}
             </Box>
           )}
         </DialogContent>
         <DialogActions>
-          <Button 
-            onClick={() => {
-              setModalDetallePago(false)
-              setPagoSeleccionadoDetalle(null)
-              setUsuarioRegistroNombre('')
-              setUsuarioAutorizacionNombre('')
-            }}
-          >
-            Cerrar
-          </Button>
+          <Button onClick={() => { setModalDetallePago(false); setPagoSeleccionadoDetalle(null); setUsuarioRegistroNombre(''); setUsuarioAutorizacionNombre('') }}>Cerrar</Button>
         </DialogActions>
       </Dialog>
 
