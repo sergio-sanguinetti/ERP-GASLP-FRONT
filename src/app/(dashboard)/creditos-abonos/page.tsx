@@ -209,6 +209,8 @@ export default function CreditosAbonosPage() {
     porcentajePorVencer: 0
   })
   const [clientesCredito, setClientesCredito] = useState<ClienteCredito[]>([])
+  const [clientesDashboard, setClientesDashboard] = useState<ClienteCredito[]>([])
+  const [loadingDashboard, setLoadingDashboard] = useState(false)
   const [pagosPendientesAutorizacion, setPagosPendientesAutorizacion] = useState<PagoPendienteAutorizacion[]>([])
   const [historialPagos, setHistorialPagos] = useState<Pago[]>([])
   const [historialLimites, setHistorialLimites] = useState<HistorialLimite[]>([])
@@ -339,6 +341,26 @@ export default function CreditosAbonosPage() {
     } finally {
       setLoadingSBC(false)
     }
+  }
+
+  const cargarClientesDashboard = async () => {
+    if (loadingDashboard) return
+    try {
+      setLoadingDashboard(true)
+      // Cargar TODOS los clientes sin filtro de ruta para el dashboard
+      const params = new URLSearchParams()
+      params.append('pageSize', '200')
+      if (sedeId) params.append('sedeId', sedeId)
+      const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+      const token = typeof window !== 'undefined' ? (localStorage.getItem('token') || sessionStorage.getItem('token') || '') : ''
+      const res = await fetch(API + '/creditos-abonos/clientes-credito?' + params.toString(), {
+        headers: { 'Authorization': 'Bearer ' + token }
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      setClientesDashboard(Array.isArray(data.clientes) ? data.clientes : [])
+    } catch (e) { console.error('Error dashboard clientes', e) }
+    finally { setLoadingDashboard(false) }
   }
 
   const abrirTicketSbc = async (pedidoId: string) => {
@@ -488,6 +510,10 @@ export default function CreditosAbonosPage() {
         setLoading(false)
       }
     })
+  }, [sedeId])
+
+  useEffect(() => {
+    if (sedeId) cargarClientesDashboard()
   }, [sedeId])
 
   const loadInitialData = async () => {
@@ -1253,7 +1279,7 @@ export default function CreditosAbonosPage() {
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Button
             variant={vistaActual === 'dashboard' ? 'contained' : 'outlined'}
-            onClick={() => setVistaActual('dashboard')}
+            onClick={() => { setVistaActual('dashboard'); cargarClientesDashboard(); }}
             startIcon={<AssessmentIcon />}
           >
             Dashboard
@@ -1305,7 +1331,7 @@ export default function CreditosAbonosPage() {
                     ${resumenCredito.carteraTotal.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </Typography>
                   <Typography variant='body2' color='text.secondary'>{resumenCredito.notasPendientes} notas activas</Typography>
-                  <Typography variant='caption' color='text.disabled'>{clientesCredito.filter(c => (c.saldoActual ?? 0) > 0).length} clientes con saldo</Typography>
+                  <Typography variant='caption' color='text.disabled'>{clientesDashboard.filter(c => (c.saldoActual ?? 0) > 0).length} clientes con saldo</Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -1360,7 +1386,7 @@ export default function CreditosAbonosPage() {
                 <CardContent>
                   <Typography variant='subtitle2' fontWeight='bold' gutterBottom>Distribución por Estado</Typography>
                   {(() => {
-                    const clientesCon = clientesCredito.filter(c => (c.saldoActual ?? 0) > 0)
+                    const clientesCon = clientesDashboard.filter(c => (c.saldoActual ?? 0) > 0)
                     const grupos = [
                       { label: 'Buen pagador', key: 'buen-pagador', color: '#2e7d32', bg: '#e8f5e9' },
                       { label: 'Por vencer', key: 'vencido', color: '#f57c00', bg: '#fff3e0' },
@@ -1435,7 +1461,7 @@ export default function CreditosAbonosPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {[...clientesCredito]
+                    {[...clientesDashboard]
                       .filter(c => (c.saldoActual ?? 0) > 0)
                       .sort((a, b) => (b.saldoActual ?? 0) - (a.saldoActual ?? 0))
                       .slice(0, 10)
