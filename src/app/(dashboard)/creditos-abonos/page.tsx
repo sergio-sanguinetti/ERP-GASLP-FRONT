@@ -2436,19 +2436,32 @@ export default function CreditosAbonosPage() {
 
               {(tipoDialogo === 'registrar-pago' || tipoDialogo === 'registrar-abono') && (
                 <Box>
+                  {/* Info del cliente y contexto */}
+                  <Box sx={{ mb: 2, p: 2, bgcolor: '#f9f6f2', borderRadius: 1, border: '1px solid #e0d5c8' }}>
+                    <Typography variant='subtitle2' fontWeight='bold' color='text.secondary' gutterBottom>CLIENTE</Typography>
+                    <Typography variant='body1' fontWeight='bold'>{clienteSeleccionado?.nombre}</Typography>
+                    <Typography variant='caption' color='text.secondary'>{clienteSeleccionado?.ruta} · Saldo: ${(clienteSeleccionado?.saldoActual ?? 0).toLocaleString('es-MX', { maximumFractionDigits: 0 })}</Typography>
+                  </Box>
                   {notaSeleccionada && (
-                    <Box sx={{ mb: 3, p: 2, bgcolor: 'primary.light', borderRadius: 1 }}>
-                      <Typography variant='h6' gutterBottom>
-                        Nota a Pagar: {notaSeleccionada.numeroNota}
-                      </Typography>
-                      <Typography variant='body2' color='text.secondary'>
-                        Importe de la nota: ${notaSeleccionada.importe.toLocaleString()}
-                      </Typography>
+                    <Box sx={{ mb: 2, p: 2, bgcolor: '#fff8e1', borderRadius: 1, border: '1px solid #ffb74d' }}>
+                      <Typography variant='subtitle2' fontWeight='bold' color='warning.dark' gutterBottom>NOTA A LIQUIDAR</Typography>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Box>
+                          <Typography variant='body1' fontWeight='bold'>{notaSeleccionada.numeroNota}</Typography>
+                          <Typography variant='caption' color='text.secondary'>Vence: {notaSeleccionada.fechaVencimiento ? new Date(notaSeleccionada.fechaVencimiento).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', dateStyle: 'medium' }) : '—'}</Typography>
+                        </Box>
+                        <Box sx={{ textAlign: 'right' }}>
+                          <Typography variant='h6' fontWeight='bold' color='primary.main'>${(notaSeleccionada.saldoPendiente ?? notaSeleccionada.importe ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Typography>
+                          <Typography variant='caption' color='text.secondary'>saldo pendiente</Typography>
+                        </Box>
+                      </Box>
                     </Box>
                   )}
-
-                  <Typography variant='h6' gutterBottom>
-                    Formas de Pago
+                  <Typography variant='subtitle1' fontWeight='bold' gutterBottom sx={{ mt: 1 }}>
+                    Comprobantes de Pago
+                  </Typography>
+                  <Typography variant='caption' color='text.secondary' display='block' sx={{ mb: 1 }}>
+                    Registra cada forma de pago con su folio o referencia del comprobante físico
                   </Typography>
 
                   {formasPago.map((forma, index) => (
@@ -2528,31 +2541,37 @@ export default function CreditosAbonosPage() {
                     Agregar otra forma de pago
                   </Button>
 
-                  <Card sx={{ bgcolor: 'success.light', mb: 2 }}>
-                    <CardContent>
-                      <Typography variant='h6' gutterBottom>
-                        Resumen del Pago
-                      </Typography>
-                      <Typography variant='h4' color='primary'>
-                        Total a pagar: ${totalPago.toLocaleString()}
-                      </Typography>
-                      {notaSeleccionada && (
-                        <Typography variant='body2' color='text.secondary'>
-                          Faltante: ${(notaSeleccionada.importe - totalPago).toLocaleString()}
-                        </Typography>
-                      )}
+                  <Card sx={{ bgcolor: '#e8f5e9', mb: 2, border: '1px solid #a5d6a7' }}>
+                    <CardContent sx={{ pb: '12px !important' }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Box>
+                          <Typography variant='caption' color='success.dark' fontWeight='bold' textTransform='uppercase'>Total registrado</Typography>
+                          <Typography variant='h4' color='success.dark' fontWeight='bold'>${totalPago.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Typography>
+                        </Box>
+                        {notaSeleccionada && (
+                          <Box sx={{ textAlign: 'right' }}>
+                            <Typography variant='caption' color={totalPago >= (notaSeleccionada.saldoPendiente ?? notaSeleccionada.importe ?? 0) ? 'success.dark' : 'warning.dark'} fontWeight='bold' textTransform='uppercase'>
+                              {totalPago >= (notaSeleccionada.saldoPendiente ?? notaSeleccionada.importe ?? 0) ? '✅ Cubre el saldo' : 'Abono parcial'}
+                            </Typography>
+                            <Typography variant='body2' color='text.secondary'>
+                              Pendiente después: ${Math.max(0, (notaSeleccionada.saldoPendiente ?? notaSeleccionada.importe ?? 0) - totalPago).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                            </Typography>
+                          </Box>
+                        )}
+                      </Box>
                     </CardContent>
                   </Card>
 
                   <TextField
                     fullWidth
-                    label='Observaciones'
+                    size='small'
+                    label='Notas del cobrador (opcional)'
                     multiline
-                    rows={3}
+                    rows={2}
                     value={observacionesPago}
                     onChange={(e) => setObservacionesPago(e.target.value)}
                     sx={{ mb: 2 }}
-                    placeholder='Observaciones sobre el pago...'
+                    placeholder='Ej: Cliente pagó con 2 billetes, dio cambio de $50. Voucher firmado...'
                   />
                 </Box>
               )}
@@ -3213,14 +3232,55 @@ export default function CreditosAbonosPage() {
                   <Typography variant='body2' sx={{ mb: 2 }}><strong>Forma de pago:</strong> {pagoSelModal.formasPago?.map((f: any) => f.metodo).join(', ')}</Typography>
                 </Box>
               )}
-              {tipoAccionPago === 'autorizar' && (
-                <Alert severity='success' sx={{ mb: 2 }}>
-                  Al autorizar, la nota de crédito quedará oficialmente pagada y el crédito del cliente se liberará.
+              {tipoAccionPago === 'autorizar' && pagoSelModal && (
+                <Box sx={{ mb: 2 }}>
+                  <Alert severity='info' sx={{ mb: 2 }}>
+                    Revisa los comprobantes físicos y confirma que el pago es correcto antes de autorizar.
+                  </Alert>
+                  <Box sx={{ bgcolor: '#f9f6f2', borderRadius: 1, p: 1.5, mb: 2 }}>
+                    <Grid container spacing={1}>
+                      <Grid item xs={6}>
+                        <Typography variant='caption' color='text.secondary'>Monto</Typography>
+                        <Typography variant='body1' fontWeight='bold' color='primary.main'>${pagoSelModal.montoPagado?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant='caption' color='text.secondary'>Registrado por</Typography>
+                        <Typography variant='body2' fontWeight='bold'>{pagoSelModal.registradoPorNombre || pagoSelModal.registradoPor}</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant='caption' color='text.secondary'>Forma de pago</Typography>
+                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.3 }}>
+                          {pagoSelModal.formasPago?.map((f: any, i: number) => (
+                            <Box key={i}>
+                              <Typography variant='caption' fontWeight='bold'>{f.metodo}: ${f.monto?.toLocaleString('es-MX', { maximumFractionDigits: 0 })}</Typography>
+                              {f.referencia && <Typography variant='caption' color='text.secondary' display='block'>Folio: {f.referencia}</Typography>}
+                              {f.banco && <Typography variant='caption' color='text.secondary' display='block'>Banco: {f.banco}</Typography>}
+                            </Box>
+                          ))}
+                        </Box>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant='caption' color='text.secondary'>Fecha registro</Typography>
+                        <Typography variant='body2'>{pagoSelModal.fechaHora}</Typography>
+                      </Grid>
+                      {pagoSelModal.observaciones && (
+                        <Grid item xs={12}>
+                          <Typography variant='caption' color='text.secondary'>Notas del cobrador</Typography>
+                          <Typography variant='body2' sx={{ bgcolor: '#fff8e1', p: 0.8, borderRadius: 0.5, mt: 0.3 }}>{pagoSelModal.observaciones}</Typography>
+                        </Grid>
+                      )}
+                    </Grid>
+                  </Box>
+                </Box>
+              )}
+              {tipoAccionPago === 'revision' && (
+                <Alert severity='info' sx={{ mb: 2 }}>
+                  Confirmas que recibiste el pago y los comprobantes. El admin lo revisará para autorizar.
                 </Alert>
               )}
               <TextField fullWidth multiline rows={2} size='small'
-                label={tipoAccionPago === 'rechazar' ? 'Motivo del rechazo' : tipoAccionPago === 'reactivar' ? 'Motivo de reactivación (opcional)' : 'Nota (opcional)'}
-                placeholder={tipoAccionPago === 'rechazar' ? 'Ej: El efectivo no coincide...' : tipoAccionPago === 'autorizar' ? 'Ej: Confirmado en cuenta bancaria...' : ''}
+                label={tipoAccionPago === 'rechazar' ? 'Motivo del rechazo *' : tipoAccionPago === 'reactivar' ? 'Motivo de reactivación (opcional)' : 'Nota o referencia del comprobante (opcional)'}
+                placeholder={tipoAccionPago === 'rechazar' ? 'Ej: El monto no coincide con lo registrado...' : tipoAccionPago === 'autorizar' ? 'Ej: Transferencia confirmada en cuenta BBVA...' : tipoAccionPago === 'revision' ? 'Ej: Efectivo recibido en caja, ticket #123...' : ''}
                 value={notaAccionPago} onChange={e => setNotaAccionPago(e.target.value)} />
             </DialogContent>
             <DialogActions>
