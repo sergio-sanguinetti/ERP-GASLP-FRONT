@@ -2684,10 +2684,7 @@ export default function CreditosAbonosPage() {
                       </Box>
                     ))}
                   </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant='caption' color='text.secondary'>Registrado por (Oficina/Planta)</Typography>
-                    <Typography variant='body2' fontWeight='bold'>{usuarioRegistroNombre || '—'}</Typography>
-                  </Grid>
+
                   <Grid item xs={6}>
                     <Typography variant='caption' color='text.secondary'>Fecha y hora</Typography>
                     <Typography variant='body2'>{new Date(pagoSeleccionadoDetalle.fechaPago).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', dateStyle: 'medium' })} {pagoSeleccionadoDetalle.horaPago}</Typography>
