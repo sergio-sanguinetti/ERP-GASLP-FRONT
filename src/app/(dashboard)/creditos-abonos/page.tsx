@@ -2230,11 +2230,14 @@ export default function CreditosAbonosPage() {
                                 setPagoSeleccionadoDetalle(pago.pagoCompleto)
                                 setModalDetallePago(true)
                                 try {
-                                  if (pago.pagoCompleto.usuarioRegistro) {
+                                  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+                                  if (pago.pagoCompleto.usuarioRegistro && uuidRegex.test(pago.pagoCompleto.usuarioRegistro)) {
                                     const u = await usuariosAPI.getById(pago.pagoCompleto.usuarioRegistro)
                                     setUsuarioRegistroNombre(`${u.nombres} ${u.apellidoPaterno}`)
+                                  } else {
+                                    setUsuarioRegistroNombre(pago.pagoCompleto.usuarioRegistro || pago.registradoPorNombre || '—')
                                   }
-                                  if (pago.pagoCompleto.usuarioAutorizacion) {
+                                  if (pago.pagoCompleto.usuarioAutorizacion && uuidRegex.test(pago.pagoCompleto.usuarioAutorizacion)) {
                                     const u = await usuariosAPI.getById(pago.pagoCompleto.usuarioAutorizacion)
                                     setUsuarioAutorizacionNombre(`${u.nombres} ${u.apellidoPaterno}`)
                                   }
