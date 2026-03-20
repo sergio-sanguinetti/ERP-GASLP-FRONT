@@ -2643,21 +2643,36 @@ export default function CreditosAbonosPage() {
                     <Typography variant='caption' color='text.secondary'>Ruta / Repartidor</Typography>
                     <Typography variant='body2' fontWeight='bold'>{(pagoSeleccionadoDetalle.cliente as any)?.ruta?.nombre || '—'}</Typography>
                   </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant='caption' color='text.secondary'>Nota de crédito</Typography>
-                    <Typography variant='body2' fontWeight='bold'>{pagoSeleccionadoDetalle.notaCredito?.numeroNota || 'Abono general'}</Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant='caption' color='text.secondary'>Tipo</Typography>
-                    <Chip label={pagoSeleccionadoDetalle.tipo === 'nota_especifica' ? 'Nota específica' : 'Abono general'}
-                      size='small' color={pagoSeleccionadoDetalle.tipo === 'nota_especifica' ? 'primary' : 'secondary'} sx={{ fontSize: 10 }} />
-                  </Grid>
+                  {(pagoSeleccionadoDetalle as any)._esSBC ? (
+                    <>
+                      <Grid item xs={6}>
+                        <Typography variant='caption' color='text.secondary'>Pedido</Typography>
+                        <Typography variant='body2' fontWeight='bold'>{(pagoSeleccionadoDetalle as any)._numeroPedido}</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant='caption' color='text.secondary'>Monto de la venta</Typography>
+                        <Typography variant='body2' fontWeight='bold' color='primary.main'>${pagoSeleccionadoDetalle.montoTotal?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Typography>
+                      </Grid>
+                    </>
+                  ) : (
+                    <>
+                      <Grid item xs={6}>
+                        <Typography variant='caption' color='text.secondary'>Nota de crédito</Typography>
+                        <Typography variant='body2' fontWeight='bold'>{pagoSeleccionadoDetalle.notaCredito?.numeroNota || 'Abono general'}</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant='caption' color='text.secondary'>Tipo</Typography>
+                        <Chip label={pagoSeleccionadoDetalle.tipo === 'nota_especifica' ? 'Nota específica' : 'Abono general'}
+                          size='small' color={pagoSeleccionadoDetalle.tipo === 'nota_especifica' ? 'primary' : 'secondary'} sx={{ fontSize: 10 }} />
+                      </Grid>
+                    </>
+                  )}
                 </Grid>
               </Box>
 
               {/* SECCIÓN 2: El cobro */}
               <Box sx={{ mb: 2, pb: 2, borderBottom: '2px solid #f0f0f0' }}>
-                <Typography variant='caption' color='text.secondary' fontWeight='bold' textTransform='uppercase' display='block' sx={{ mb: 1 }}>💰 El Cobro</Typography>
+                <Typography variant='caption' color='text.secondary' fontWeight='bold' textTransform='uppercase' display='block' sx={{ mb: 1 }}>{(pagoSeleccionadoDetalle as any)._esSBC ? '🔍 La Revisión' : '💰 El Cobro'}</Typography>
                 <Grid container spacing={1.5}>
                   <Grid item xs={6}>
                     <Typography variant='caption' color='text.secondary'>Monto cobrado</Typography>
