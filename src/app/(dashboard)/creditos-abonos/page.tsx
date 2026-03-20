@@ -176,7 +176,7 @@ interface PagoPendienteAutorizacion {
 }
 
 export default function CreditosAbonosPage() {
-  const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'limites' | 'pagos-pendientes' | 'historial-pagos' | 'pagos-sbc'>('dashboard')
+  const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'pagos-pendientes' | 'historial-pagos' | 'pagos-sbc'>('dashboard')
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteCredito | null>(null)
   const refFichaCliente = useRef<HTMLDivElement | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
@@ -1265,13 +1265,7 @@ export default function CreditosAbonosPage() {
           >
             Gestión por Cliente
           </Button>
-          <Button
-            variant={vistaActual === 'limites' ? 'contained' : 'outlined'}
-            onClick={() => setVistaActual('limites')}
-            startIcon={<CreditCardIcon />}
-          >
-            Control de Límites
-          </Button>
+
           <Button
             variant={vistaActual === 'pagos-pendientes' ? 'contained' : 'outlined'}
             onClick={() => setVistaActual('pagos-pendientes')}
@@ -1301,137 +1295,186 @@ export default function CreditosAbonosPage() {
       {/* Dashboard Principal */}
       {vistaActual === 'dashboard' && (
         <Box>
-          {/* Filtros del Dashboard: ruta y fechas */}
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', mb: 3 }}>
-            <FormControl size='small' sx={{ minWidth: 200 }}>
-              <InputLabel>Ruta</InputLabel>
-              <Select
-                label='Ruta'
-                value={filtroRutaDashboard}
-                onChange={(e) => setFiltroRutaDashboard(e.target.value)}
-              >
-                <MenuItem value='todas'>Todas las rutas</MenuItem>
-                {rutasUnicas.map((ruta) => (
-                  <MenuItem key={ruta} value={ruta}>
-                    {ruta}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              size='small'
-              label='Fecha desde'
-              type='date'
-              value={fechaDesdeDashboard}
-              onChange={(e) => setFechaDesdeDashboard(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              sx={{ minWidth: 160 }}
-            />
-            <TextField
-              size='small'
-              label='Fecha hasta'
-              type='date'
-              value={fechaHastaDashboard}
-              onChange={(e) => setFechaHastaDashboard(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              sx={{ minWidth: 160 }}
-            />
-          </Box>
-          {/* Tarjetas de Resumen General */}
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid item xs={12} sm={6} md={4}>
-              <Card>
+          {/* Fila 1 — 4 KPIs */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ borderLeft: '4px solid', borderLeftColor: 'primary.main', height: '100%' }}>
                 <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                      <Typography color='text.secondary' gutterBottom>
-                        CARTERA TOTAL
-                      </Typography>
-                      <Typography variant='h4' component='div' color='primary'>
-                        ${resumenCredito.carteraTotal.toLocaleString()}
-                      </Typography>
-                      <Typography variant='body2' color='text.secondary'>
-                        {resumenCredito.notasPendientes} notas pendientes
-                      </Typography>
-                    </Box>
-                    <AccountBalanceIcon color='primary' sx={{ fontSize: 40 }} />
-                  </Box>
+                  <Typography variant='caption' color='text.secondary' fontWeight='bold' textTransform='uppercase'>Cartera Total</Typography>
+                  <Typography variant='h4' fontWeight='bold' color='primary.main' sx={{ my: 0.5 }}>
+                    ${resumenCredito.carteraTotal.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </Typography>
+                  <Typography variant='body2' color='text.secondary'>{resumenCredito.notasPendientes} notas activas</Typography>
+                  <Typography variant='caption' color='text.disabled'>{clientesCredito.filter(c => (c.saldoActual ?? 0) > 0).length} clientes con saldo</Typography>
                 </CardContent>
               </Card>
             </Grid>
-
-            <Grid item xs={12} sm={6} md={4}>
-              <Card>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ borderLeft: '4px solid', borderLeftColor: 'error.main', height: '100%' }}>
                 <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                      <Typography color='text.secondary' gutterBottom>
-                        VENCIDA
-                      </Typography>
-                      <Typography variant='h4' component='div' color='error.main'>
-                        ${resumenCredito.carteraVencida.toLocaleString()}
-                      </Typography>
-                      <Typography variant='body2' color='text.secondary'>
-                        {resumenCredito.notasVencidas} notas • {resumenCredito.porcentajeVencida}%
-                      </Typography>
-                    </Box>
-                    <WarningIcon color='error' sx={{ fontSize: 40 }} />
-                  </Box>
+                  <Typography variant='caption' color='error.main' fontWeight='bold' textTransform='uppercase'>Cartera Vencida</Typography>
+                  <Typography variant='h4' fontWeight='bold' color='error.main' sx={{ my: 0.5 }}>
+                    ${resumenCredito.carteraVencida.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </Typography>
+                  <Typography variant='body2' color='error.dark'>{resumenCredito.notasVencidas} notas vencidas</Typography>
+                  <Typography variant='caption' color='text.disabled'>
+                    {resumenCredito.carteraTotal > 0 ? resumenCredito.porcentajeVencida.toFixed(1) : '0'}% del total
+                  </Typography>
                 </CardContent>
               </Card>
             </Grid>
-
-            <Grid item xs={12} sm={6} md={4}>
-              <Card>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ borderLeft: '4px solid', borderLeftColor: 'warning.main', height: '100%' }}>
                 <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                      <Typography color='text.secondary' gutterBottom>
-                        POR VENCER
-                      </Typography>
-                      <Typography variant='h4' component='div' color='warning.main'>
-                        ${resumenCredito.carteraPorVencer.toLocaleString()}
-                      </Typography>
-                      <Typography variant='body2' color='text.secondary'>
-                        {resumenCredito.notasPorVencer} notas • {resumenCredito.porcentajePorVencer}%
-                      </Typography>
-                    </Box>
-                    <ScheduleIcon color='warning' sx={{ fontSize: 40 }} />
-                  </Box>
+                  <Typography variant='caption' color='warning.dark' fontWeight='bold' textTransform='uppercase'>Por Vencer (5 días)</Typography>
+                  <Typography variant='h4' fontWeight='bold' color='warning.main' sx={{ my: 0.5 }}>
+                    ${resumenCredito.carteraPorVencer.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </Typography>
+                  <Typography variant='body2' color='warning.dark'>{resumenCredito.notasPorVencer} notas próximas</Typography>
+                  <Typography variant='caption' color='text.disabled'>
+                    {resumenCredito.carteraTotal > 0 ? resumenCredito.porcentajePorVencer.toFixed(1) : '0'}% del total
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ borderLeft: '4px solid', borderLeftColor: 'success.main', height: '100%' }}>
+                <CardContent>
+                  <Typography variant='caption' color='success.dark' fontWeight='bold' textTransform='uppercase'>Al Corriente</Typography>
+                  <Typography variant='h4' fontWeight='bold' color='success.main' sx={{ my: 0.5 }}>
+                    ${(resumenCredito.carteraTotal - resumenCredito.carteraVencida - resumenCredito.carteraPorVencer).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </Typography>
+                  <Typography variant='body2' color='success.dark'>
+                    {resumenCredito.notasPendientes - resumenCredito.notasVencidas - resumenCredito.notasPorVencer} notas vigentes
+                  </Typography>
+                  <Typography variant='caption' color='text.disabled'>Sin riesgo inmediato</Typography>
                 </CardContent>
               </Card>
             </Grid>
           </Grid>
 
-          {/* Sección de Alertas Críticas */}
+          {/* Fila 2 — Distribución por estado de clientes */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={12} md={5}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <Typography variant='subtitle2' fontWeight='bold' gutterBottom>Distribución por Estado</Typography>
+                  {(() => {
+                    const clientesCon = clientesCredito.filter(c => (c.saldoActual ?? 0) > 0)
+                    const grupos = [
+                      { label: 'Buen pagador', key: 'buen-pagador', color: '#2e7d32', bg: '#e8f5e9' },
+                      { label: 'Por vencer', key: 'vencido', color: '#f57c00', bg: '#fff3e0' },
+                      { label: 'Crítico', key: 'critico', color: '#c62828', bg: '#ffebee' },
+                      { label: 'Bloqueado', key: 'bloqueado', color: '#424242', bg: '#f5f5f5' },
+                    ]
+                    return (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                        {grupos.map(g => {
+                          const cantidad = clientesCon.filter(c => c.estado === g.key).length
+                          const monto = clientesCon.filter(c => c.estado === g.key).reduce((s, c) => s + (c.saldoActual ?? 0), 0)
+                          const pct = clientesCon.length > 0 ? (cantidad / clientesCon.length) * 100 : 0
+                          return (
+                            <Box key={g.key}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.3 }}>
+                                <Typography variant='caption' fontWeight='bold' sx={{ color: g.color }}>{g.label}</Typography>
+                                <Typography variant='caption' color='text.secondary'>{cantidad} clientes · ${monto.toLocaleString('es-MX', { maximumFractionDigits: 0 })}</Typography>
+                              </Box>
+                              <Box sx={{ bgcolor: '#f0f0f0', borderRadius: 1, height: 8, overflow: 'hidden' }}>
+                                <Box sx={{ width: `${pct}%`, bgcolor: g.color, height: '100%', borderRadius: 1, transition: 'width 0.5s' }} />
+                              </Box>
+                            </Box>
+                          )
+                        })}
+                      </Box>
+                    )
+                  })()}
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={7}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <Typography variant='subtitle2' fontWeight='bold' gutterBottom>⚠️ Alertas Críticas</Typography>
+                  {alertasCredito.filter(a => a.tipo === 'critica').length === 0 ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'success.main', mt: 1 }}>
+                      <CheckCircleIcon />
+                      <Typography variant='body2'>Sin alertas críticas en este momento</Typography>
+                    </Box>
+                  ) : (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 200, overflowY: 'auto' }}>
+                      {alertasCredito.filter(a => a.tipo === 'critica').map((alerta) => (
+                        <Alert key={alerta.id} severity='error' sx={{ py: 0.5 }}>
+                          <Typography variant='caption' fontWeight='bold'>{alerta.titulo}</Typography>
+                          {alerta.cliente && <Typography variant='caption' display='block'>{alerta.cliente}</Typography>}
+                          {alerta.monto && <Typography variant='caption' display='block'>${alerta.monto.toLocaleString()}</Typography>}
+                        </Alert>
+                      ))}
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* Fila 3 — Top 10 deudores */}
           <Card>
             <CardContent>
-              <Typography variant='h6' gutterBottom>
-                Alertas Críticas
-              </Typography>
-              
-              <Grid container spacing={2}>
-                {alertasCredito.filter(a => a.tipo === 'critica').map((alerta) => (
-                  <Grid item xs={12} md={6} key={alerta.id}>
-                    <Alert severity={getAlertaColor(alerta.tipo) as any}>
-                      <AlertTitle>{alerta.titulo}</AlertTitle>
-                      <Typography variant='body2'>
-                        {alerta.descripcion}
-                      </Typography>
-                      {alerta.cliente && (
-                        <Typography variant='body2' sx={{ mt: 1, fontWeight: 'bold' }}>
-                          Cliente: {alerta.cliente}
-                        </Typography>
-                      )}
-                      {alerta.monto && (
-                        <Typography variant='body2' sx={{ fontWeight: 'bold' }}>
-                          Monto: ${alerta.monto.toLocaleString()}
-                        </Typography>
-                      )}
-                    </Alert>
-                  </Grid>
-                ))}
-              </Grid>
+              <Typography variant='subtitle2' fontWeight='bold' gutterBottom>Top Deudores</Typography>
+              <TableContainer>
+                <Table size='small'>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: 'background.default' }}>
+                      <TableCell><Typography variant='caption' fontWeight='bold'>#</Typography></TableCell>
+                      <TableCell><Typography variant='caption' fontWeight='bold'>Cliente</Typography></TableCell>
+                      <TableCell><Typography variant='caption' fontWeight='bold'>Ruta</Typography></TableCell>
+                      <TableCell align='right'><Typography variant='caption' fontWeight='bold'>Saldo</Typography></TableCell>
+                      <TableCell align='right'><Typography variant='caption' fontWeight='bold'>Límite</Typography></TableCell>
+                      <TableCell><Typography variant='caption' fontWeight='bold'>Estado</Typography></TableCell>
+                      <TableCell><Typography variant='caption' fontWeight='bold'>Uso</Typography></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {[...clientesCredito]
+                      .filter(c => (c.saldoActual ?? 0) > 0)
+                      .sort((a, b) => (b.saldoActual ?? 0) - (a.saldoActual ?? 0))
+                      .slice(0, 10)
+                      .map((c, idx) => {
+                        const pct = c.limiteCredito > 0 ? Math.min(((c.saldoActual ?? 0) / c.limiteCredito) * 100, 100) : 0
+                        const estadoColor = c.estado === 'buen-pagador' ? 'success' : c.estado === 'critico' ? 'error' : c.estado === 'bloqueado' ? 'default' : 'warning'
+                        const estadoLabel = c.estado === 'buen-pagador' ? 'Al corriente' : c.estado === 'vencido' ? 'Por vencer' : c.estado === 'critico' ? 'Crítico' : 'Bloqueado'
+                        return (
+                          <TableRow key={c.id} hover
+                            sx={{ cursor: 'pointer' }}
+                            onClick={() => { setVistaActual('clientes'); setTimeout(() => setClienteSeleccionado(c), 100) }}>
+                            <TableCell><Typography variant='caption' color='text.disabled'>{idx + 1}</Typography></TableCell>
+                            <TableCell><Typography variant='caption' fontWeight='bold'>{c.nombre}</Typography></TableCell>
+                            <TableCell><Typography variant='caption' color='text.secondary'>{c.ruta}</Typography></TableCell>
+                            <TableCell align='right'>
+                              <Typography variant='caption' fontWeight='bold' color={c.estado === 'critico' ? 'error.main' : 'text.primary'}>
+                                ${(c.saldoActual ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align='right'>
+                              <Typography variant='caption' color='text.secondary'>
+                                ${c.limiteCredito.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Chip label={estadoLabel} size='small' color={estadoColor as any} sx={{ fontSize: 10, height: 20 }} />
+                            </TableCell>
+                            <TableCell sx={{ minWidth: 80 }}>
+                              <Box sx={{ bgcolor: '#f0f0f0', borderRadius: 1, height: 6, overflow: 'hidden' }}>
+                                <Box sx={{ width: `${pct}%`, bgcolor: pct >= 100 ? '#c62828' : pct >= 75 ? '#f57c00' : '#2e7d32', height: '100%', borderRadius: 1 }} />
+                              </Box>
+                              <Typography variant='caption' color='text.disabled'>{pct.toFixed(0)}%</Typography>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </CardContent>
           </Card>
         </Box>
@@ -1875,268 +1918,6 @@ export default function CreditosAbonosPage() {
       )}
 
       {/* Panel de Control de Límites de Crédito */}
-      {vistaActual === 'limites' && (
-        <Box>
-          {/* Configuración Masiva */}
-          <Card sx={{ mb: 3 }}>
-            <CardContent>
-              <Typography variant='h6' gutterBottom>
-                Configuración Masiva de Límites
-              </Typography>
-              
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label='Límite para Clientes Nuevos'
-                    type='number'
-                    defaultValue='25000'
-                    InputProps={{
-                      startAdornment: <InputAdornment position='start'>$</InputAdornment>
-                    }}
-                  />
-                  <Typography variant='caption' color='text.secondary'>
-                    Se aplicará automáticamente a todos los clientes nuevos
-                  </Typography>
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <Box sx={{ display: 'flex', gap: 2 }}>
-                    <FormControl fullWidth>
-                      <InputLabel>Ruta Específica</InputLabel>
-                      <Select
-                        label='Ruta Específica'
-                        value={filtros.ruta}
-                        onChange={(e) => manejarCambioFiltros('ruta', e.target.value)}
-                      >
-                        <MenuItem value=''>Primera ruta (por defecto)</MenuItem>
-                        {rutasUnicas.map((ruta) => (
-                          <MenuItem key={ruta} value={ruta}>
-                            {ruta}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <TextField
-                      label='Nuevo Límite'
-                      type='number'
-                      defaultValue='30000'
-                      InputProps={{
-                        startAdornment: <InputAdornment position='start'>$</InputAdornment>
-                      }}
-                    />
-                  </Box>
-                </Grid>
-              </Grid>
-              
-              <Box sx={{ mt: 2 }}>
-                <Button variant='contained' startIcon={<AddIcon />}>
-                  Aplicar Configuración Masiva
-                </Button>
-              </Box>
-            </CardContent>
-          </Card>
-
-          {/* Tabla de Límites Individuales */}
-          <Card sx={{ mb: 3 }}>
-            <CardContent>
-              <Typography variant='h6' gutterBottom>
-                Límites Individuales por Cliente
-              </Typography>
-
-              {/* Filtros propios de esta sección: buscador y ruta (no usan el filtro de arriba) */}
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
-                <TextField
-                  size='small'
-                  placeholder='Buscar por nombre'
-                  value={filtroNombreLimites}
-                  onChange={(e) => setFiltroNombreLimites(e.target.value)}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position='start'>
-                        <SearchIcon color='action' />
-                      </InputAdornment>
-                    )
-                  }}
-                  sx={{ minWidth: 220 }}
-                />
-                <FormControl size='small' sx={{ minWidth: 200 }}>
-                  <InputLabel>Ruta</InputLabel>
-                  <Select
-                    label='Ruta'
-                    value={filtros.ruta}
-                    onChange={(e) => manejarCambioFiltros('ruta', e.target.value)}
-                  >
-                    <MenuItem value=''>Primera ruta (por defecto)</MenuItem>
-                    {rutasUnicas.map((ruta) => (
-                      <MenuItem key={ruta} value={ruta}>
-                        {ruta}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
-              
-              <TableContainer component={Paper} variant='outlined'>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Cliente</TableCell>
-                      <TableCell>Ruta</TableCell>
-                      <TableCell align='right'>Límite Actual</TableCell>
-                      <TableCell align='right'>Nuevo Límite</TableCell>
-                      <TableCell align='center' sx={{ minWidth: 400 }}>Acciones</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {clientesCreditoFiltradosLimites.map((cliente) => (
-                      <TableRow key={cliente.id}>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <Avatar sx={{ width: 40, height: 40 }}>
-                              {cliente.nombre.charAt(0)}
-                            </Avatar>
-                            <Typography variant='subtitle2' fontWeight='bold'>
-                              {cliente.nombre}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Chip label={cliente.ruta} size='small' variant='outlined' />
-                        </TableCell>
-                        <TableCell align='right'>
-                          <Typography variant='h6' color='primary'>
-                            ${cliente.limiteCredito.toLocaleString()}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align='right'>
-                          <TextField
-                            size='small'
-                            type='number'
-                            value={limitesEditados[cliente.id]?.limite ?? cliente.limiteCredito}
-                            onChange={(e) => manejarCambioLimite(cliente.id, Number(e.target.value))}
-                            InputProps={{
-                              startAdornment: <InputAdornment position='start'>$</InputAdornment>
-                            }}
-                            sx={{ minWidth: 150 }}
-                          />
-                        </TableCell>
-                        <TableCell align='center'>
-                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-                            <TextField
-                              size='small'
-                              placeholder='Motivo (opcional)'
-                              value={limitesEditados[cliente.id]?.motivo || ''}
-                              onChange={(e) => manejarCambioMotivo(cliente.id, e.target.value)}
-                              sx={{ minWidth: 180, maxWidth: 250 }}
-                            />
-                            <Button 
-                              variant='outlined' 
-                              size='small' 
-                              startIcon={<EditIcon />}
-                              onClick={() => actualizarLimiteCliente(cliente.id)}
-                              disabled={
-                                saving || 
-                                !limitesEditados[cliente.id] || 
-                                limitesEditados[cliente.id].limite <= 0 ||
-                                (limitesEditados[cliente.id].limite === cliente.limiteCredito && !limitesEditados[cliente.id].motivo)
-                              }
-                            >
-                              {saving ? 'Guardando...' : 'Actualizar'}
-                            </Button>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              <TablePagination
-                component='div'
-                count={totalClientes}
-                page={pageClientes}
-                onPageChange={(_, newPage) => {
-                  setPageClientes(newPage)
-                  cargarDatos(undefined, { pageClientes: newPage })
-                }}
-                rowsPerPage={rowsPerPageClientes}
-                onRowsPerPageChange={(e) => {
-                  const newRpp = parseInt(e.target.value, 10)
-                  setRowsPerPageClientes(newRpp)
-                  setPageClientes(0)
-                  cargarDatos(undefined, { pageClientes: 0, rowsPerPageClientes: newRpp })
-                }}
-                rowsPerPageOptions={[5, 10, 25, 50, 100]}
-                labelRowsPerPage='Filas por página'
-                labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Historial de Cambios */}
-          <Card>
-            <CardContent>
-              <Typography variant='h6' gutterBottom>
-                Historial de Cambios de Límites (solo primera ruta)
-              </Typography>
-              
-              <List>
-                {historialLimites.map((cambio) => (
-                  <ListItem key={cambio.id}>
-                    <ListItemIcon>
-                      <HistoryIcon color='primary' />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                          <Typography variant='subtitle2' fontWeight='bold'>
-                            {cambio.cliente}
-                          </Typography>
-                          <Chip 
-                            label={`$${cambio.limiteAnterior.toLocaleString()} → $${cambio.limiteNuevo.toLocaleString()}`}
-                            size='small'
-                            color={cambio.limiteNuevo > cambio.limiteAnterior ? 'success' : 'warning'}
-                          />
-                        </Box>
-                      }
-                      secondary={
-                        <Box>
-                          <Typography variant='body2' color='text.secondary'>
-                            {cambio.motivo}
-                          </Typography>
-                          <Typography variant='caption' color='text.secondary'>
-                            {cambio.usuario} • {formatearFecha(cambio.fecha)}
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                  </ListItem>
-                ))}
-              </List>
-              <TablePagination
-                component='div'
-                count={totalHistorial}
-                page={pageHistorial}
-                onPageChange={(_, newPage) => {
-                  setPageHistorial(newPage)
-                  cargarDatos(undefined, { pageHistorial: newPage })
-                }}
-                rowsPerPage={rowsPerPageHistorial}
-                onRowsPerPageChange={(e) => {
-                  const newRpp = parseInt(e.target.value, 10)
-                  setRowsPerPageHistorial(newRpp)
-                  setPageHistorial(0)
-                  cargarDatos(undefined, { pageHistorial: 0, rowsPerPageHistorial: newRpp })
-                }}
-                rowsPerPageOptions={[5, 10, 25, 50]}
-                labelRowsPerPage='Filas por página'
-                labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-              />
-            </CardContent>
-          </Card>
-        </Box>
-      )}
-
       {/* Vista de Pagos Pendientes de Autorización */}
       {vistaActual === 'pagos-pendientes' && (
         <Box>
