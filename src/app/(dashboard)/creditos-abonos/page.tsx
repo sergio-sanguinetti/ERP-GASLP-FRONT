@@ -1279,23 +1279,32 @@ export default function CreditosAbonosPage() {
   }
 
   const clientesFiltrados = useMemo(() => {
-    return clientesCredito.filter(cliente => {
-      // Solo deben aparecer los clientes con crédito utilizado (saldo pendiente mayor a 0)
-      if ((cliente.saldoActual ?? 0) <= 0) return false
-
-      const cumpleNombre = !filtros.nombre || cliente.nombre.toLowerCase().includes(filtros.nombre.toLowerCase())
-      const cumpleRuta = !filtros.ruta || cliente.ruta === filtros.ruta
-      const cumpleEstado = !filtros.estado || cliente.estado === filtros.estado
-      const tieneDeuda = true // Como el saldo siempre es mayor a 0 por la condición anterior
-      const cumpleDeuda =
-        !filtros.deuda ||
-        (filtros.deuda === 'con-deuda' && tieneDeuda) ||
-        (filtros.deuda === 'sin-deuda' && !tieneDeuda)
-      const cumpleSaldoMin = !filtros.saldoMin || cliente.saldoActual >= Number(filtros.saldoMin)
-      const cumpleSaldoMax = !filtros.saldoMax || cliente.saldoActual <= Number(filtros.saldoMax)
-
-      return cumpleNombre && cumpleRuta && cumpleEstado && cumpleDeuda && cumpleSaldoMin && cumpleSaldoMax
-    })
+    const ahora = new Date()
+    return clientesCredito
+      .filter(cliente => {
+        if ((cliente.saldoActual ?? 0) <= 0 && filtros.deuda !== 'sin-deuda') return false
+        const cumpleNombre = !filtros.nombre || cliente.nombre.toLowerCase().includes(filtros.nombre.toLowerCase())
+        const cumpleRuta = !filtros.ruta || cliente.ruta === filtros.ruta
+        // Estado dinámico: calcular desde notas del cliente
+        let estadoDinamico = 'buen-pagador'
+        const notas = cliente.notasPendientes ?? []
+        const tieneVencida = notas.some(n => n.fechaVencimiento && new Date(n.fechaVencimiento) < ahora && n.estado !== 'pagada')
+        const tienePorVencer = notas.some(n => {
+          if (!n.fechaVencimiento || n.estado === 'pagada') return false
+          const dias = (new Date(n.fechaVencimiento).getTime() - ahora.getTime()) / 86400000
+          return dias >= 0 && dias <= 5
+        })
+        if ((cliente.saldoActual ?? 0) > cliente.limiteCredito) estadoDinamico = 'critico'
+        else if (tieneVencida) estadoDinamico = 'vencido'
+        else if (tienePorVencer) estadoDinamico = 'por_vencer'
+        const cumpleEstado = !filtros.estado || estadoDinamico === filtros.estado || cliente.estadoCliente === filtros.estado
+        const tieneDeuda = (cliente.saldoActual ?? 0) > 0
+        const cumpleDeuda = !filtros.deuda || (filtros.deuda === 'con-deuda' && tieneDeuda) || (filtros.deuda === 'sin-deuda' && !tieneDeuda)
+        const cumpleSaldoMin = !filtros.saldoMin || (cliente.saldoActual ?? 0) >= Number(filtros.saldoMin)
+        const cumpleSaldoMax = !filtros.saldoMax || (cliente.saldoActual ?? 0) <= Number(filtros.saldoMax)
+        return cumpleNombre && cumpleRuta && cumpleEstado && cumpleDeuda && cumpleSaldoMin && cumpleSaldoMax
+      })
+      .sort((a, b) => (b.saldoActual ?? 0) - (a.saldoActual ?? 0))
   }, [clientesCredito, filtros])
 
   const rutasUnicas = useMemo(() => {
@@ -1348,7 +1357,7 @@ export default function CreditosAbonosPage() {
     setPageHistorial(0)
     cargarDatos(undefined, { pageClientes: 0, pageHistorial: 0 })
   }, [
-    filtros.nombre, filtros.ruta, filtros.estado, 
+    filtros.nombre, filtros.ruta, filtros.estado, filtros.deuda, filtros.saldoMin, filtros.saldoMax,
     filtroRutaHistorialPagos, fechaDesdeHistorialPagos, fechaHastaHistorialPagos, 
     filtroRutaDashboard, fechaDesdeDashboard, fechaHastaDashboard,
     filtroRutaPagosPendientes
@@ -1700,14 +1709,13 @@ export default function CreditosAbonosPage() {
                       onChange={(e) => manejarCambioFiltros('estado', e.target.value)}
                       label='Estado'
                     >
-                      <MenuItem value=''>Todos los estados</MenuItem>
+                      <MenuItem value=''>Todos</MenuItem>
+                      <MenuItem value='buen-pagador'>✅ Al corriente</MenuItem>
+                      <MenuItem value='vencido'>⚠️ Vencido</MenuItem>
+                      <MenuItem value='por_vencer'>🕐 Por vencer (5 días)</MenuItem>
+                      <MenuItem value='critico'>🔴 Crítico</MenuItem>
                       <MenuItem value='activo'>Activo</MenuItem>
                       <MenuItem value='suspendido'>Suspendido</MenuItem>
-                      <MenuItem value='inactivo'>Inactivo</MenuItem>
-                      <MenuItem value='buen-pagador'>Buen Pagador</MenuItem>
-                      <MenuItem value='vencido'>Vencido</MenuItem>
-                      <MenuItem value='critico'>Crítico</MenuItem>
-                      <MenuItem value='bloqueado'>Bloqueado</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -1729,20 +1737,23 @@ export default function CreditosAbonosPage() {
 
                 <Grid item xs={12} sm={6} md={3}>
                   <Box sx={{ display: 'flex', gap: 1 }}>
-                    <TextField
-                      fullWidth
-                      label='Saldo Mínimo'
-                      type='number'
-                      value={filtros.saldoMin}
-                      onChange={(e) => manejarCambioFiltros('saldoMin', e.target.value)}
-                    />
-                    <TextField
-                      fullWidth
-                      label='Saldo Máximo'
-                      type='number'
-                      value={filtros.saldoMax}
-                      onChange={(e) => manejarCambioFiltros('saldoMax', e.target.value)}
-                    />
+                    <TextField fullWidth size='small' label='Saldo Mínimo' type='number'
+                      value={filtros.saldoMin} onChange={(e) => manejarCambioFiltros('saldoMin', e.target.value)} />
+                    <TextField fullWidth size='small' label='Saldo Máximo' type='number'
+                      value={filtros.saldoMax} onChange={(e) => manejarCambioFiltros('saldoMax', e.target.value)} />
+                  </Box>
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button fullWidth variant='contained' size='small' onClick={() => { setPageClientes(0); cargarDatos(undefined, { pageClientes: 0 }) }} startIcon={<SearchIcon />}>
+                      Buscar
+                    </Button>
+                    <Button fullWidth variant='outlined' size='small' onClick={() => {
+                      setFiltros({ nombre: '', ruta: '', estado: '', saldoMin: '', saldoMax: '', deuda: '', diasVencimientoMin: '', diasVencimientoMax: '' })
+                      setTimeout(() => cargarDatos(undefined, { pageClientes: 0 }), 100)
+                    }}>
+                      Limpiar
+                    </Button>
                   </Box>
                 </Grid>
               </Grid>
