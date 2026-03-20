@@ -1657,120 +1657,81 @@ export default function CreditosAbonosPage() {
       {vistaActual === 'clientes' && (
         <Box>
           {/* Filtros y Búsqueda Avanzada */}
-          <Card sx={{ mb: 3 }}>
-            <CardContent>
-              <Typography variant='h6' gutterBottom>
-                Filtros y Búsqueda Avanzada
-              </Typography>
-              
-              <Grid container spacing={2}>
+          <Card sx={{ mb: 2 }}>
+            <CardContent sx={{ pb: '12px !important' }}>
+              <Grid container spacing={1.5} alignItems='center'>
                 <Grid item xs={12} sm={6} md={3}>
-                  <TextField
-                    fullWidth
-                    size='small'
-                    label='Buscar por nombre'
+                  <TextField fullWidth size='small' placeholder='Buscar por nombre...'
                     value={filtros.nombre}
                     onChange={(e) => manejarCambioFiltros('nombre', e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') cargarDatos() }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { setPageClientes(0); cargarDatos(undefined, { pageClientes: 0 }) } }}
                     InputProps={{
-                      startAdornment: (
-                        <InputAdornment position='start'>
-                          <SearchIcon fontSize='small' />
-                        </InputAdornment>
-                      ),
+                      startAdornment: <InputAdornment position='start'><SearchIcon fontSize='small' /></InputAdornment>,
                       endAdornment: filtros.nombre ? (
                         <InputAdornment position='end'>
-                          <IconButton size='small' onClick={() => { manejarCambioFiltros('nombre', ''); setTimeout(() => cargarDatos(), 100) }}>
+                          <IconButton size='small' onClick={() => { manejarCambioFiltros('nombre', ''); setTimeout(() => cargarDatos(undefined, { pageClientes: 0 }), 100) }}>
                             <CloseIcon fontSize='small' />
                           </IconButton>
                         </InputAdornment>
                       ) : null
-                    }}
-                  />
+                    }} />
                 </Grid>
-                
-                <Grid item xs={12} sm={6} md={3}>
-                  <FormControl fullWidth>
-                    <InputLabel>Ruta</InputLabel>
-                    <Select
-                      value={filtros.ruta}
-                      onChange={(e) => manejarCambioFiltros('ruta', e.target.value)}
-                      label='Ruta'
-                    >
-                      <MenuItem value=''>Todas las rutas</MenuItem>
-                      {rutasUnicas.map((ruta) => (
-                        <MenuItem key={ruta} value={ruta}>
-                          {ruta}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={3}>
-                  <FormControl fullWidth>
-                    <InputLabel>Estado</InputLabel>
-                    <Select
-                      value={filtros.estado}
-                      onChange={(e) => manejarCambioFiltros('estado', e.target.value)}
-                      label='Estado'
-                    >
-                      <MenuItem value=''>Todos</MenuItem>
-                      <MenuItem value='buen-pagador'>✅ Al corriente</MenuItem>
-                      <MenuItem value='vencido'>⚠️ Vencido</MenuItem>
-                      <MenuItem value='por_vencer'>🕐 Por vencer (5 días)</MenuItem>
-                      <MenuItem value='critico'>🔴 Crítico</MenuItem>
-                      <MenuItem value='activo'>Activo</MenuItem>
-                      <MenuItem value='suspendido'>Suspendido</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={3}>
-                  <FormControl fullWidth>
-                    <InputLabel>Deuda</InputLabel>
-                    <Select
-                      value={filtros.deuda}
-                      onChange={(e) => manejarCambioFiltros('deuda', e.target.value)}
-                      label='Deuda'
-                    >
-                      <MenuItem value=''>Todos</MenuItem>
-                      <MenuItem value='con-deuda'>Con deuda</MenuItem>
-                      <MenuItem value='sin-deuda'>Sin deuda (al día)</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={3}>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    <TextField fullWidth size='small' label='Saldo Mínimo' type='number'
-                      value={filtros.saldoMin} onChange={(e) => manejarCambioFiltros('saldoMin', e.target.value)} />
-                    <TextField fullWidth size='small' label='Saldo Máximo' type='number'
-                      value={filtros.saldoMax} onChange={(e) => manejarCambioFiltros('saldoMax', e.target.value)} />
-                  </Box>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button fullWidth variant='contained' size='small' onClick={() => { setPageClientes(0); cargarDatos(undefined, { pageClientes: 0 }) }} startIcon={<SearchIcon />}>
-                      Buscar
-                    </Button>
-                    <Button fullWidth variant='outlined' size='small' onClick={() => {
-                      setFiltros({ nombre: '', ruta: '', estado: '', saldoMin: '', saldoMax: '', deuda: '', diasVencimientoMin: '', diasVencimientoMax: '' })
-                      setTimeout(() => cargarDatos(undefined, { pageClientes: 0 }), 100)
-                    }}>
-                      Limpiar
-                    </Button>
-                  </Box>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid item xs={12} sm={6} md={2}>
                   <FormControl fullWidth size='small'>
-                    <InputLabel>Ordenar por</InputLabel>
-                    <Select value={ordenClientes} label='Ordenar por' onChange={e => setOrdenClientes(e.target.value as any)}>
-                      <MenuItem value='saldo_desc'>Mayor deuda primero</MenuItem>
-                      <MenuItem value='saldo_asc'>Menor deuda primero</MenuItem>
+                    <InputLabel>Ruta</InputLabel>
+                    <Select value={filtros.ruta} label='Ruta' onChange={(e) => manejarCambioFiltros('ruta', e.target.value)}>
+                      <MenuItem value=''>Todas</MenuItem>
+                      {rutasUnicas.map((ruta) => <MenuItem key={ruta} value={ruta}>{ruta}</MenuItem>)}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6} md={2}>
+                  <FormControl fullWidth size='small'>
+                    <InputLabel>Estado</InputLabel>
+                    <Select value={filtros.estado} label='Estado' onChange={(e) => manejarCambioFiltros('estado', e.target.value)}>
+                      <MenuItem value=''>Todos</MenuItem>
+                      <MenuItem value='buen-pagador'>Al corriente</MenuItem>
+                      <MenuItem value='vencido'>Vencido</MenuItem>
+                      <MenuItem value='por_vencer'>Por vencer</MenuItem>
+                      <MenuItem value='critico'>Crítico</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+
+
+                <Grid item xs={6} sm={3} md={1.5}>
+                  <TextField fullWidth size='small' label='Saldo mín' type='number'
+                    value={filtros.saldoMin} onChange={(e) => manejarCambioFiltros('saldoMin', e.target.value)} />
+                </Grid>
+                <Grid item xs={6} sm={3} md={1.5}>
+                  <TextField fullWidth size='small' label='Saldo máx' type='number'
+                    value={filtros.saldoMax} onChange={(e) => manejarCambioFiltros('saldoMax', e.target.value)} />
+                </Grid>
+                <Grid item xs={12} sm={6} md={2}>
+                  <FormControl fullWidth size='small'>
+                    <InputLabel>Ordenar</InputLabel>
+                    <Select value={ordenClientes} label='Ordenar' onChange={e => setOrdenClientes(e.target.value as any)}>
+                      <MenuItem value='saldo_desc'>Mayor deuda</MenuItem>
+                      <MenuItem value='saldo_asc'>Menor deuda</MenuItem>
                       <MenuItem value='nombre_asc'>Nombre A-Z</MenuItem>
                     </Select>
                   </FormControl>
+                </Grid>
+                <Grid item xs={6} sm={3} md={1}>
+                  <Button fullWidth variant='contained' size='small'
+                    onClick={() => { setPageClientes(0); cargarDatos(undefined, { pageClientes: 0 }) }}>
+                    Buscar
+                  </Button>
+                </Grid>
+                <Grid item xs={6} sm={3} md={1}>
+                  <Button fullWidth variant='outlined' size='small' onClick={() => {
+                    setFiltros({ nombre: '', ruta: '', estado: '', saldoMin: '', saldoMax: '', deuda: '', diasVencimientoMin: '', diasVencimientoMax: '' })
+                    setOrdenClientes('saldo_desc')
+                    setTimeout(() => cargarDatos(undefined, { pageClientes: 0 }), 100)
+                  }}>
+                    Limpiar
+                  </Button>
                 </Grid>
               </Grid>
             </CardContent>
