@@ -2306,40 +2306,38 @@ export default function CreditosAbonosPage() {
                       </TableCell>
                       <TableCell align='center'>
                         <Box sx={{ display: 'flex', gap: 0.3, justifyContent: 'center' }}>
-                          {(!pago.pagoCompleto?.estado || pago.pagoCompleto?.estado === 'pendiente') &&
-                            ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '') && (
-                            <Tooltip title='Marcar En Revisión'>
-                              <IconButton size='small' sx={{ color: 'info.main' }} onClick={() => abrirModalPago(pago, 'revision')}>
-                                <CheckCircleIcon sx={{ fontSize: 18 }} />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          {pago.pagoCompleto?.estado === 'en_revision' &&
-                            ['superAdministrador', 'administrador'].includes(usuario?.rol || '') && (
-                            <Tooltip title='Autorizar — Dar de baja definitivo'>
-                              <IconButton size='small' sx={{ color: 'success.main' }} onClick={() => abrirModalPago(pago, 'autorizar')}>
-                                <CheckCircleIcon sx={{ fontSize: 18 }} />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          {((!pago.pagoCompleto?.estado || pago.pagoCompleto?.estado === 'pendiente') &&
-                            ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '')) ||
-                            (pago.pagoCompleto?.estado === 'en_revision' &&
-                            ['superAdministrador', 'administrador'].includes(usuario?.rol || '')) ? (
-                            <Tooltip title='Rechazar'>
-                              <IconButton size='small' sx={{ color: 'error.main' }} onClick={() => abrirModalPago(pago, 'rechazar')}>
-                                <CancelIcon sx={{ fontSize: 18 }} />
-                              </IconButton>
-                            </Tooltip>
-                          ) : null}
-                          {pago.pagoCompleto?.estado === 'rechazado' &&
-                            ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '') && (
-                            <Tooltip title='Reactivar'>
-                              <IconButton size='small' sx={{ color: 'warning.main' }} onClick={() => abrirModalPago(pago, 'reactivar')}>
-                                <RefreshIcon sx={{ fontSize: 18 }} />
-                              </IconButton>
-                            </Tooltip>
-                          )}
+                          {(() => {
+                            const rol = usuario?.rol || ''
+                            const esAdmin = ['superAdministrador', 'administrador'].includes(rol)
+                            const esStaff = ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(rol)
+                            const estado = pago.pagoCompleto?.estado || 'pendiente'
+                            return <>
+                              {/* Autorizar — solo admin, solo desde en_revision */}
+                              {esAdmin && estado === 'en_revision' && (
+                                <Tooltip title='✅ Autorizar pago'>
+                                  <IconButton size='small' sx={{ color: 'success.main' }} onClick={() => abrirModalPago(pago, 'autorizar')}>
+                                    <CheckCircleIcon sx={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              {/* Rechazar — admin desde en_revision, staff desde pendiente */}
+                              {((esAdmin && estado === 'en_revision') || (esStaff && estado === 'pendiente')) && (
+                                <Tooltip title='❌ Rechazar'>
+                                  <IconButton size='small' sx={{ color: 'error.main' }} onClick={() => abrirModalPago(pago, 'rechazar')}>
+                                    <CancelIcon sx={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              {/* Reactivar — desde rechazado */}
+                              {esStaff && estado === 'rechazado' && (
+                                <Tooltip title='🔄 Reactivar'>
+                                  <IconButton size='small' sx={{ color: 'warning.main' }} onClick={() => abrirModalPago(pago, 'reactivar')}>
+                                    <RefreshIcon sx={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                            </>
+                          })()}
                         </Box>
                       </TableCell>
                     </TableRow>
