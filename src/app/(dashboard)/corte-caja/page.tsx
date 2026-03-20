@@ -147,6 +147,10 @@ interface RepartidorCorte {
   resumenFormasPago?: Record<string, number>
   dailySales?: any
   stats?: any
+  /** Desglose de cilindros por kg (10/20/30) con cantidad y monto */
+  desgloseCilindros?: { kg: number; nombre: string; unidades: number; monto: number }[] | null
+  /** Detalle de pedidos pipas con forma de pago por servicio */
+  detallePedidos?: { numero: number; clienteNombre: string; monto: number; formasPago: { tipo: string; monto: number }[] }[] | null
   reporteFisico?: {
     totalServicios: number
     totalLitros: number
@@ -429,7 +433,9 @@ export default function CorteCajaPage() {
           },
           resumenFormasPago: resumenFormasPago && typeof resumenFormasPago === 'object' ? resumenFormasPago : undefined,
           dailySales: dailySales,
-          stats: stats
+          stats: stats,
+          desgloseCilindros: c.desgloseCilindros ?? null,
+          detallePedidos: c.detallePedidos ?? null
         }
       })
 
@@ -1696,34 +1702,143 @@ export default function CorteCajaPage() {
                                   {repartidorSeleccionado.ventas.litrosServicios} servicios
                                 </Typography>
 
-                                {/* Tabla de Litros Vendidos - Datos dinámicos del backend */}
+                                {/* PIPAS: litros totales + detalle por servicio con forma de pago */}
                                 {repartidorSeleccionado.tipo === 'pipas' && (
                                   <Box sx={{ mt: 3 }}>
                                     <Typography variant='subtitle1' fontWeight='bold' gutterBottom sx={{ color: 'warning.main' }}>
                                       Litros vendidos: {Number(repartidorSeleccionado.ventas.totalLitros || 0).toFixed(2)} L
                                     </Typography>
-                                    <TableContainer component={Paper} variant='outlined' sx={{ mt: 2 }}>
+                                    <Typography variant='subtitle2' fontWeight='bold' sx={{ mt: 2, mb: 1 }}>
+                                      Detalle por servicio
+                                    </Typography>
+                                    <TableContainer component={Paper} variant='outlined'>
                                       <Table size='small'>
                                         <TableHead>
-                                          <TableRow>
-                                            <TableCell>Cliente</TableCell>
-                                            <TableCell align='right'>Litros</TableCell>
+                                          <TableRow sx={{ bgcolor: 'grey.100' }}>
+                                            <TableCell sx={{ fontWeight: 'bold' }}>#</TableCell>
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Cliente</TableCell>
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Forma de pago</TableCell>
+                                            <TableCell align='right' sx={{ fontWeight: 'bold' }}>Monto</TableCell>
                                           </TableRow>
                                         </TableHead>
                                         <TableBody>
-                                          {repartidorSeleccionado.dailySales && Array.isArray(repartidorSeleccionado.dailySales) && repartidorSeleccionado.dailySales.length > 0 ? (
-                                            repartidorSeleccionado.dailySales.map((venta: any, index: number) => (
-                                              <TableRow key={index}>
-                                                <TableCell>{venta.clienteNombre || 'Cliente sin nombre'}</TableCell>
-                                                <TableCell align='right'>{Number(venta.litros || 0).toFixed(2)} L</TableCell>
+                                          {repartidorSeleccionado.detallePedidos && repartidorSeleccionado.detallePedidos.length > 0 ? (
+                                            <>
+                                              {repartidorSeleccionado.detallePedidos.map((s: any) => (
+                                                <TableRow key={s.numero} hover>
+                                                  <TableCell>
+                                                    <Chip label={`S${s.numero}`} size='small' variant='outlined' color='primary' />
+                                                  </TableCell>
+                                                  <TableCell>
+                                                    <Typography variant='body2' fontWeight='medium'>{s.clienteNombre}</Typography>
+                                                  </TableCell>
+                                                  <TableCell>
+                                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                                      {s.formasPago && s.formasPago.length > 0 ? (
+                                                        s.formasPago.map((fp: any, i: number) => {
+                                                          const t = (fp.tipo || '').toLowerCase()
+                                                          const bg = t.includes('efectivo') ? '#e8f5e9' : t.includes('transferencia') ? '#e3f2fd' : t.includes('tarjeta') || t.includes('terminal') ? '#f3e5f5' : t.includes('cheque') ? '#fff8e1' : '#f5f5f5'
+                                                          const fg = t.includes('efectivo') ? '#2e7d32' : t.includes('transferencia') ? '#1565c0' : t.includes('tarjeta') || t.includes('terminal') ? '#7b1fa2' : t.includes('cheque') ? '#f57f17' : '#424242'
+                                                          return (
+                                                            <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                              <Chip label={fp.tipo?.toUpperCase() || 'OTRO'} size='small' sx={{ bgcolor: bg, color: fg, fontWeight: 'bold', fontSize: '0.6rem', height: 20 }} />
+                                                              <Typography variant='caption' fontWeight='bold'>
+                                                                ${Number(fp.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                                              </Typography>
+                                                            </Box>
+                                                          )
+                                                        })
+                                                      ) : (
+                                                        <Typography variant='caption' color='text.secondary'>—</Typography>
+                                                      )}
+                                                    </Box>
+                                                  </TableCell>
+                                                  <TableCell align='right'>
+                                                    <Typography variant='body2' fontWeight='bold' color='primary'>
+                                                      ${Number(s.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                                    </Typography>
+                                                  </TableCell>
+                                                </TableRow>
+                                              ))}
+                                              <TableRow sx={{ bgcolor: 'action.hover' }}>
+                                                <TableCell colSpan={3}><Typography variant='body2' fontWeight='bold'>Total</Typography></TableCell>
+                                                <TableCell align='right'>
+                                                  <Typography variant='body2' fontWeight='bold' color='primary'>
+                                                    ${repartidorSeleccionado.detallePedidos.reduce((s: number, p: any) => s + Number(p.monto || 0), 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                                  </Typography>
+                                                </TableCell>
                                               </TableRow>
-                                            ))
+                                            </>
                                           ) : (
                                             <TableRow>
-                                              <TableCell colSpan={2} align='center'>
-                                                <Typography variant='body2' color='text.secondary'>
-                                                  No hay detalle de ventas por cliente disponible
-                                                </Typography>
+                                              <TableCell colSpan={4} align='center'>
+                                                <Typography variant='body2' color='text.secondary'>No hay detalle de servicios disponible</Typography>
+                                              </TableCell>
+                                            </TableRow>
+                                          )}
+                                        </TableBody>
+                                      </Table>
+                                    </TableContainer>
+                                  </Box>
+                                )}
+
+                                {/* CILINDROS: desglose por tipo (10/20/30 kg) */}
+                                {repartidorSeleccionado.tipo === 'cilindros' && (
+                                  <Box sx={{ mt: 3 }}>
+                                    <Typography variant='subtitle2' fontWeight='bold' sx={{ mb: 1 }}>
+                                      Desglose por tipo de cilindro
+                                    </Typography>
+                                    <TableContainer component={Paper} variant='outlined'>
+                                      <Table size='small'>
+                                        <TableHead>
+                                          <TableRow sx={{ bgcolor: 'grey.100' }}>
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Tipo</TableCell>
+                                            <TableCell align='center' sx={{ fontWeight: 'bold' }}>Cantidad</TableCell>
+                                            <TableCell align='right' sx={{ fontWeight: 'bold' }}>Total</TableCell>
+                                          </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                          {repartidorSeleccionado.desgloseCilindros && repartidorSeleccionado.desgloseCilindros.length > 0 ? (
+                                            <>
+                                              {repartidorSeleccionado.desgloseCilindros.map((d: any) => (
+                                                <TableRow key={d.kg} hover>
+                                                  <TableCell>
+                                                    <Chip
+                                                      label={`${d.kg} kg`}
+                                                      size='small'
+                                                      color={d.kg === 10 ? 'primary' : d.kg === 20 ? 'secondary' : 'warning'}
+                                                      variant='outlined'
+                                                      sx={{ fontWeight: 'bold' }}
+                                                    />
+                                                  </TableCell>
+                                                  <TableCell align='center'>
+                                                    <Typography variant='body2' fontWeight='bold'>{d.unidades}</Typography>
+                                                  </TableCell>
+                                                  <TableCell align='right'>
+                                                    <Typography variant='body2' fontWeight='bold' color='primary'>
+                                                      ${Number(d.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                                    </Typography>
+                                                  </TableCell>
+                                                </TableRow>
+                                              ))}
+                                              <TableRow sx={{ bgcolor: 'action.hover' }}>
+                                                <TableCell><Typography variant='body2' fontWeight='bold'>Total</Typography></TableCell>
+                                                <TableCell align='center'>
+                                                  <Typography variant='body2' fontWeight='bold'>
+                                                    {repartidorSeleccionado.desgloseCilindros.reduce((s: number, d: any) => s + Number(d.unidades || 0), 0)}
+                                                  </Typography>
+                                                </TableCell>
+                                                <TableCell align='right'>
+                                                  <Typography variant='body2' fontWeight='bold' color='primary'>
+                                                    ${repartidorSeleccionado.desgloseCilindros.reduce((s: number, d: any) => s + Number(d.monto || 0), 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                                  </Typography>
+                                                </TableCell>
+                                              </TableRow>
+                                            </>
+                                          ) : (
+                                            <TableRow>
+                                              <TableCell colSpan={3} align='center'>
+                                                <Typography variant='body2' color='text.secondary'>No hay desglose disponible</Typography>
                                               </TableCell>
                                             </TableRow>
                                           )}
