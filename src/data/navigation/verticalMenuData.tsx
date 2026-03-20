@@ -39,6 +39,7 @@ const verticalMenuData = (role?: string): VerticalMenuDataType[] => {
     configChildren.push({ label: 'Rutas', href: '/configuracion/rutas', icon: 'tabler-route' })
     configChildren.push({ label: 'Zonas', href: '/zonas', icon: 'tabler-map-pin' })
     configChildren.push({ label: 'Tickets', href: '/configuracion/tickets', icon: 'tabler-receipt' })
+    configChildren.push({ label: 'Fusionar Clientes', href: '/configuracion/fusionar-clientes', icon: 'tabler-git-merge' })
 
     menu.push({
       label: 'Configuración',
