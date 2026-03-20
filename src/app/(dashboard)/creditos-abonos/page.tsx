@@ -347,18 +347,29 @@ export default function CreditosAbonosPage() {
     if (loadingDashboard) return
     try {
       setLoadingDashboard(true)
-      // Cargar TODOS los clientes sin filtro de ruta para el dashboard
-      const params = new URLSearchParams()
-      params.append('pageSize', '200')
-      if (sedeId) params.append('sedeId', sedeId)
       const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
       const token = typeof window !== 'undefined' ? (localStorage.getItem('token') || sessionStorage.getItem('token') || '') : ''
-      const res = await fetch(API + '/creditos-abonos/clientes-credito?' + params.toString(), {
-        headers: { 'Authorization': 'Bearer ' + token }
-      })
-      if (!res.ok) return
-      const data = await res.json()
-      setClientesDashboard(Array.isArray(data.clientes) ? data.clientes : [])
+      // Traer todas las páginas hasta agotar
+      let todos: any[] = []
+      let page = 1
+      const PAGE_SIZE = 100
+      while (true) {
+        const params = new URLSearchParams()
+        params.append('pageSize', String(PAGE_SIZE))
+        params.append('page', String(page))
+        params.append('saldoMin', '0.01')
+        if (sedeId) params.append('sedeId', sedeId)
+        const res = await fetch(API + '/creditos-abonos/clientes-credito?' + params.toString(), {
+          headers: { 'Authorization': 'Bearer ' + token }
+        })
+        if (!res.ok) break
+        const data = await res.json()
+        const clientes = Array.isArray(data.clientes) ? data.clientes : []
+        todos = [...todos, ...clientes]
+        if (clientes.length < PAGE_SIZE || todos.length >= data.total) break
+        page++
+      }
+      setClientesDashboard(todos)
     } catch (e) { console.error('Error dashboard clientes', e) }
     finally { setLoadingDashboard(false) }
   }
