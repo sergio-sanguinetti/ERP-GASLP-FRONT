@@ -2227,7 +2227,7 @@ export default function CreditosAbonosPage() {
                               if (!nc) { setError('Este pago no tiene nota asociada'); return }
                               const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
                               const token = typeof window !== 'undefined' ? (localStorage.getItem('token') || sessionStorage.getItem('token') || '') : ''
-                              const res = await fetch(API + '/creditos-abonos/notas/' + nc, { headers: { 'Authorization': 'Bearer ' + token } })
+                              const res = await fetch(API + '/creditos-abonos/notas-credito/' + nc, { headers: { 'Authorization': 'Bearer ' + token } })
                               if (!res.ok) { setError('No se pudo cargar la nota'); return }
                               const nota = await res.json()
                               if (nota.pedidoId) {
