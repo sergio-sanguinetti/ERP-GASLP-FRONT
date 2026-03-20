@@ -222,6 +222,11 @@ export default function CreditosAbonosPage() {
   const [modalSbc, setModalSbc] = useState(false)
   const [pagoSbcSel, setPagoSbcSel] = useState<any | null>(null)
   const [tipoAccionSbc, setTipoAccionSbc] = useState<'oficina' | 'sanluis' | 'rechazar' | 'reactivar'>('oficina')
+  const [modalPago, setModalPago] = useState(false)
+  const [pagoSelModal, setPagoSelModal] = useState<any>(null)
+  const [tipoAccionPago, setTipoAccionPago] = useState<'revision' | 'autorizar' | 'rechazar' | 'reactivar'>('revision')
+  const [notaAccionPago, setNotaAccionPago] = useState('')
+  const [filtroEstadoPagos, setFiltroEstadoPagos] = useState<string>('pendiente')
   const [folioConfSbc, setFolioConfSbc] = useState('')
   const [notaConfSbc, setNotaConfSbc] = useState('')
   const [filtroOperadorSbc, setFiltroOperadorSbc] = useState('')
@@ -1068,30 +1073,52 @@ export default function CreditosAbonosPage() {
     }
   }
 
-  const autorizarPago = async (pagoId: string) => {
+  const abrirModalPago = (pago: any, accion: 'revision' | 'autorizar' | 'rechazar' | 'reactivar') => {
+    setPagoSelModal(pago)
+    setTipoAccionPago(accion)
+    setNotaAccionPago('')
+    setModalPago(true)
+  }
+
+  const ejecutarAccionPago = async () => {
+    if (!pagoSelModal) return
+    const rolUsuario = usuario?.rol || ''
+    const rolesAdmin = ['superAdministrador', 'administrador']
+    const rolesOficina = ['superAdministrador', 'administrador', 'oficina', 'planta']
+    if (tipoAccionPago === 'autorizar' && !rolesAdmin.includes(rolUsuario)) {
+      setError('Solo Administrador o SuperAdministrador puede autorizar pagos.')
+      return
+    }
     try {
       setSaving(true)
-      setError(null)
-      await creditosAbonosAPI.updatePagoEstado(pagoId, 'autorizado')
+      const estado = tipoAccionPago === 'revision' ? 'en_revision'
+        : tipoAccionPago === 'autorizar' ? 'autorizado'
+        : tipoAccionPago === 'reactivar' ? 'pendiente' : 'rechazado'
+      await creditosAbonosAPI.updatePagoEstado(pagoSelModal.id, estado as any, notaAccionPago)
+      setSuccessMessage(
+        tipoAccionPago === 'revision' ? 'Pago marcado En Revisión' :
+        tipoAccionPago === 'autorizar' ? '✅ Pago autorizado — nota de crédito cerrada' :
+        tipoAccionPago === 'reactivar' ? 'Pago reactivado a Pendiente' : 'Pago rechazado'
+      )
+      setModalPago(false)
+      setPagoSelModal(null)
       await cargarDatos()
+      setTimeout(() => setSuccessMessage(null), 3000)
     } catch (err: any) {
-      setError(err.message || 'Error al autorizar pago')
+      setError(err.message || 'Error al actualizar pago')
     } finally {
       setSaving(false)
     }
   }
 
+  const autorizarPago = async (pagoId: string) => {
+    const pago = pagosPendientesAutorizacion.find(p => p.id === pagoId)
+    if (pago) abrirModalPago(pago, 'autorizar')
+  }
+
   const rechazarPago = async (pagoId: string) => {
-    try {
-      setSaving(true)
-      setError(null)
-      await creditosAbonosAPI.updatePagoEstado(pagoId, 'rechazado')
-      await cargarDatos()
-    } catch (err: any) {
-      setError(err.message || 'Error al rechazar pago')
-    } finally {
-      setSaving(false)
-    }
+    const pago = pagosPendientesAutorizacion.find(p => p.id === pagoId)
+    if (pago) abrirModalPago(pago, 'rechazar')
   }
 
   // Calcular total del pago usando useMemo para evitar re-renders infinitos
@@ -1967,14 +1994,46 @@ export default function CreditosAbonosPage() {
       {/* Vista de Pagos Pendientes de Autorización */}
       {vistaActual === 'pagos-pendientes' && (
         <Box>
+          {/* KPIs rápidos */}
+          <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+            {[
+              { label: 'Pendientes', valor: pagosPendientesAutorizacion.filter(p => !p.pagoCompleto?.estado || p.pagoCompleto?.estado === 'pendiente').length, color: 'warning.main' },
+              { label: 'En Revisión', valor: pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'en_revision').length, color: 'info.main' },
+              { label: 'Rechazados', valor: pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'rechazado').length, color: 'error.main' },
+            ].map(k => (
+              <Card key={k.label} sx={{ flex: 1, minWidth: 120, cursor: 'pointer', border: filtroEstadoPagos === k.label.toLowerCase().replace(' ', '_') ? '2px solid' : '1px solid #e0e0e0' }}
+                onClick={() => setFiltroEstadoPagos(k.label === 'Pendientes' ? 'pendiente' : k.label === 'En Revisión' ? 'en_revision' : 'rechazado')}>
+                <CardContent sx={{ pb: '8px !important', pt: 1.5 }}>
+                  <Typography variant='caption' color='text.secondary'>{k.label}</Typography>
+                  <Typography variant='h5' fontWeight='bold' sx={{ color: k.color }}>{k.valor}</Typography>
+                </CardContent>
+              </Card>
+            ))}
+            <Card sx={{ flex: 1, minWidth: 120, cursor: 'pointer', border: filtroEstadoPagos === 'todos' ? '2px solid' : '1px solid #e0e0e0' }}
+              onClick={() => setFiltroEstadoPagos('todos')}>
+              <CardContent sx={{ pb: '8px !important', pt: 1.5 }}>
+                <Typography variant='caption' color='text.secondary'>Todos</Typography>
+                <Typography variant='h5' fontWeight='bold'>{pagosPendientesAutorizacion.length}</Typography>
+              </CardContent>
+            </Card>
+          </Box>
           <Typography variant='h6' gutterBottom>
-            Pagos Pendientes de Autorización
+            {filtroEstadoPagos === 'pendiente' ? 'Pagos Pendientes' : filtroEstadoPagos === 'en_revision' ? 'En Revisión' : filtroEstadoPagos === 'rechazado' ? 'Rechazados' : 'Todos los Pagos'}
           </Typography>
           
           <Card>
             <CardContent>
-              {/* Buscador y filtro por ruta dentro de la tabla */}
+              {/* Filtros */}
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+                <FormControl size='small' sx={{ minWidth: 160 }}>
+                  <InputLabel>Estado</InputLabel>
+                  <Select value={filtroEstadoPagos} label='Estado' onChange={e => setFiltroEstadoPagos(e.target.value)}>
+                    <MenuItem value='pendiente'>Pendientes</MenuItem>
+                    <MenuItem value='en_revision'>En Revisión</MenuItem>
+                    <MenuItem value='rechazado'>Rechazados</MenuItem>
+                    <MenuItem value='todos'>Todos</MenuItem>
+                  </Select>
+                </FormControl>
                 <TextField
                   size='small'
                   placeholder='Buscar por cliente, nota o registrado por'
@@ -2022,11 +2081,15 @@ export default function CreditosAbonosPage() {
                       <TableCell>Formas de Pago</TableCell>
                       <TableCell>Registrado por</TableCell>
                       <TableCell>Fecha/Hora</TableCell>
+                      <TableCell>Estado</TableCell>
                       <TableCell align='center'>Acciones</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {pagosPendientesFiltrados
+                      .filter(p => filtroEstadoPagos === 'todos' ? true :
+                        filtroEstadoPagos === 'pendiente' ? (!p.pagoCompleto?.estado || p.pagoCompleto?.estado === 'pendiente') :
+                        p.pagoCompleto?.estado === filtroEstadoPagos)
                       .slice(
                         pagePagosPendientes * rowsPerPagePagosPendientes,
                         pagePagosPendientes * rowsPerPagePagosPendientes + rowsPerPagePagosPendientes
@@ -2075,49 +2138,79 @@ export default function CreditosAbonosPage() {
                             {pago.fechaHora}
                           </Typography>
                         </TableCell>
+                        <TableCell>
+                          {(!pago.pagoCompleto?.estado || pago.pagoCompleto?.estado === 'pendiente') ? (
+                            <Chip label='Pendiente' size='small' color='warning' sx={{ fontWeight: 'bold', fontSize: 10 }} />
+                          ) : pago.pagoCompleto?.estado === 'en_revision' ? (
+                            <Box>
+                              <Chip label='En Revisión' size='small' color='info' sx={{ fontWeight: 'bold', fontSize: 10, mb: 0.3 }} />
+                              {pago.pagoCompleto?.revisadoPor && <Typography variant='caption' color='text.secondary' display='block'>{pago.pagoCompleto.revisadoPor}</Typography>}
+                            </Box>
+                          ) : pago.pagoCompleto?.estado === 'autorizado' ? (
+                            <Box>
+                              <Chip label='✓ Autorizado' size='small' color='success' sx={{ fontWeight: 'bold', fontSize: 10, mb: 0.3 }} />
+                              {pago.pagoCompleto?.autorizadoPorNombre && <Typography variant='caption' color='text.secondary' display='block'>{pago.pagoCompleto.autorizadoPorNombre}</Typography>}
+                            </Box>
+                          ) : (
+                            <Chip label='Rechazado' size='small' color='error' sx={{ fontWeight: 'bold', fontSize: 10 }} />
+                          )}
+                        </TableCell>
                         <TableCell align='center'>
-                          <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <Box sx={{ display: 'flex', gap: 0.3, justifyContent: 'center' }}>
                             <Tooltip title='Ver detalles'>
-                              <IconButton 
-                                size='small' 
-                                onClick={async () => {
-                                  if (pago.pagoCompleto) {
-                                    setPagoSeleccionadoDetalle(pago.pagoCompleto)
-                                    setModalDetallePago(true)
-                                    
-                                    // Cargar nombres de usuarios
-                                    try {
-                                      if (pago.pagoCompleto.usuarioRegistro) {
-                                        const usuarioReg = await usuariosAPI.getById(pago.pagoCompleto.usuarioRegistro)
-                                        setUsuarioRegistroNombre(`${usuarioReg.nombres} ${usuarioReg.apellidoPaterno}`)
-                                      }
-                                      if (pago.pagoCompleto.usuarioAutorizacion) {
-                                        const usuarioAut = await usuariosAPI.getById(pago.pagoCompleto.usuarioAutorizacion)
-                                        setUsuarioAutorizacionNombre(`${usuarioAut.nombres} ${usuarioAut.apellidoPaterno}`)
-                                      }
-                                    } catch (err) {
-                                      console.error('Error al cargar información de usuarios:', err)
-                                      setUsuarioRegistroNombre(pago.pagoCompleto.usuarioRegistro)
-                                      if (pago.pagoCompleto.usuarioAutorizacion) {
-                                        setUsuarioAutorizacionNombre(pago.pagoCompleto.usuarioAutorizacion)
-                                      }
+                              <IconButton size='small' onClick={async () => {
+                                if (pago.pagoCompleto) {
+                                  setPagoSeleccionadoDetalle(pago.pagoCompleto)
+                                  setModalDetallePago(true)
+                                  try {
+                                    if (pago.pagoCompleto.usuarioRegistro) {
+                                      const u = await usuariosAPI.getById(pago.pagoCompleto.usuarioRegistro)
+                                      setUsuarioRegistroNombre(`${u.nombres} ${u.apellidoPaterno}`)
                                     }
-                                  }
-                                }}
-                              >
-                                <VisibilityIcon />
+                                  } catch {}
+                                }
+                              }}>
+                                <VisibilityIcon sx={{ fontSize: 16 }} />
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title='Autorizar'>
-                              <IconButton size='small' color='success' onClick={() => autorizarPago(pago.id)}>
-                                <CheckCircleIcon />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title='Rechazar'>
-                              <IconButton size='small' color='error' onClick={() => rechazarPago(pago.id)}>
-                                <CloseIcon />
-                              </IconButton>
-                            </Tooltip>
+                            {/* Marcar En Revisión — oficina, planta, admin */}
+                            {(!pago.pagoCompleto?.estado || pago.pagoCompleto?.estado === 'pendiente') &&
+                              ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '') && (
+                              <Tooltip title='Marcar En Revisión'>
+                                <IconButton size='small' sx={{ color: 'info.main' }} onClick={() => abrirModalPago(pago, 'revision')}>
+                                  <CheckCircleIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            {/* Autorizar definitivo — solo admin/superAdmin */}
+                            {pago.pagoCompleto?.estado === 'en_revision' &&
+                              ['superAdministrador', 'administrador'].includes(usuario?.rol || '') && (
+                              <Tooltip title='Autorizar — Dar de baja definitivo'>
+                                <IconButton size='small' sx={{ color: 'success.main' }} onClick={() => abrirModalPago(pago, 'autorizar')}>
+                                  <CheckCircleIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            {/* Rechazar — desde pendiente solo oficina+, desde en_revision solo admin */}
+                            {((!pago.pagoCompleto?.estado || pago.pagoCompleto?.estado === 'pendiente') &&
+                              ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '')) ||
+                              (pago.pagoCompleto?.estado === 'en_revision' &&
+                              ['superAdministrador', 'administrador'].includes(usuario?.rol || '')) ? (
+                              <Tooltip title='Rechazar'>
+                                <IconButton size='small' sx={{ color: 'error.main' }} onClick={() => abrirModalPago(pago, 'rechazar')}>
+                                  <CancelIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Tooltip>
+                            ) : null}
+                            {/* Reactivar — desde rechazado */}
+                            {pago.pagoCompleto?.estado === 'rechazado' &&
+                              ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '') && (
+                              <Tooltip title='Reactivar a Pendiente'>
+                                <IconButton size='small' sx={{ color: 'warning.main' }} onClick={() => abrirModalPago(pago, 'reactivar')}>
+                                  <RefreshIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Tooltip>
+                            )}
                           </Box>
                         </TableCell>
                       </TableRow>
@@ -3127,6 +3220,42 @@ export default function CreditosAbonosPage() {
               </Card>
             )
           })()}
+
+          {/* Modal acción pagos crédito */}
+          <Dialog open={modalPago} onClose={() => setModalPago(false)} maxWidth='sm' fullWidth>
+            <DialogTitle>
+              {tipoAccionPago === 'revision' ? 'Marcar En Revisión' :
+               tipoAccionPago === 'autorizar' ? '✅ Autorizar pago — Dar de baja definitivo' :
+               tipoAccionPago === 'reactivar' ? 'Reactivar pago' : 'Rechazar pago'}
+            </DialogTitle>
+            <DialogContent>
+              {pagoSelModal && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant='body2'><strong>Cliente:</strong> {pagoSelModal.cliente}</Typography>
+                  <Typography variant='body2'><strong>Nota:</strong> {pagoSelModal.nota}</Typography>
+                  <Typography variant='body2'><strong>Monto:</strong> ${pagoSelModal.montoPagado?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Typography>
+                  <Typography variant='body2' sx={{ mb: 2 }}><strong>Forma de pago:</strong> {pagoSelModal.formasPago?.map((f: any) => f.metodo).join(', ')}</Typography>
+                </Box>
+              )}
+              {tipoAccionPago === 'autorizar' && (
+                <Alert severity='success' sx={{ mb: 2 }}>
+                  Al autorizar, la nota de crédito quedará oficialmente pagada y el crédito del cliente se liberará.
+                </Alert>
+              )}
+              <TextField fullWidth multiline rows={2} size='small'
+                label={tipoAccionPago === 'rechazar' ? 'Motivo del rechazo' : tipoAccionPago === 'reactivar' ? 'Motivo de reactivación (opcional)' : 'Nota (opcional)'}
+                placeholder={tipoAccionPago === 'rechazar' ? 'Ej: El efectivo no coincide...' : tipoAccionPago === 'autorizar' ? 'Ej: Confirmado en cuenta bancaria...' : ''}
+                value={notaAccionPago} onChange={e => setNotaAccionPago(e.target.value)} />
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setModalPago(false)} disabled={saving}>Cancelar</Button>
+              <Button variant='contained'
+                color={tipoAccionPago === 'rechazar' ? 'error' : tipoAccionPago === 'reactivar' ? 'warning' : tipoAccionPago === 'autorizar' ? 'success' : 'primary'}
+                onClick={ejecutarAccionPago} disabled={saving}>
+                {saving ? 'Procesando...' : tipoAccionPago === 'revision' ? 'Marcar En Revisión' : tipoAccionPago === 'autorizar' ? 'Autorizar definitivo' : tipoAccionPago === 'reactivar' ? 'Reactivar' : 'Rechazar'}
+              </Button>
+            </DialogActions>
+          </Dialog>
 
           {/* Modal confirmar/rechazar SBC */}
           <Dialog open={modalSbc} onClose={() => setModalSbc(false)} maxWidth='sm' fullWidth>

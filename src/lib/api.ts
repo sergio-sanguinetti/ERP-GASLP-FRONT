@@ -2181,7 +2181,12 @@ export interface Pago {
   observaciones?: string
   usuarioRegistro: string
   usuarioAutorizacion?: string
-  estado: 'pendiente' | 'autorizado' | 'rechazado' | 'cancelado'
+  estado: 'pendiente' | 'en_revision' | 'autorizado' | 'rechazado' | 'cancelado'
+  revisadoPor?: string
+  fechaRevision?: string
+  autorizadoPorNombre?: string
+  fechaAutorizacionReal?: string
+  notaAutorizacion?: string
   fechaCreacion: string
   fechaModificacion: string
   formasPago?: PagoFormaPago[]
@@ -2400,10 +2405,10 @@ export const creditosAbonosAPI = {
     return result.pago || result
   },
 
-  updatePagoEstado: async (id: string, estado: 'pendiente' | 'autorizado' | 'rechazado' | 'cancelado'): Promise<Pago> => {
+  updatePagoEstado: async (id: string, estado: 'pendiente' | 'en_revision' | 'autorizado' | 'rechazado' | 'cancelado', nota?: string): Promise<Pago> => {
     const response = await fetchWithAuth(`/creditos-abonos/pagos/${id}/estado`, {
       method: 'PUT',
-      body: JSON.stringify({ estado }),
+      body: JSON.stringify({ estado, notaAutorizacion: nota }),
     })
 
     if (!response.ok) {
