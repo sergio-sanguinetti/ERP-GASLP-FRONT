@@ -2911,11 +2911,39 @@ export default function CreditosAbonosPage() {
                       {filtradosConUrgente.map((p) => (
                         <TableRow key={p.id} hover sx={{ borderLeft: '3px solid', borderLeftColor: (p as any).esUrgente ? 'error.main' : p.estadoSbc === 'rechazado' ? '#9e9e9e' : p.estadoSbc === 'confirmado_sanluis' ? 'success.main' : p.estadoSbc === 'confirmado_oficina' ? 'info.main' : 'warning.main', bgcolor: (p as any).esUrgente ? '#fff8f0' : 'inherit' }}>
                           <TableCell sx={{ p: 0.5 }}>
-                            <Tooltip title='Ver ticket'>
-                              <IconButton size='small' onClick={() => abrirTicketSbc(p.pedidoId)}>
-                                <ReceiptIcon sx={{ fontSize: 16 }} />
-                              </IconButton>
-                            </Tooltip>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.3 }}>
+                              <Tooltip title='Ver detalle del pago SBC'>
+                                <IconButton size='small' onClick={() => {
+                                  // Construir un objeto compatible con pagoSeleccionadoDetalle
+                                  const detalle: any = {
+                                    cliente: { nombre: p.cliente, apellidoPaterno: '', ruta: { nombre: p.ruta } },
+                                    notaCredito: { numeroNota: p.numeroPedido },
+                                    tipo: 'nota_especifica',
+                                    montoTotal: p.monto,
+                                    estado: p.estadoSbc === 'confirmado_sanluis' ? 'autorizado' : p.estadoSbc === 'confirmado_oficina' ? 'en_revision' : p.estadoSbc === 'rechazado' ? 'rechazado' : 'pendiente',
+                                    formasPago: [{ formaPago: { tipo: p.metodoPago }, monto: p.monto, referencia: p.folioConfirmado || p.folioOriginal }],
+                                    fechaPago: p.fechaPedido || new Date().toISOString(),
+                                    horaPago: p.fechaPedido ? new Date(p.fechaPedido).toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit' }) : '—',
+                                    observaciones: p.notaConfirmacion,
+                                    revisadoPor: p.confirmadoPorOficina,
+                                    fechaRevision: p.fechaConfOficina,
+                                    autorizadoPorNombre: p.confirmadoPorSanLuis,
+                                    fechaAutorizacionReal: p.fechaConfSanLuis,
+                                    notaAutorizacion: p.notaConfirmacion,
+                                  }
+                                  setPagoSeleccionadoDetalle(detalle)
+                                  setUsuarioRegistroNombre(p.repartidor || '—')
+                                  setModalDetallePago(true)
+                                }}>
+                                  <VisibilityIcon sx={{ fontSize: 15 }} />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title='Ver ticket de venta'>
+                                <IconButton size='small' onClick={() => abrirTicketSbc(p.pedidoId)}>
+                                  <ReceiptIcon sx={{ fontSize: 15 }} />
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
                           </TableCell>
                           <TableCell>
                             <Typography variant='caption' fontWeight='bold'>{p.numeroPedido}</Typography>
