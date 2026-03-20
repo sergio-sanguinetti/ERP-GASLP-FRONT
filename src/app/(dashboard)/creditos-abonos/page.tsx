@@ -2233,15 +2233,24 @@ export default function CreditosAbonosPage() {
                                 setModalDetallePago(true)
                                 try {
                                   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-                                  if (pago.pagoCompleto.usuarioRegistro && uuidRegex.test(pago.pagoCompleto.usuarioRegistro)) {
-                                    const u = await usuariosAPI.getById(pago.pagoCompleto.usuarioRegistro)
-                                    setUsuarioRegistroNombre(`${u.nombres} ${u.apellidoPaterno}`)
+                                  // Si es UUID buscar nombre, si no usar el texto directamente
+                                  if (pago.pagoCompleto.usuarioRegistro) {
+                                    if (uuidRegex.test(pago.pagoCompleto.usuarioRegistro)) {
+                                      try {
+                                        const u = await usuariosAPI.getById(pago.pagoCompleto.usuarioRegistro)
+                                        setUsuarioRegistroNombre(`${u.nombres} ${u.apellidoPaterno}`)
+                                      } catch { setUsuarioRegistroNombre(pago.registradoPorNombre || '—') }
+                                    } else {
+                                      setUsuarioRegistroNombre(pago.pagoCompleto.usuarioRegistro)
+                                    }
                                   } else {
-                                    setUsuarioRegistroNombre(pago.pagoCompleto.usuarioRegistro || pago.registradoPorNombre || '—')
+                                    setUsuarioRegistroNombre(pago.registradoPorNombre || '—')
                                   }
                                   if (pago.pagoCompleto.usuarioAutorizacion && uuidRegex.test(pago.pagoCompleto.usuarioAutorizacion)) {
-                                    const u = await usuariosAPI.getById(pago.pagoCompleto.usuarioAutorizacion)
-                                    setUsuarioAutorizacionNombre(`${u.nombres} ${u.apellidoPaterno}`)
+                                    try {
+                                      const u = await usuariosAPI.getById(pago.pagoCompleto.usuarioAutorizacion)
+                                      setUsuarioAutorizacionNombre(`${u.nombres} ${u.apellidoPaterno}`)
+                                    } catch { setUsuarioAutorizacionNombre(pago.pagoCompleto.usuarioAutorizacion) }
                                   }
                                 } catch {}
                               }
