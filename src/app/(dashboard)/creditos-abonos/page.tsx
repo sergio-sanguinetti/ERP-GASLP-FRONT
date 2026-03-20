@@ -249,6 +249,8 @@ export default function CreditosAbonosPage() {
   const [nuevoLimite, setNuevoLimite] = useState(0)
   const [motivoLimite, setMotivoLimite] = useState('')
   const [formatoEstadoCuenta, setFormatoEstadoCuenta] = useState<'pdf' | 'excel'>('pdf')
+  const [periodoDesdeEC, setPeriodoDesdeEC] = useState('')
+  const [periodoHastaEC, setPeriodoHastaEC] = useState(new Date().toISOString().split('T')[0])
   const [observacionesPago, setObservacionesPago] = useState('')
   const [limitesEditados, setLimitesEditados] = useState<Record<string, { limite: number; motivo: string }>>({})
   const [modalDetallePago, setModalDetallePago] = useState(false)
@@ -594,9 +596,7 @@ export default function CreditosAbonosPage() {
           filtrosAPI.rutaId = rutaEncontrada.id
         }
       }
-      if (!filtrosAPI.rutaId && primeraRutaId) {
-        filtrosAPI.rutaId = primeraRutaId
-      }
+      // No forzar primera ruta — mostrar todos los clientes por defecto
       // Solo enviar estadoCliente al API cuando es un valor del enum del backend (activo/suspendido/inactivo).
       // Los valores buen-pagador, vencido, critico, bloqueado son estado de crédito y se filtran en cliente.
       const estadoClienteValidos = ['activo', 'suspendido', 'inactivo']
@@ -605,6 +605,9 @@ export default function CreditosAbonosPage() {
       }
       if (filtros.saldoMin !== '') filtrosAPI.saldoMin = filtros.saldoMin
       if (filtros.saldoMax !== '') filtrosAPI.saldoMax = filtros.saldoMax
+      // Fix filtro "con-deuda": mandar saldoMin al backend en vez de filtrar en frontend
+      if (filtros.deuda === 'con-deuda' && filtros.saldoMin === '') filtrosAPI.saldoMin = '0.01'
+      if (filtros.deuda === 'sin-deuda') { filtrosAPI.saldoMin = '0'; filtrosAPI.saldoMax = '0' }
 
       const rutaIdParaCarga = filtrosAPI.rutaId
       const pageC = overrides?.pageClientes ?? pageClientes
@@ -651,7 +654,7 @@ export default function CreditosAbonosPage() {
       ])
 
       setResumenCredito(resumen)
-      setClientesCredito(clientesResp.clientes)
+      setClientesCredito([...clientesResp.clientes].sort((a,b) => (b.saldoActual ?? 0) - (a.saldoActual ?? 0)))
       setTotalClientes(clientesResp.total)
       
       // Convertir pagos pendientes al formato esperado
@@ -915,34 +918,113 @@ export default function CreditosAbonosPage() {
       setSaving(true)
       setError(null)
       const notas = clienteSeleccionado.notasPendientes ?? []
-      const fecha = new Date().toLocaleDateString('es-MX', { dateStyle: 'long' })
-      const html = `
-        <!DOCTYPE html><html><head><meta charset="utf-8"><title>Estado de Cuenta - ${clienteSeleccionado.nombre}</title>
-        <style>body{font-family:system-ui,sans-serif;margin:2rem;max-width:800px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:left}h1{font-size:1.25rem}.totales{font-weight:bold;margin-top:1rem}</style></head>
-        <body>
-          <h1>Estado de Cuenta</h1>
-          <p><strong>Cliente:</strong> ${clienteSeleccionado.nombre}</p>
-          <p><strong>Fecha:</strong> ${fecha}</p>
-          <p><strong>Límite de crédito:</strong> $${(clienteSeleccionado.limiteCredito ?? 0).toLocaleString()}</p>
-          <p><strong>Saldo actual:</strong> $${(clienteSeleccionado.saldoActual ?? 0).toLocaleString()}</p>
-          <p><strong>Crédito disponible:</strong> $${(clienteSeleccionado.creditoDisponible ?? 0).toLocaleString()}</p>
-          <h2>Notas pendientes</h2>
+      const ahora = new Date()
+      const fechaEmision = ahora.toLocaleDateString('es-MX', { dateStyle: 'long', timeZone: 'America/Mexico_City' })
+      const periodoTexto = periodoDesdeEC
+        ? `Del ${new Date(periodoDesdeEC + 'T12:00:00').toLocaleDateString('es-MX', { dateStyle: 'medium' })} al ${new Date(periodoHastaEC + 'T12:00:00').toLocaleDateString('es-MX', { dateStyle: 'medium' })}`
+        : `Al ${fechaEmision}`
+      const notasFiltradas = periodoDesdeEC
+        ? notas.filter((n: NotaCredito) => {
+            const fv = new Date(n.fechaVenta)
+            const desde = new Date(periodoDesdeEC + 'T00:00:00')
+            const hasta = new Date(periodoHastaEC + 'T23:59:59')
+            return fv >= desde && fv <= hasta
+          })
+        : notas
+      const totalPendiente = notasFiltradas.reduce((s: number, n: NotaCredito) => s + (n.saldoPendiente ?? n.importe ?? 0), 0)
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+        <title>Estado de Cuenta — ${clienteSeleccionado.nombre}</title>
+        <style>
+          * { margin:0; padding:0; box-sizing:border-box; }
+          body { font-family: 'Arial', sans-serif; color: #222; background: white; }
+          .page { max-width: 800px; margin: 0 auto; padding: 32px; }
+          .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #8B5E3C; padding-bottom:16px; margin-bottom:24px; }
+          .logo-area h1 { font-size:22px; color:#8B5E3C; font-weight:900; letter-spacing:1px; }
+          .logo-area p { font-size:11px; color:#666; margin-top:2px; }
+          .doc-info { text-align:right; }
+          .doc-info h2 { font-size:18px; color:#333; font-weight:700; }
+          .doc-info p { font-size:11px; color:#666; margin-top:4px; }
+          .cliente-box { background:#f9f6f2; border-left:4px solid #8B5E3C; padding:14px 18px; margin-bottom:20px; border-radius:0 6px 6px 0; }
+          .cliente-box h3 { font-size:15px; font-weight:700; color:#333; }
+          .cliente-box p { font-size:12px; color:#555; margin-top:3px; }
+          .resumen { display:flex; gap:16px; margin-bottom:20px; }
+          .resumen-card { flex:1; border:1px solid #e0d5c8; border-radius:8px; padding:12px; text-align:center; }
+          .resumen-card .monto { font-size:20px; font-weight:900; color:#8B5E3C; }
+          .resumen-card .label { font-size:10px; color:#888; text-transform:uppercase; margin-top:4px; }
+          table { width:100%; border-collapse:collapse; font-size:12px; }
+          thead { background:#8B5E3C; color:white; }
+          thead th { padding:9px 10px; text-align:left; font-weight:600; }
+          tbody tr:nth-child(even) { background:#faf7f4; }
+          tbody td { padding:8px 10px; border-bottom:1px solid #ece5dc; }
+          .estado-vencida { color:#c0392b; font-weight:bold; }
+          .estado-vigente { color:#27ae60; font-weight:bold; }
+          .estado-por_vencer { color:#e67e22; font-weight:bold; }
+          .estado-pagada { color:#27ae60; }
+          .total-row { background:#f0e8df !important; font-weight:700; }
+          .footer { margin-top:32px; border-top:1px solid #ddd; padding-top:16px; display:flex; justify-content:space-between; }
+          .firma { text-align:center; width:200px; }
+          .firma .linea { border-top:1px solid #333; margin-top:40px; padding-top:6px; font-size:11px; }
+          .nota-legal { font-size:10px; color:#aaa; margin-top:20px; text-align:center; }
+          @media print { body { print-color-adjust:exact; -webkit-print-color-adjust:exact; } }
+        </style></head>
+        <body><div class="page">
+          <div class="header">
+            <div class="logo-area">
+              <h1>⛽ GAS PROVIDENCIA</h1>
+              <p>Distribución de Gas LP • San Luis de la Paz, Gto.</p>
+              <p>Tel: 4696863030</p>
+            </div>
+            <div class="doc-info">
+              <h2>ESTADO DE CUENTA</h2>
+              <p>Período: ${periodoTexto}</p>
+              <p>Fecha de emisión: ${fechaEmision}</p>
+              <p>Ruta: ${clienteSeleccionado.ruta || '—'}</p>
+            </div>
+          </div>
+          <div class="cliente-box">
+            <h3>${clienteSeleccionado.nombre}</h3>
+            <p>${clienteSeleccionado.direccion || ''}</p>
+            <p>Tel: ${clienteSeleccionado.telefono || '—'}</p>
+          </div>
+          <div class="resumen">
+            <div class="resumen-card">
+              <div class="monto">$${totalPendiente.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div class="label">Saldo Pendiente</div>
+            </div>
+            <div class="resumen-card">
+              <div class="monto">${notasFiltradas.filter((n: NotaCredito) => { const d = n.fechaVencimiento ? Math.floor((new Date(n.fechaVencimiento).getTime()-ahora.getTime())/86400000) : 0; return d < 0 && n.estado !== 'pagada' }).length}</div>
+              <div class="label">Notas Vencidas</div>
+            </div>
+            <div class="resumen-card">
+              <div class="monto">${notasFiltradas.filter((n: NotaCredito) => n.estado !== 'pagada').length}</div>
+              <div class="label">Notas Pendientes</div>
+            </div>
+          </div>
           <table>
-            <thead><tr><th>Número</th><th>Fecha venta</th><th>Vencimiento</th><th>Importe</th><th>Estado</th></tr></thead>
+            <thead><tr><th>Folio</th><th>Fecha</th><th>Vencimiento</th><th>Importe</th><th>Saldo Pendiente</th><th>Estado</th></tr></thead>
             <tbody>
-              ${notas.map((n: NotaCredito) => `<tr><td>${n.numeroNota ?? ''}</td><td>${formatearFecha(n.fechaVenta)}</td><td>${formatearFecha(n.fechaVencimiento)}</td><td>$${(n.importe ?? 0).toLocaleString()}</td><td>${n.estado ?? ''}</td></tr>`).join('')}
+              ${notasFiltradas.map((n: NotaCredito) => {
+                const fv = n.fechaVencimiento ? new Date(n.fechaVencimiento) : null
+                const dias = fv ? Math.floor((fv.getTime()-ahora.getTime())/86400000) : null
+                const estadoReal = n.estado === 'pagada' ? 'pagada' : dias === null ? 'vigente' : dias < 0 ? 'vencida' : dias <= 5 ? 'por_vencer' : 'vigente'
+                const estadoLabel = estadoReal === 'pagada' ? 'Pagada' : estadoReal === 'vencida' ? `Vencida ${Math.abs(dias!)}d` : estadoReal === 'por_vencer' ? `Vence en ${dias}d` : 'Vigente'
+                const saldo = (n.saldoPendiente ?? n.importe ?? 0)
+                return `<tr><td><strong>${n.numeroNota||''}</strong></td><td>${formatearFecha(n.fechaVenta)}</td><td>${formatearFecha(n.fechaVencimiento)}</td><td>$${(n.importe??0).toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td>$${saldo.toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td class="estado-${estadoReal}">${estadoLabel}</td></tr>`
+              }).join('')}
+              <tr class="total-row"><td colspan="4">TOTAL PENDIENTE</td><td>$${totalPendiente.toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td></td></tr>
             </tbody>
           </table>
-          ${notas.length === 0 ? '<p>Sin notas pendientes.</p>' : ''}
-          <p class="totales">Total pendiente: $${(clienteSeleccionado.saldoActual ?? 0).toLocaleString()}</p>
-        </body></html>`
+          <div class="footer">
+            <div class="firma"><div class="linea">Firma del Cliente<br><small>${clienteSeleccionado.nombre}</small></div></div>
+            <div class="firma"><div class="linea">Autorizado por<br><small>Gas Providencia</small></div></div>
+          </div>
+          <p class="nota-legal">Este documento es un comprobante de estado de cuenta generado el ${fechaEmision}. Para aclaraciones comuníquese con Gas Providencia.</p>
+        </div></body></html>`
       const ventana = window.open('', '_blank')
       if (ventana) {
         ventana.document.write(html)
         ventana.document.close()
-        if (formatoEstadoCuenta === 'pdf') {
-          ventana.print()
-        }
+        setTimeout(() => ventana.print(), 800)
       }
       cerrarDialogo()
     } catch (err: any) {
@@ -1567,15 +1649,24 @@ export default function CreditosAbonosPage() {
                 <Grid item xs={12} sm={6} md={3}>
                   <TextField
                     fullWidth
-                    label='Buscar por Nombre'
+                    size='small'
+                    label='Buscar por nombre'
                     value={filtros.nombre}
                     onChange={(e) => manejarCambioFiltros('nombre', e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') cargarDatos() }}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position='start'>
-                          <SearchIcon />
+                          <SearchIcon fontSize='small' />
                         </InputAdornment>
-                      )
+                      ),
+                      endAdornment: filtros.nombre ? (
+                        <InputAdornment position='end'>
+                          <IconButton size='small' onClick={() => { manejarCambioFiltros('nombre', ''); setTimeout(() => cargarDatos(), 100) }}>
+                            <CloseIcon fontSize='small' />
+                          </IconButton>
+                        </InputAdornment>
+                      ) : null
                     }}
                   />
                 </Grid>
@@ -1659,7 +1750,7 @@ export default function CreditosAbonosPage() {
           <Card>
             <CardContent>
               <Typography variant='h6' gutterBottom>
-                Lista de Clientes (solo primera ruta)
+                Lista de Clientes con Crédito
               </Typography>
               
               <TableContainer component={Paper} variant='outlined'>
@@ -1883,7 +1974,7 @@ export default function CreditosAbonosPage() {
                           <TableCell>Fecha Venta</TableCell>
                           <TableCell>Fecha Vencimiento</TableCell>
                           <TableCell align='right'>Importe</TableCell>
-                          <TableCell align='right'>Días Vencimiento</TableCell>
+                          <TableCell align='right'>Días restantes</TableCell>
                           <TableCell align='center'>Estado</TableCell>
                         </TableRow>
                       </TableHead>
@@ -1907,20 +1998,31 @@ export default function CreditosAbonosPage() {
                               </Typography>
                             </TableCell>
                             <TableCell align='right'>
-                              <Typography 
-                                variant='body2'
-                                color={nota.diasVencimiento < 0 ? 'error' : nota.diasVencimiento < 7 ? 'warning' : 'text.primary'}
-                              >
-                                {nota.diasVencimiento > 0 ? `+${nota.diasVencimiento}` : nota.diasVencimiento}
-                              </Typography>
+                              {(() => {
+                                const ahora = new Date()
+                                const fv = nota.fechaVencimiento ? new Date(nota.fechaVencimiento) : null
+                                const dias = fv ? Math.floor((fv.getTime() - ahora.getTime()) / 86400000) : null
+                                const color = dias === null ? 'text.secondary' : dias < 0 ? 'error.main' : dias <= 5 ? 'warning.main' : 'success.main'
+                                return (
+                                  <Typography variant='body2' fontWeight='bold' sx={{ color }}>
+                                    {dias === null ? '—' : dias < 0 ? `${Math.abs(dias)} días vencida` : dias === 0 ? 'Vence hoy' : `${dias} días`}
+                                  </Typography>
+                                )
+                              })()}
                             </TableCell>
                           <TableCell align='center'>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Chip
-                                label={nota.estado.replace('-', ' ').toUpperCase()}
-                                color={getNotaEstadoColor(nota.estado) as any}
-                                size='small'
-                              />
+                              {(() => {
+                                const ahora = new Date()
+                                const fv = nota.fechaVencimiento ? new Date(nota.fechaVencimiento) : null
+                                const dias = fv ? Math.floor((fv.getTime() - ahora.getTime()) / 86400000) : null
+                                const estadoReal = nota.estado === 'pagada' ? 'pagada'
+                                  : dias === null ? nota.estado
+                                  : dias < 0 ? 'vencida' : dias <= 5 ? 'por_vencer' : 'vigente'
+                                const colorChip = estadoReal === 'pagada' ? 'success' : estadoReal === 'vencida' ? 'error' : estadoReal === 'por_vencer' ? 'warning' : 'info'
+                                const labelChip = estadoReal === 'pagada' ? 'Pagada' : estadoReal === 'vencida' ? 'Vencida' : estadoReal === 'por_vencer' ? 'Por vencer' : 'Vigente'
+                                return <Chip label={labelChip} color={colorChip as any} size='small' sx={{ fontWeight: 'bold', fontSize: 10 }} />
+                              })()}
                               <Tooltip title='Pagar esta nota'>
                                 <IconButton 
                                   size='small' 
@@ -2473,19 +2575,19 @@ export default function CreditosAbonosPage() {
               {tipoDialogo === 'estado-cuenta' && (
                 <Box>
                   <Typography variant='body2' color='text.secondary' gutterBottom>
-                    Se generará un estado de cuenta detallado para este cliente (imprimir o ver en nueva pestaña).
+                    Selecciona el período para el estado de cuenta. Si no seleccionas fechas, se incluirán todas las notas.
                   </Typography>
-                  <FormControl fullWidth sx={{ mt: 2 }}>
-                    <InputLabel>Formato</InputLabel>
-                    <Select
-                      label='Formato'
-                      value={formatoEstadoCuenta}
-                      onChange={(e) => setFormatoEstadoCuenta(e.target.value as 'pdf' | 'excel')}
-                    >
-                      <MenuItem value='pdf'>PDF (imprimir)</MenuItem>
-                      <MenuItem value='excel'>Ver en pantalla</MenuItem>
-                    </Select>
-                  </FormControl>
+                  <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+                    <TextField fullWidth size='small' label='Desde (opcional)' type='date'
+                      value={periodoDesdeEC} onChange={e => setPeriodoDesdeEC(e.target.value)}
+                      InputLabelProps={{ shrink: true }} />
+                    <TextField fullWidth size='small' label='Hasta' type='date'
+                      value={periodoHastaEC} onChange={e => setPeriodoHastaEC(e.target.value)}
+                      InputLabelProps={{ shrink: true }} />
+                  </Box>
+                  <Typography variant='caption' color='text.secondary' sx={{ mt: 1, display: 'block' }}>
+                    Se abrirá una ventana para imprimir el estado de cuenta membretado.
+                  </Typography>
                 </Box>
               )}
 
