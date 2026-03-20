@@ -176,7 +176,7 @@ interface PagoPendienteAutorizacion {
 }
 
 export default function CreditosAbonosPage() {
-  const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'pagos-pendientes' | 'historial-pagos' | 'pagos-sbc'>('dashboard')
+  const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'pagos-pendientes' | 'pagos-sbc'>('dashboard')
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteCredito | null>(null)
   const refFichaCliente = useRef<HTMLDivElement | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
@@ -228,7 +228,7 @@ export default function CreditosAbonosPage() {
   const [pagoSelModal, setPagoSelModal] = useState<any>(null)
   const [tipoAccionPago, setTipoAccionPago] = useState<'revision' | 'autorizar' | 'rechazar' | 'reactivar'>('revision')
   const [notaAccionPago, setNotaAccionPago] = useState('')
-  const [filtroEstadoPagos, setFiltroEstadoPagos] = useState<string>('pendiente')
+  const [filtroEstadoPagos, setFiltroEstadoPagos] = useState<string>('en_revision')
   const [folioConfSbc, setFolioConfSbc] = useState('')
   const [notaConfSbc, setNotaConfSbc] = useState('')
   const [filtroOperadorSbc, setFiltroOperadorSbc] = useState('')
@@ -2050,21 +2050,7 @@ export default function CreditosAbonosPage() {
                               {(nota as any).pedidoId && (
                                 <Tooltip title='Ver ticket del pedido'>
                                   <IconButton size='small' sx={{ color: 'text.secondary' }}
-                                    onClick={async () => {
-                                      try {
-                                        const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
-                                        const token = typeof window !== 'undefined' ? (localStorage.getItem('token') || sessionStorage.getItem('token') || '') : ''
-                                        // Buscar el pedido via la nota
-                                        const pedidoId = (nota as any).pedidoId
-                                        if (!pedidoId) { alert('Esta nota no tiene pedido asociado'); return }
-                                        const res = await fetch(API + '/pedidos/' + pedidoId, { headers: { 'Authorization': 'Bearer ' + token } })
-                                        if (!res.ok) { setError('No se pudo cargar el pedido'); return }
-                                        const pedido = await res.json()
-                                        const html = generarHtmlTicketVenta(pedido, null)
-                                        const w = window.open('', '_blank', 'width=420,height=650')
-                                        if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 600) }
-                                      } catch(e) { console.error(e) }
-                                    }}>
+                                    onClick={() => abrirTicketSbc((nota as any).pedidoId)}>
                                     <ReceiptIcon sx={{ fontSize: 16 }} />
                                   </IconButton>
                                 </Tooltip>
@@ -2142,7 +2128,7 @@ export default function CreditosAbonosPage() {
       {/* Vista de Pagos Pendientes de Autorización */}
       {vistaActual === 'pagos-pendientes' && (
         <Box>
-          {/* KPIs rápidos */}
+          {/* KPIs con monto */}
           <Grid container spacing={2} sx={{ mb: 2 }}>
             {(() => {
               const pendientes = pagosPendientesAutorizacion.filter(p => !p.pagoCompleto?.estado || p.pagoCompleto?.estado === 'pendiente')
@@ -2150,423 +2136,198 @@ export default function CreditosAbonosPage() {
               const autorizados = pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'autorizado')
               const rechazados = pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'rechazado')
               const kpis = [
-                { label: 'Pendientes', count: pendientes.length, monto: pendientes.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'warning.main', val: 'pendiente' },
-                { label: 'En Revisión', count: enRevision.length, monto: enRevision.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'info.main', val: 'en_revision' },
-                { label: 'Autorizados', count: autorizados.length, monto: autorizados.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'success.main', val: 'autorizado' },
-                { label: 'Rechazados', count: rechazados.length, monto: rechazados.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'error.main', val: 'rechazado' },
+                { label: 'Pendientes', count: pendientes.length, monto: pendientes.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'warning.main', val: 'pendiente', desc: 'Sin revisar' },
+                { label: 'En Revisión', count: enRevision.length, monto: enRevision.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'info.main', val: 'en_revision', desc: 'Esperando autorización' },
+                { label: 'Autorizados', count: autorizados.length, monto: autorizados.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'success.main', val: 'autorizado', desc: 'Confirmados' },
+                { label: 'Rechazados', count: rechazados.length, monto: rechazados.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'error.main', val: 'rechazado', desc: 'Requieren atención' },
               ]
               return kpis.map(k => (
                 <Grid item xs={6} sm={3} key={k.label}>
-                  <Card sx={{ cursor: 'pointer', border: filtroEstadoPagos === k.val ? '2px solid' : '1px solid #e0e0e0', borderColor: filtroEstadoPagos === k.val ? k.color : '#e0e0e0' }}
+                  <Card sx={{ cursor: 'pointer', borderLeft: '4px solid', borderLeftColor: filtroEstadoPagos === k.val ? k.color : 'transparent', transition: 'all 0.2s', '&:hover': { boxShadow: 3 } }}
                     onClick={() => setFiltroEstadoPagos(k.val)}>
                     <CardContent sx={{ pb: '10px !important' }}>
                       <Typography variant='caption' color='text.secondary' fontWeight='bold' textTransform='uppercase'>{k.label}</Typography>
-                      <Typography variant='h5' fontWeight='bold' sx={{ color: k.color, my: 0.3 }}>{k.count}</Typography>
-                      <Typography variant='caption' color='text.secondary'>${k.monto.toLocaleString('es-MX', { maximumFractionDigits: 0 })}</Typography>
+                      <Typography variant='h4' fontWeight='bold' sx={{ color: k.color, my: 0.3 }}>{k.count}</Typography>
+                      <Typography variant='caption' color='text.secondary' display='block'>${k.monto.toLocaleString('es-MX', { maximumFractionDigits: 0 })}</Typography>
+                      <Typography variant='caption' color='text.disabled'>{k.desc}</Typography>
                     </CardContent>
                   </Card>
                 </Grid>
               ))
             })()}
           </Grid>
-          
+
+          {/* Filtros */}
+          <Card sx={{ mb: 2 }}>
+            <CardContent sx={{ pb: '12px !important' }}>
+              <Grid container spacing={1.5} alignItems='center'>
+                <Grid item xs={12} sm={6} md={2}>
+                  <FormControl fullWidth size='small'>
+                    <InputLabel>Estado</InputLabel>
+                    <Select value={filtroEstadoPagos} label='Estado' onChange={e => setFiltroEstadoPagos(e.target.value)}>
+                      <MenuItem value='en_revision'>En Revisión</MenuItem>
+                      <MenuItem value='pendiente'>Pendientes</MenuItem>
+                      <MenuItem value='autorizado'>Autorizados</MenuItem>
+                      <MenuItem value='rechazado'>Rechazados</MenuItem>
+                      <MenuItem value='todos'>Todos</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <TextField fullWidth size='small' placeholder='Buscar cliente, nota, ruta...'
+                    value={filtroBusquedaPagosPendientes}
+                    onChange={e => { setFiltroBusquedaPagosPendientes(e.target.value); setPagePagosPendientes(0) }}
+                    InputProps={{ startAdornment: <InputAdornment position='start'><SearchIcon fontSize='small' /></InputAdornment> }} />
+                </Grid>
+                <Grid item xs={12} sm={6} md={2}>
+                  <FormControl fullWidth size='small'>
+                    <InputLabel>Ruta</InputLabel>
+                    <Select value={filtroRutaPagosPendientes} label='Ruta'
+                      onChange={e => { setFiltroRutaPagosPendientes(e.target.value); setPagePagosPendientes(0) }}>
+                      <MenuItem value='todas'>Todas</MenuItem>
+                      {rutasUnicas.map(r => <MenuItem key={r} value={r}>{r}</MenuItem>)}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+
+          {/* Tabla */}
           <Card>
-            <CardContent>
-              {/* Filtros */}
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
-                <FormControl size='small' sx={{ minWidth: 160 }}>
-                  <InputLabel>Estado</InputLabel>
-                  <Select value={filtroEstadoPagos} label='Estado' onChange={e => setFiltroEstadoPagos(e.target.value)}>
-                    <MenuItem value='pendiente'>Pendientes</MenuItem>
-                    <MenuItem value='en_revision'>En Revisión</MenuItem>
-                    <MenuItem value='autorizado'>Autorizados</MenuItem>
-                    <MenuItem value='rechazado'>Rechazados</MenuItem>
-                    <MenuItem value='todos'>Todos</MenuItem>
-                  </Select>
-                </FormControl>
-                <TextField
-                  size='small'
-                  placeholder='Buscar por cliente, nota o registrado por'
-                  value={filtroBusquedaPagosPendientes}
-                  onChange={(e) => {
-                    setFiltroBusquedaPagosPendientes(e.target.value)
-                    setPagePagosPendientes(0)
-                  }}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position='start'>
-                        <SearchIcon color='action' />
-                      </InputAdornment>
-                    )
-                  }}
-                  sx={{ minWidth: 280 }}
-                />
-                <FormControl size='small' sx={{ minWidth: 200 }}>
-                  <InputLabel>Ruta</InputLabel>
-                  <Select
-                    label='Ruta'
-                    value={filtroRutaPagosPendientes}
-                    onChange={(e) => {
-                      setFiltroRutaPagosPendientes(e.target.value)
-                      setPagePagosPendientes(0)
-                    }}
-                  >
-                    <MenuItem value='todas'>Todas las rutas</MenuItem>
-                    {rutasUnicas.map((ruta) => (
-                      <MenuItem key={ruta} value={ruta}>
-                        {ruta}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
-              <TableContainer component={Paper} variant='outlined'>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Cliente</TableCell>
-                      <TableCell>Ruta</TableCell>
-                      <TableCell>Nota</TableCell>
-                      <TableCell align='right'>Monto Pagado</TableCell>
-                      <TableCell>Formas de Pago</TableCell>
-                      <TableCell>Registrado por</TableCell>
-                      <TableCell>Fecha/Hora</TableCell>
-                      <TableCell>Estado</TableCell>
-                      <TableCell align='center'>Acciones</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {pagosPendientesFiltrados
-                      .filter(p => filtroEstadoPagos === 'todos' ? true :
-                        filtroEstadoPagos === 'pendiente' ? (!p.pagoCompleto?.estado || p.pagoCompleto?.estado === 'pendiente') :
-                        p.pagoCompleto?.estado === filtroEstadoPagos)
-                      .slice(
-                        pagePagosPendientes * rowsPerPagePagosPendientes,
-                        pagePagosPendientes * rowsPerPagePagosPendientes + rowsPerPagePagosPendientes
-                      )
-                      .map((pago) => (
-                      <TableRow key={pago.id} hover>
-                        <TableCell>
-                          <Typography variant='subtitle2' fontWeight='bold'>
-                            {pago.cliente}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='body2'>
-                            {pago.ruta}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='subtitle2' fontWeight='bold'>
-                            {pago.nota}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align='right'>
-                          <Typography variant='h6' color='primary'>
-                            ${pago.montoPagado.toLocaleString()}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                            {pago.formasPago.map((forma, index) => (
-                              <Chip
-                                key={index}
-                                label={`${forma.metodo}: $${forma.monto.toLocaleString()}`}
-                                color={getMetodoPagoColor(forma.metodo) as any}
-                                size='small'
-                              />
-                            ))}
+            <TableContainer>
+              <Table size='small'>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: 'background.default' }}>
+                    <TableCell sx={{ width: 32 }}></TableCell>
+                    <TableCell><Typography variant='caption' fontWeight='bold'>Cliente</Typography></TableCell>
+                    <TableCell><Typography variant='caption' fontWeight='bold'>Ruta / Registrado por</Typography></TableCell>
+                    <TableCell><Typography variant='caption' fontWeight='bold'>Nota</Typography></TableCell>
+                    <TableCell align='right'><Typography variant='caption' fontWeight='bold'>Monto</Typography></TableCell>
+                    <TableCell><Typography variant='caption' fontWeight='bold'>Forma de pago</Typography></TableCell>
+                    <TableCell><Typography variant='caption' fontWeight='bold'>Fecha</Typography></TableCell>
+                    <TableCell><Typography variant='caption' fontWeight='bold'>Estado</Typography></TableCell>
+                    <TableCell align='center'><Typography variant='caption' fontWeight='bold'>Acciones</Typography></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {pagosPendientesFiltrados
+                    .filter(p => filtroEstadoPagos === 'todos' ? true :
+                      filtroEstadoPagos === 'pendiente' ? (!p.pagoCompleto?.estado || p.pagoCompleto?.estado === 'pendiente') :
+                      p.pagoCompleto?.estado === filtroEstadoPagos)
+                    .slice(pagePagosPendientes * rowsPerPagePagosPendientes, pagePagosPendientes * rowsPerPagePagosPendientes + rowsPerPagePagosPendientes)
+                    .map(pago => (
+                    <TableRow key={pago.id} hover>
+                      <TableCell sx={{ p: 0.5 }}>
+                        {pago.pagoCompleto?.notaCreditoId && (
+                          <Tooltip title='Ver ticket'>
+                            <IconButton size='small' onClick={() => pago.pagoCompleto?.notaCreditoId && abrirTicketSbc(pago.pagoCompleto.notaCreditoId)}>
+                              <ReceiptIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant='caption' fontWeight='bold'>{pago.cliente}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant='caption' display='block'>{pago.ruta}</Typography>
+                        <Typography variant='caption' color='text.secondary'>{pago.registradoPorNombre || pago.registradoPor}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant='caption' fontWeight='bold'>{pago.nota}</Typography>
+                      </TableCell>
+                      <TableCell align='right'>
+                        <Typography variant='body2' fontWeight='bold' color='primary.main'>
+                          ${pago.montoPagado?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                          {pago.formasPago?.map((forma, i) => (
+                            <Chip key={i} label={`${forma.metodo}: $${forma.monto.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`}
+                              size='small' color={getMetodoPagoColor(forma.metodo) as any} sx={{ fontSize: 10 }} />
+                          ))}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant='caption'>{pago.fechaHora}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        {(!pago.pagoCompleto?.estado || pago.pagoCompleto?.estado === 'pendiente') ? (
+                          <Chip label='Pendiente' size='small' color='warning' sx={{ fontWeight: 'bold', fontSize: 10 }} />
+                        ) : pago.pagoCompleto?.estado === 'en_revision' ? (
+                          <Box>
+                            <Chip label='En Revisión' size='small' color='info' sx={{ fontWeight: 'bold', fontSize: 10, mb: 0.3 }} />
+                            {pago.pagoCompleto?.revisadoPor && <Typography variant='caption' color='text.secondary' display='block'>{pago.pagoCompleto.revisadoPor}</Typography>}
                           </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='body2'>
-                            {pago.registradoPorNombre || pago.registradoPor}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='body2'>
-                            {pago.fechaHora}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          {(!pago.pagoCompleto?.estado || pago.pagoCompleto?.estado === 'pendiente') ? (
-                            <Chip label='Pendiente' size='small' color='warning' sx={{ fontWeight: 'bold', fontSize: 10 }} />
-                          ) : pago.pagoCompleto?.estado === 'en_revision' ? (
-                            <Box>
-                              <Chip label='En Revisión' size='small' color='info' sx={{ fontWeight: 'bold', fontSize: 10, mb: 0.3 }} />
-                              {pago.pagoCompleto?.revisadoPor && <Typography variant='caption' color='text.secondary' display='block'>{pago.pagoCompleto.revisadoPor}</Typography>}
-                            </Box>
-                          ) : pago.pagoCompleto?.estado === 'autorizado' ? (
-                            <Box>
-                              <Chip label='✓ Autorizado' size='small' color='success' sx={{ fontWeight: 'bold', fontSize: 10, mb: 0.3 }} />
-                              {pago.pagoCompleto?.autorizadoPorNombre && <Typography variant='caption' color='text.secondary' display='block'>{pago.pagoCompleto.autorizadoPorNombre}</Typography>}
-                            </Box>
-                          ) : (
-                            <Chip label='Rechazado' size='small' color='error' sx={{ fontWeight: 'bold', fontSize: 10 }} />
-                          )}
-                        </TableCell>
-                        <TableCell align='center'>
-                          <Box sx={{ display: 'flex', gap: 0.3, justifyContent: 'center' }}>
-                            <Tooltip title='Ver detalles'>
-                              <IconButton size='small' onClick={async () => {
-                                if (pago.pagoCompleto) {
-                                  setPagoSeleccionadoDetalle(pago.pagoCompleto)
-                                  setModalDetallePago(true)
-                                  try {
-                                    if (pago.pagoCompleto.usuarioRegistro) {
-                                      const u = await usuariosAPI.getById(pago.pagoCompleto.usuarioRegistro)
-                                      setUsuarioRegistroNombre(`${u.nombres} ${u.apellidoPaterno}`)
-                                    }
-                                  } catch {}
-                                }
-                              }}>
-                                <VisibilityIcon sx={{ fontSize: 16 }} />
+                        ) : pago.pagoCompleto?.estado === 'autorizado' ? (
+                          <Box>
+                            <Chip label='✓ Autorizado' size='small' color='success' sx={{ fontWeight: 'bold', fontSize: 10, mb: 0.3 }} />
+                            {pago.pagoCompleto?.autorizadoPorNombre && <Typography variant='caption' color='text.secondary' display='block'>{pago.pagoCompleto.autorizadoPorNombre}</Typography>}
+                          </Box>
+                        ) : (
+                          <Chip label='Rechazado' size='small' color='error' sx={{ fontWeight: 'bold', fontSize: 10 }} />
+                        )}
+                      </TableCell>
+                      <TableCell align='center'>
+                        <Box sx={{ display: 'flex', gap: 0.3, justifyContent: 'center' }}>
+                          {(!pago.pagoCompleto?.estado || pago.pagoCompleto?.estado === 'pendiente') &&
+                            ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '') && (
+                            <Tooltip title='Marcar En Revisión'>
+                              <IconButton size='small' sx={{ color: 'info.main' }} onClick={() => abrirModalPago(pago, 'revision')}>
+                                <CheckCircleIcon sx={{ fontSize: 18 }} />
                               </IconButton>
                             </Tooltip>
-                            {/* Marcar En Revisión — oficina, planta, admin */}
-                            {(!pago.pagoCompleto?.estado || pago.pagoCompleto?.estado === 'pendiente') &&
-                              ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '') && (
-                              <Tooltip title='Marcar En Revisión'>
-                                <IconButton size='small' sx={{ color: 'info.main' }} onClick={() => abrirModalPago(pago, 'revision')}>
-                                  <CheckCircleIcon sx={{ fontSize: 16 }} />
-                                </IconButton>
-                              </Tooltip>
-                            )}
-                            {/* Autorizar definitivo — solo admin/superAdmin */}
-                            {pago.pagoCompleto?.estado === 'en_revision' &&
-                              ['superAdministrador', 'administrador'].includes(usuario?.rol || '') && (
-                              <Tooltip title='Autorizar — Dar de baja definitivo'>
-                                <IconButton size='small' sx={{ color: 'success.main' }} onClick={() => abrirModalPago(pago, 'autorizar')}>
-                                  <CheckCircleIcon sx={{ fontSize: 16 }} />
-                                </IconButton>
-                              </Tooltip>
-                            )}
-                            {/* Rechazar — desde pendiente solo oficina+, desde en_revision solo admin */}
-                            {((!pago.pagoCompleto?.estado || pago.pagoCompleto?.estado === 'pendiente') &&
-                              ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '')) ||
-                              (pago.pagoCompleto?.estado === 'en_revision' &&
-                              ['superAdministrador', 'administrador'].includes(usuario?.rol || '')) ? (
-                              <Tooltip title='Rechazar'>
-                                <IconButton size='small' sx={{ color: 'error.main' }} onClick={() => abrirModalPago(pago, 'rechazar')}>
-                                  <CancelIcon sx={{ fontSize: 16 }} />
-                                </IconButton>
-                              </Tooltip>
-                            ) : null}
-                            {/* Reactivar — desde rechazado */}
-                            {pago.pagoCompleto?.estado === 'rechazado' &&
-                              ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '') && (
-                              <Tooltip title='Reactivar a Pendiente'>
-                                <IconButton size='small' sx={{ color: 'warning.main' }} onClick={() => abrirModalPago(pago, 'reactivar')}>
-                                  <RefreshIcon sx={{ fontSize: 16 }} />
-                                </IconButton>
-                              </Tooltip>
-                            )}
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              <TablePagination
-                component='div'
-                count={pagosPendientesFiltrados.length}
-                page={pagePagosPendientes}
-                onPageChange={(_, newPage) => setPagePagosPendientes(newPage)}
-                rowsPerPage={rowsPerPagePagosPendientes}
-                onRowsPerPageChange={(e) => {
-                  setRowsPerPagePagosPendientes(parseInt(e.target.value, 10))
-                  setPagePagosPendientes(0)
-                }}
-                rowsPerPageOptions={[5, 10, 25, 50, 100]}
-                labelRowsPerPage='Filas por página'
-                labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-              />
-            </CardContent>
+                          )}
+                          {pago.pagoCompleto?.estado === 'en_revision' &&
+                            ['superAdministrador', 'administrador'].includes(usuario?.rol || '') && (
+                            <Tooltip title='Autorizar — Dar de baja definitivo'>
+                              <IconButton size='small' sx={{ color: 'success.main' }} onClick={() => abrirModalPago(pago, 'autorizar')}>
+                                <CheckCircleIcon sx={{ fontSize: 18 }} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {((!pago.pagoCompleto?.estado || pago.pagoCompleto?.estado === 'pendiente') &&
+                            ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '')) ||
+                            (pago.pagoCompleto?.estado === 'en_revision' &&
+                            ['superAdministrador', 'administrador'].includes(usuario?.rol || '')) ? (
+                            <Tooltip title='Rechazar'>
+                              <IconButton size='small' sx={{ color: 'error.main' }} onClick={() => abrirModalPago(pago, 'rechazar')}>
+                                <CancelIcon sx={{ fontSize: 18 }} />
+                              </IconButton>
+                            </Tooltip>
+                          ) : null}
+                          {pago.pagoCompleto?.estado === 'rechazado' &&
+                            ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(usuario?.rol || '') && (
+                            <Tooltip title='Reactivar'>
+                              <IconButton size='small' sx={{ color: 'warning.main' }} onClick={() => abrirModalPago(pago, 'reactivar')}>
+                                <RefreshIcon sx={{ fontSize: 18 }} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <TablePagination component='div'
+              count={pagosPendientesFiltrados.filter(p => filtroEstadoPagos === 'todos' ? true :
+                filtroEstadoPagos === 'pendiente' ? (!p.pagoCompleto?.estado || p.pagoCompleto?.estado === 'pendiente') :
+                p.pagoCompleto?.estado === filtroEstadoPagos).length}
+              page={pagePagosPendientes}
+              onPageChange={(_, newPage) => setPagePagosPendientes(newPage)}
+              rowsPerPage={rowsPerPagePagosPendientes}
+              onRowsPerPageChange={e => { setRowsPerPagePagosPendientes(parseInt(e.target.value, 10)); setPagePagosPendientes(0) }}
+              rowsPerPageOptions={[10, 25, 50, 100]}
+              labelRowsPerPage='Filas por página'
+              labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`} />
           </Card>
         </Box>
       )}
 
-      {/* Vista de Historial de Pagos */}
-      {vistaActual === 'historial-pagos' && (
-        <Box>
-          <Typography variant='h6' gutterBottom>
-            Historial de Pagos
-          </Typography>
-          
-          <Card>
-            <CardContent>
-              {/* Buscador, filtro por ruta (incl. Todas las rutas) y por fechas (por defecto hoy) */}
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2, alignItems: 'center' }}>
-                <TextField
-                  size='small'
-                  placeholder='Buscar por cliente o nota'
-                  value={filtroBusquedaHistorialPagos}
-                  onChange={(e) => {
-                    setFiltroBusquedaHistorialPagos(e.target.value)
-                    setPageHistorialPagos(0)
-                  }}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position='start'>
-                        <SearchIcon color='action' />
-                      </InputAdornment>
-                    )
-                  }}
-                  sx={{ minWidth: 260 }}
-                />
-                <FormControl size='small' sx={{ minWidth: 200 }}>
-                  <InputLabel>Ruta</InputLabel>
-                  <Select
-                    label='Ruta'
-                    value={filtroRutaHistorialPagos}
-                    onChange={(e) => {
-                      setFiltroRutaHistorialPagos(e.target.value)
-                      setPageHistorialPagos(0)
-                    }}
-                  >
-                    <MenuItem value='todas'>Todas las rutas</MenuItem>
-                    {rutasUnicas.map((ruta) => (
-                      <MenuItem key={ruta} value={ruta}>
-                        {ruta}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <TextField
-                  size='small'
-                  label='Fecha desde'
-                  type='date'
-                  value={fechaDesdeHistorialPagos}
-                  onChange={(e) => {
-                    setFechaDesdeHistorialPagos(e.target.value)
-                    setPageHistorialPagos(0)
-                  }}
-                  InputLabelProps={{ shrink: true }}
-                  sx={{ minWidth: 160 }}
-                />
-                <TextField
-                  size='small'
-                  label='Fecha hasta'
-                  type='date'
-                  value={fechaHastaHistorialPagos}
-                  onChange={(e) => {
-                    setFechaHastaHistorialPagos(e.target.value)
-                    setPageHistorialPagos(0)
-                  }}
-                  InputLabelProps={{ shrink: true }}
-                  sx={{ minWidth: 160 }}
-                />
-              </Box>
-              <TableContainer component={Paper} variant='outlined'>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Fecha/Hora</TableCell>
-                      <TableCell>Cliente</TableCell>
-                      <TableCell>Nota</TableCell>
-                      <TableCell align='right'>Monto Total</TableCell>
-                      <TableCell>Formas de Pago</TableCell>
-                      <TableCell>Registrado por</TableCell>
-                      <TableCell>Autorizado por</TableCell>
-                      <TableCell align='center'>Estado</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {historialPagosFiltrado
-                      .slice(
-                        pageHistorialPagos * rowsPerPageHistorialPagos,
-                        pageHistorialPagos * rowsPerPageHistorialPagos + rowsPerPageHistorialPagos
-                      )
-                      .map((pago) => (
-                      <TableRow key={pago.id} hover>
-                        <TableCell>
-                          <Box>
-                            <Typography variant='body2'>
-                              {formatearFecha(pago.fechaPago)}
-                            </Typography>
-                            <Typography variant='caption' color='text.secondary'>
-                              {pago.horaPago}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='subtitle2' fontWeight='bold'>
-                            {pago.cliente ? `${pago.cliente.nombre} ${pago.cliente.apellidoPaterno} ${pago.cliente.apellidoMaterno}` : 'N/A'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='subtitle2' fontWeight='bold'>
-                            {pago.notaCredito?.numeroNota || 'Abono general'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align='right'>
-                          <Typography variant='h6' color='primary'>
-                            ${pago.montoTotal.toLocaleString()}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                            {pago.formasPago.map((forma, index) => {
-                              const metodoLabel = forma.metodo ?? (forma as any).formaPago?.nombre ?? (forma as any).formaPago?.tipo ?? 'Otro'
-                              return (
-                                <Chip
-                                  key={index}
-                                  label={`${metodoLabel}: $${forma.monto.toLocaleString()}`}
-                                  color={getMetodoPagoColor(metodoLabel) as any}
-                                  size='small'
-                                />
-                              )
-                            })}
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='body2'>
-                            {pago.usuarioRegistro
-                              ? (usuariosNombresMapHistorial.get(pago.usuarioRegistro) || pago.usuarioRegistro)
-                              : '-'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='body2'>
-                            {pago.usuarioAutorizacion
-                              ? (usuariosNombresMapHistorial.get(pago.usuarioAutorizacion) || pago.usuarioAutorizacion)
-                              : '-'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align='center'>
-                          <Chip
-                            label={pago.estado.toUpperCase()}
-                            color={
-                              pago.estado === 'autorizado' ? 'success' :
-                              pago.estado === 'pendiente' ? 'warning' : 'error'
-                            }
-                            size='small'
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              <TablePagination
-                component='div'
-                count={historialPagosFiltrado.length}
-                page={pageHistorialPagos}
-                onPageChange={(_, newPage) => setPageHistorialPagos(newPage)}
-                rowsPerPage={rowsPerPageHistorialPagos}
-                onRowsPerPageChange={(e) => {
-                  setRowsPerPageHistorialPagos(parseInt(e.target.value, 10))
-                  setPageHistorialPagos(0)
-                }}
-                rowsPerPageOptions={[5, 10, 25, 50, 100]}
-                labelRowsPerPage='Filas por página'
-                labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-              />
-            </CardContent>
-          </Card>
-        </Box>
-      )}
 
       {/* Modales */}
       <Dialog open={dialogoAbierto} onClose={cerrarDialogo} maxWidth='sm' fullWidth>
