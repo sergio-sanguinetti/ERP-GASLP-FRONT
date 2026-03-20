@@ -228,6 +228,7 @@ export default function CreditosAbonosPage() {
   const [pagoSelModal, setPagoSelModal] = useState<any>(null)
   const [tipoAccionPago, setTipoAccionPago] = useState<'revision' | 'autorizar' | 'rechazar' | 'reactivar'>('revision')
   const [notaAccionPago, setNotaAccionPago] = useState('')
+  const [folioConfirmacionPago, setFolioConfirmacionPago] = useState('')
   const [filtroEstadoPagos, setFiltroEstadoPagos] = useState<string>('en_revision')
   const [folioConfSbc, setFolioConfSbc] = useState('')
   const [notaConfSbc, setNotaConfSbc] = useState('')
@@ -1175,6 +1176,7 @@ export default function CreditosAbonosPage() {
     setPagoSelModal(pago)
     setTipoAccionPago(accion)
     setNotaAccionPago('')
+    setFolioConfirmacionPago('')
     setModalPago(true)
   }
 
@@ -1192,7 +1194,8 @@ export default function CreditosAbonosPage() {
       const estado = tipoAccionPago === 'revision' ? 'en_revision'
         : tipoAccionPago === 'autorizar' ? 'autorizado'
         : tipoAccionPago === 'reactivar' ? 'pendiente' : 'rechazado'
-      await creditosAbonosAPI.updatePagoEstado(pagoSelModal.id, estado as any, notaAccionPago)
+      const notaFinal = folioConfirmacionPago ? `Folio confirmado: ${folioConfirmacionPago}${notaAccionPago ? ' — ' + notaAccionPago : ''}` : notaAccionPago
+      await creditosAbonosAPI.updatePagoEstado(pagoSelModal.id, estado as any, notaFinal)
       setSuccessMessage(
         tipoAccionPago === 'revision' ? 'Pago marcado En Revisión' :
         tipoAccionPago === 'autorizar' ? '✅ Pago autorizado — nota de crédito cerrada' :
@@ -3054,42 +3057,60 @@ export default function CreditosAbonosPage() {
               )}
               {tipoAccionPago === 'autorizar' && pagoSelModal && (
                 <Box sx={{ mb: 2 }}>
-                  <Alert severity='info' sx={{ mb: 2 }}>
-                    Revisa los comprobantes físicos y confirma que el pago es correcto antes de autorizar.
-                  </Alert>
-                  <Box sx={{ bgcolor: '#f9f6f2', borderRadius: 1, p: 1.5, mb: 2 }}>
-                    <Grid container spacing={1}>
-                      <Grid item xs={6}>
-                        <Typography variant='caption' color='text.secondary'>Monto</Typography>
-                        <Typography variant='body1' fontWeight='bold' color='primary.main'>${pagoSelModal.montoPagado?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Typography>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Typography variant='caption' color='text.secondary'>Registrado por</Typography>
-                        <Typography variant='body2' fontWeight='bold'>{pagoSelModal.registradoPorNombre || pagoSelModal.registradoPor}</Typography>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Typography variant='caption' color='text.secondary'>Forma de pago</Typography>
-                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.3 }}>
-                          {pagoSelModal.formasPago?.map((f: any, i: number) => (
-                            <Box key={i}>
-                              <Typography variant='caption' fontWeight='bold'>{f.metodo}: ${f.monto?.toLocaleString('es-MX', { maximumFractionDigits: 0 })}</Typography>
-                              {f.referencia && <Typography variant='caption' color='text.secondary' display='block'>Folio: {f.referencia}</Typography>}
-                              {f.banco && <Typography variant='caption' color='text.secondary' display='block'>Banco: {f.banco}</Typography>}
-                            </Box>
-                          ))}
+                  {/* Sección 1: La venta */}
+                  <Box sx={{ mb: 1.5, pb: 1.5, borderBottom: '1px solid #f0f0f0' }}>
+                    <Typography variant='caption' fontWeight='bold' color='text.secondary' textTransform='uppercase'>📦 La Venta</Typography>
+                    <Box sx={{ display: 'flex', gap: 4, mt: 0.5 }}>
+                      <Box>
+                        <Typography variant='caption' color='text.secondary'>Cliente</Typography>
+                        <Typography variant='body2' fontWeight='bold'>{pagoSelModal.cliente}</Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant='caption' color='text.secondary'>Nota</Typography>
+                        <Typography variant='body2' fontWeight='bold'>{pagoSelModal.nota}</Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant='caption' color='text.secondary'>Ruta</Typography>
+                        <Typography variant='body2'>{pagoSelModal.ruta}</Typography>
+                      </Box>
+                    </Box>
+                  </Box>
+                  {/* Sección 2: El cobro */}
+                  <Box sx={{ mb: 1.5, pb: 1.5, borderBottom: '1px solid #f0f0f0' }}>
+                    <Typography variant='caption' fontWeight='bold' color='text.secondary' textTransform='uppercase'>💰 El Cobro</Typography>
+                    <Box sx={{ mt: 0.5 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                        <Typography variant='h5' fontWeight='bold' color='primary.main'>${pagoSelModal.montoPagado?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Typography>
+                        <Typography variant='caption' color='text.secondary'>Registrado por: <strong>{pagoSelModal.registradoPorNombre || pagoSelModal.registradoPor}</strong></Typography>
+                      </Box>
+                      {pagoSelModal.formasPago?.map((f: any, i: number) => (
+                        <Box key={i} sx={{ display: 'flex', gap: 2, p: 1, bgcolor: '#f9f6f2', borderRadius: 1, mb: 0.5, alignItems: 'center' }}>
+                          <Chip label={f.metodo?.toUpperCase()} size='small'
+                            color={f.metodo === 'transferencia' ? 'primary' : f.metodo === 'cheque' ? 'warning' : f.metodo === 'deposito' ? 'secondary' : 'default'}
+                            sx={{ fontSize: 10, minWidth: 90 }} />
+                          <Typography variant='body2' fontWeight='bold'>${f.monto?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Typography>
+                          {f.referencia && <Box><Typography variant='caption' color='text.secondary'>Folio registrado: </Typography><Typography variant='caption' fontWeight='bold'>{f.referencia}</Typography></Box>}
+                          {f.banco && <Typography variant='caption' color='text.secondary'>Banco: {f.banco}</Typography>}
                         </Box>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Typography variant='caption' color='text.secondary'>Fecha registro</Typography>
-                        <Typography variant='body2'>{pagoSelModal.fechaHora}</Typography>
-                      </Grid>
+                      ))}
                       {pagoSelModal.observaciones && (
-                        <Grid item xs={12}>
-                          <Typography variant='caption' color='text.secondary'>Notas del cobrador</Typography>
-                          <Typography variant='body2' sx={{ bgcolor: '#fff8e1', p: 0.8, borderRadius: 0.5, mt: 0.3 }}>{pagoSelModal.observaciones}</Typography>
-                        </Grid>
+                        <Typography variant='caption' sx={{ bgcolor: '#fff8e1', p: 0.8, borderRadius: 0.5, display: 'block', mt: 0.5 }}>
+                          📝 {pagoSelModal.observaciones}
+                        </Typography>
                       )}
-                    </Grid>
+                      <Typography variant='caption' color='text.disabled' display='block' sx={{ mt: 0.5 }}>Fecha: {pagoSelModal.fechaHora}</Typography>
+                    </Box>
+                  </Box>
+                  {/* Sección 3: Confirmación */}
+                  <Box>
+                    <Typography variant='caption' fontWeight='bold' color='text.secondary' textTransform='uppercase'>✅ Tu Confirmación</Typography>
+                    {pagoSelModal.formasPago?.some((f: any) => ['transferencia','cheque','deposito'].includes(f.metodo)) && (
+                      <TextField fullWidth size='small' sx={{ mt: 1, mb: 1 }}
+                        label='Folio confirmado en estado de cuenta / banco *'
+                        placeholder='Ej: Referencia bancaria que aparece en tu cuenta...'
+                        value={folioConfirmacionPago}
+                        onChange={e => setFolioConfirmacionPago(e.target.value)} />
+                    )}
                   </Box>
                 </Box>
               )}
