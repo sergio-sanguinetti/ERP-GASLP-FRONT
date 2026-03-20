@@ -2265,8 +2265,15 @@ export default function CreditosAbonosPage() {
                         <Typography variant='caption' fontWeight='bold'>{pago.cliente}</Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant='caption' display='block'>{pago.ruta}</Typography>
-                        <Typography variant='caption' color='text.secondary'>{pago.registradoPorNombre || pago.registradoPor}</Typography>
+                        <Typography variant='caption' display='block' fontWeight='bold'>{pago.ruta}</Typography>
+                        <Typography variant='caption' color='text.secondary'>Cobrado por: {pago.registradoPorNombre || pago.registradoPor}</Typography>
+                        {(() => {
+                          const reps = (pago as any).pagoCompleto?.cliente?.ruta?.usuarioRuta
+                          if (!reps || reps.length === 0) return null
+                          return <Typography variant='caption' color='info.main' display='block'>
+                            Rep: {reps.map((ur: any) => `${ur.usuario?.nombres || ''} ${ur.usuario?.apellidoPaterno || ''}`.trim()).filter(Boolean).join(', ')}
+                          </Typography>
+                        })()}
                       </TableCell>
                       <TableCell>
                         <Typography variant='caption' fontWeight='bold'>{pago.nota}</Typography>
@@ -2658,8 +2665,15 @@ export default function CreditosAbonosPage() {
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
-                    <Typography variant='caption' color='text.secondary'>Ruta / Repartidor</Typography>
-                    <Typography variant='body2' fontWeight='bold'>{pagoSeleccionadoDetalle.cliente?.ruta?.nombre || '—'}</Typography>
+                    <Typography variant='caption' color='text.secondary'>Ruta</Typography>
+                    <Typography variant='body2' fontWeight='bold'>{(pagoSeleccionadoDetalle.cliente as any)?.ruta?.nombre || '—'}</Typography>
+                    {(() => {
+                      const reps = (pagoSeleccionadoDetalle.cliente as any)?.ruta?.usuarioRuta
+                      if (!reps || reps.length === 0) return null
+                      return <Typography variant='caption' color='text.secondary'>
+                        Repartidor: {reps.map((ur: any) => `${ur.usuario?.nombres || ''} ${ur.usuario?.apellidoPaterno || ''}`.trim()).filter(Boolean).join(', ')}
+                      </Typography>
+                    })()}
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant='caption' color='text.secondary'>Nota de crédito</Typography>
