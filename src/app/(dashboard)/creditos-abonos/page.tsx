@@ -596,7 +596,10 @@ export default function CreditosAbonosPage() {
           filtrosAPI.rutaId = rutaEncontrada.id
         }
       }
-      // No forzar primera ruta — mostrar todos los clientes por defecto
+      // No forzar primera ruta — mostrar todos los clientes con saldo por defecto
+      if (!filtrosAPI.saldoMin && filtros.deuda !== 'sin-deuda') {
+        filtrosAPI.saldoMin = '0.01'
+      }
       // Solo enviar estadoCliente al API cuando es un valor del enum del backend (activo/suspendido/inactivo).
       // Los valores buen-pagador, vencido, critico, bloqueado son estado de crédito y se filtran en cliente.
       const estadoClienteValidos = ['activo', 'suspendido', 'inactivo']
