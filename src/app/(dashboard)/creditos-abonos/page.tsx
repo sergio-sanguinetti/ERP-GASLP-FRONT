@@ -756,38 +756,46 @@ export default function CreditosAbonosPage() {
       monto?: number
       diasVencimiento?: number
     }> = []
+    const ahora = new Date()
 
-    clientesCredito.forEach(cliente => {
-      if (cliente.saldoActual > cliente.limiteCredito) {
+    clientesDashboard.forEach(cliente => {
+      // Alerta: excede límite de crédito
+      if ((cliente.saldoActual ?? 0) > cliente.limiteCredito && cliente.limiteCredito > 0) {
         alertas.push({
           id: `alerta-${cliente.id}-excede`,
           tipo: 'critica',
           titulo: 'Cliente excede límite de crédito',
-          descripcion: `${cliente.nombre} ha excedido su límite de crédito en $${(cliente.saldoActual - cliente.limiteCredito).toLocaleString()}`,
+          descripcion: `Excede en $${((cliente.saldoActual ?? 0) - cliente.limiteCredito).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`,
           fecha: new Date().toISOString().split('T')[0],
           cliente: cliente.nombre,
-          monto: cliente.saldoActual - cliente.limiteCredito
+          monto: (cliente.saldoActual ?? 0) - cliente.limiteCredito
         })
       }
-
-      const notasVencidas = cliente.notasPendientes.filter(n => n.estado === 'vencida')
-      notasVencidas.forEach(nota => {
-        if (nota.diasVencimiento < -60) {
-          alertas.push({
-            id: `alerta-${nota.id}-vencida`,
-            tipo: 'critica',
-            titulo: 'Deuda vencida más de 60 días',
-            descripcion: `${cliente.nombre} tiene deuda vencida desde hace ${Math.abs(nota.diasVencimiento)} días`,
-            fecha: new Date().toISOString().split('T')[0],
-            cliente: cliente.nombre,
-            diasVencimiento: Math.abs(nota.diasVencimiento)
-          })
-        }
+      // Alerta: notas vencidas más de 30 días (calculado desde fechaVencimiento)
+      const notasVencidas30 = (cliente.notasPendientes ?? []).filter(n => {
+        if (!n.fechaVencimiento) return false
+        const dias = (ahora.getTime() - new Date(n.fechaVencimiento).getTime()) / 86400000
+        return dias > 30
       })
+      if (notasVencidas30.length > 0) {
+        const maxDias = Math.max(...notasVencidas30.map(n => (ahora.getTime() - new Date(n.fechaVencimiento!).getTime()) / 86400000))
+        const montoVencido = notasVencidas30.reduce((s, n) => s + (n.saldoPendiente ?? 0), 0)
+        alertas.push({
+          id: `alerta-${cliente.id}-vencida30`,
+          tipo: 'critica',
+          titulo: `Deuda vencida +${Math.floor(maxDias)} días`,
+          descripcion: `$${montoVencido.toLocaleString('es-MX', { maximumFractionDigits: 0 })} sin pagar`,
+          fecha: new Date().toISOString().split('T')[0],
+          cliente: cliente.nombre,
+          monto: montoVencido,
+          diasVencimiento: Math.floor(maxDias)
+        })
+      }
     })
 
-    return alertas
-  }, [clientesCredito])
+    // Ordenar por monto descendente
+    return alertas.sort((a, b) => (b.monto ?? 0) - (a.monto ?? 0))
+  }, [clientesDashboard])
 
   // Función helper para formatear fechas de manera consistente
   const formatearFecha = (fecha: string) => {
