@@ -2219,27 +2219,47 @@ export default function CreditosAbonosPage() {
                     .map(pago => (
                     <TableRow key={pago.id} hover>
                       <TableCell sx={{ p: 0.5 }}>
-                        <Tooltip title='Ver detalle del pago'>
-                          <IconButton size='small' onClick={async () => {
-                            try {
-                              // Obtener pedidoId desde la nota de crédito
-                              const nc = pago.pagoCompleto?.notaCreditoId
-                              if (!nc) { setError('Este pago no tiene nota asociada'); return }
-                              const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
-                              const token = typeof window !== 'undefined' ? (localStorage.getItem('token') || sessionStorage.getItem('token') || '') : ''
-                              const res = await fetch(API + '/creditos-abonos/notas-credito/' + nc, { headers: { 'Authorization': 'Bearer ' + token } })
-                              if (!res.ok) { setError('No se pudo cargar la nota'); return }
-                              const nota = await res.json()
-                              if (nota.pedidoId) {
-                                abrirTicketSbc(nota.pedidoId)
-                              } else {
-                                setError('Esta nota no tiene pedido asociado')
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.3 }}>
+                          {/* Botón detalle */}
+                          <Tooltip title='Ver detalle completo del pago'>
+                            <IconButton size='small' onClick={async () => {
+                              if (pago.pagoCompleto) {
+                                setPagoSeleccionadoDetalle(pago.pagoCompleto)
+                                setModalDetallePago(true)
+                                try {
+                                  if (pago.pagoCompleto.usuarioRegistro) {
+                                    const u = await usuariosAPI.getById(pago.pagoCompleto.usuarioRegistro)
+                                    setUsuarioRegistroNombre(`${u.nombres} ${u.apellidoPaterno}`)
+                                  }
+                                  if (pago.pagoCompleto.usuarioAutorizacion) {
+                                    const u = await usuariosAPI.getById(pago.pagoCompleto.usuarioAutorizacion)
+                                    setUsuarioAutorizacionNombre(`${u.nombres} ${u.apellidoPaterno}`)
+                                  }
+                                } catch {}
                               }
-                            } catch(e: any) { setError(e.message) }
-                          }}>
-                            <ReceiptIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
+                            }}>
+                              <VisibilityIcon sx={{ fontSize: 15 }} />
+                            </IconButton>
+                          </Tooltip>
+                          {/* Botón ticket */}
+                          <Tooltip title='Ver ticket de venta'>
+                            <IconButton size='small' sx={{ color: 'text.secondary' }} onClick={async () => {
+                              try {
+                                const nc = pago.pagoCompleto?.notaCreditoId
+                                if (!nc) { setError('Sin nota asociada'); return }
+                                const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+                                const token = typeof window !== 'undefined' ? (localStorage.getItem('token') || sessionStorage.getItem('token') || '') : ''
+                                const res = await fetch(API + '/creditos-abonos/notas-credito/' + nc, { headers: { 'Authorization': 'Bearer ' + token } })
+                                if (!res.ok) { setError('No se pudo cargar la nota'); return }
+                                const nota = await res.json()
+                                if (nota.pedidoId) abrirTicketSbc(nota.pedidoId)
+                                else setError('Esta nota no tiene pedido asociado')
+                              } catch(e: any) { setError(e.message) }
+                            }}>
+                              <ReceiptIcon sx={{ fontSize: 15 }} />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                       </TableCell>
                       <TableCell>
                         <Typography variant='caption' fontWeight='bold'>{pago.cliente}</Typography>
@@ -2671,18 +2691,49 @@ export default function CreditosAbonosPage() {
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Estado
-                      </Typography>
+                      <Typography variant="body2" color="text.secondary">Estado</Typography>
                       <Chip
-                        label={pagoSeleccionadoDetalle.estado.toUpperCase()}
+                        label={
+                          pagoSeleccionadoDetalle.estado === 'autorizado' ? '✅ Autorizado' :
+                          pagoSeleccionadoDetalle.estado === 'en_revision' ? '🔍 En Revisión' :
+                          pagoSeleccionadoDetalle.estado === 'pendiente' ? '⏳ Pendiente' : '❌ Rechazado'
+                        }
                         color={
                           pagoSeleccionadoDetalle.estado === 'autorizado' ? 'success' :
+                          pagoSeleccionadoDetalle.estado === 'en_revision' ? 'info' :
                           pagoSeleccionadoDetalle.estado === 'pendiente' ? 'warning' : 'error'
                         }
-                        size="small"
+                        size="small" sx={{ fontWeight: 'bold' }}
                       />
                     </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">Registrado por</Typography>
+                      <Typography variant="body1" fontWeight="bold">{usuarioRegistroNombre || '—'}</Typography>
+                    </Grid>
+                    {(pagoSeleccionadoDetalle as any).revisadoPor && (
+                      <Grid item xs={12} sm={6}>
+                        <Typography variant="body2" color="text.secondary">Revisado por (Oficina)</Typography>
+                        <Typography variant="body1" color="info.main" fontWeight="bold">{(pagoSeleccionadoDetalle as any).revisadoPor}</Typography>
+                        {(pagoSeleccionadoDetalle as any).fechaRevision && (
+                          <Typography variant="caption" color="text.secondary">{new Date((pagoSeleccionadoDetalle as any).fechaRevision).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', dateStyle: 'medium' })}</Typography>
+                        )}
+                      </Grid>
+                    )}
+                    {(pagoSeleccionadoDetalle as any).autorizadoPorNombre && (
+                      <Grid item xs={12} sm={6}>
+                        <Typography variant="body2" color="text.secondary">Autorizado por</Typography>
+                        <Typography variant="body1" color="success.main" fontWeight="bold">{(pagoSeleccionadoDetalle as any).autorizadoPorNombre}</Typography>
+                        {(pagoSeleccionadoDetalle as any).fechaAutorizacionReal && (
+                          <Typography variant="caption" color="text.secondary">{new Date((pagoSeleccionadoDetalle as any).fechaAutorizacionReal).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', dateStyle: 'medium' })}</Typography>
+                        )}
+                      </Grid>
+                    )}
+                    {(pagoSeleccionadoDetalle as any).notaAutorizacion && (
+                      <Grid item xs={12}>
+                        <Typography variant="body2" color="text.secondary">Observación</Typography>
+                        <Typography variant="body2" sx={{ bgcolor: '#f5f5f5', p: 1, borderRadius: 1, mt: 0.5 }}>{(pagoSeleccionadoDetalle as any).notaAutorizacion}</Typography>
+                      </Grid>
+                    )}
                     <Grid item xs={12} sm={6}>
                       <Typography variant="body2" color="text.secondary">
                         Fecha de Pago
