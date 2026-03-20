@@ -2319,17 +2319,18 @@ export default function CreditosAbonosPage() {
                             const esAdmin = ['superAdministrador', 'administrador'].includes(rol)
                             const esStaff = ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(rol)
                             const estado = pago.pagoCompleto?.estado || 'pendiente'
+                            const esEnRevision = ['en_revision', 'pendiente'].includes(estado) || !pago.pagoCompleto?.estado
                             return <>
-                              {/* Autorizar — solo admin, solo desde en_revision */}
-                              {esAdmin && estado === 'en_revision' && (
+                              {/* Autorizar — solo admin, desde en_revision o pendiente */}
+                              {esAdmin && esEnRevision && (
                                 <Tooltip title='✅ Autorizar pago'>
                                   <IconButton size='small' sx={{ color: 'success.main' }} onClick={() => abrirModalPago(pago, 'autorizar')}>
                                     <CheckCircleIcon sx={{ fontSize: 18 }} />
                                   </IconButton>
                                 </Tooltip>
                               )}
-                              {/* Rechazar — admin desde en_revision, staff desde pendiente */}
-                              {((esAdmin && estado === 'en_revision') || (esStaff && estado === 'pendiente')) && (
+                              {/* Rechazar — admin o staff desde en_revision/pendiente */}
+                              {(esAdmin || esStaff) && esEnRevision && (
                                 <Tooltip title='❌ Rechazar'>
                                   <IconButton size='small' sx={{ color: 'error.main' }} onClick={() => abrirModalPago(pago, 'rechazar')}>
                                     <CancelIcon sx={{ fontSize: 18 }} />
