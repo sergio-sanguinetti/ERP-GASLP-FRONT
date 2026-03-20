@@ -1177,11 +1177,13 @@ export default function CreditosAbonosPage() {
     setTipoAccionPago(accion)
     setNotaAccionPago('')
     setFolioConfirmacionPago('')
+    setError(null)
     setModalPago(true)
   }
 
   const ejecutarAccionPago = async () => {
     if (!pagoSelModal) return
+    setError(null)
     const rolUsuario = usuario?.rol || ''
     const rolesAdmin = ['superAdministrador', 'administrador']
     const rolesOficina = ['superAdministrador', 'administrador', 'oficina', 'planta']
