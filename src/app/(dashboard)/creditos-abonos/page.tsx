@@ -2925,11 +2925,11 @@ export default function CreditosAbonosPage() {
                                     fechaPago: p.fechaPedido || new Date().toISOString(),
                                     horaPago: p.fechaPedido ? new Date(p.fechaPedido).toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit' }) : '—',
                                     observaciones: p.notaConfirmacion,
-                                    revisadoPor: p.confirmadoPorOficina,
+                                    revisadoPor: p.estadoSbc === 'confirmado_oficina' || p.estadoSbc === 'confirmado_sanluis' ? p.confirmadoPorOficina : null,
                                     fechaRevision: p.fechaConfOficina,
-                                    autorizadoPorNombre: p.confirmadoPorSanLuis,
+                                    autorizadoPorNombre: p.confirmadoPorSanLuis || null,
                                     fechaAutorizacionReal: p.fechaConfSanLuis,
-                                    notaAutorizacion: p.notaConfirmacion,
+                                    notaAutorizacion: p.confirmadoPorSanLuis ? p.notaConfirmacion : null,
                                   }
                                   setPagoSeleccionadoDetalle(detalle)
                                   setUsuarioRegistroNombre(p.repartidor || '—')
