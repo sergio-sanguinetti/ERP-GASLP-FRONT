@@ -211,6 +211,7 @@ export default function CreditosAbonosPage() {
   const [clientesCredito, setClientesCredito] = useState<ClienteCredito[]>([])
   const [clientesDashboard, setClientesDashboard] = useState<ClienteCredito[]>([])
   const [loadingDashboard, setLoadingDashboard] = useState(false)
+  const [ordenClientes, setOrdenClientes] = useState<'saldo_desc' | 'saldo_asc' | 'nombre_asc' | 'reciente'>('saldo_desc')
   const [pagosPendientesAutorizacion, setPagosPendientesAutorizacion] = useState<PagoPendienteAutorizacion[]>([])
   const [historialPagos, setHistorialPagos] = useState<Pago[]>([])
   const [historialLimites, setHistorialLimites] = useState<HistorialLimite[]>([])
@@ -973,9 +974,10 @@ export default function CreditosAbonosPage() {
         <body><div class="page">
           <div class="header">
             <div class="logo-area">
-              <h1>⛽ GAS PROVIDENCIA</h1>
-              <p>Distribución de Gas LP • San Luis de la Paz, Gto.</p>
-              <p>Tel: 4696863030</p>
+              <img src="https://erp-gaslp-front.vercel.app/logo.png" alt="Gas Providencia" style="height:60px;object-fit:contain" onerror="this.style.display='none';document.getElementById('logo-text').style.display='block'" />
+              <div id="logo-text" style="display:none"><h1 style="color:#8B5E3C;font-size:20px;font-weight:900">GAS PROVIDENCIA</h1></div>
+              <p style="font-size:11px;color:#666;margin-top:4px">Distribución de Gas LP • San Luis de la Paz, Gto.</p>
+              <p style="font-size:11px;color:#666">Tel: 4696863030</p>
             </div>
             <div class="doc-info">
               <h2>ESTADO DE CUENTA</h2>
@@ -1304,8 +1306,12 @@ export default function CreditosAbonosPage() {
         const cumpleSaldoMax = !filtros.saldoMax || (cliente.saldoActual ?? 0) <= Number(filtros.saldoMax)
         return cumpleNombre && cumpleRuta && cumpleEstado && cumpleDeuda && cumpleSaldoMin && cumpleSaldoMax
       })
-      .sort((a, b) => (b.saldoActual ?? 0) - (a.saldoActual ?? 0))
-  }, [clientesCredito, filtros])
+      .sort((a, b) => {
+        if (ordenClientes === 'saldo_asc') return (a.saldoActual ?? 0) - (b.saldoActual ?? 0)
+        if (ordenClientes === 'nombre_asc') return (a.nombre || '').localeCompare(b.nombre || '')
+        return (b.saldoActual ?? 0) - (a.saldoActual ?? 0) // saldo_desc por defecto
+      })
+  }, [clientesCredito, filtros, ordenClientes])
 
   const rutasUnicas = useMemo(() => {
     // Usar las rutas cargadas de la API, no solo las de los clientes cargados
@@ -1756,6 +1762,16 @@ export default function CreditosAbonosPage() {
                     </Button>
                   </Box>
                 </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <FormControl fullWidth size='small'>
+                    <InputLabel>Ordenar por</InputLabel>
+                    <Select value={ordenClientes} label='Ordenar por' onChange={e => setOrdenClientes(e.target.value as any)}>
+                      <MenuItem value='saldo_desc'>Mayor deuda primero</MenuItem>
+                      <MenuItem value='saldo_asc'>Menor deuda primero</MenuItem>
+                      <MenuItem value='nombre_asc'>Nombre A-Z</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
               </Grid>
             </CardContent>
           </Card>
@@ -1827,9 +1843,21 @@ export default function CreditosAbonosPage() {
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={cliente.estado.replace('-', ' ').toUpperCase()}
-                            color={getEstadoColor(cliente.estado) as any}
-                            size='small'
+                            label={
+                              cliente.estado === 'buen-pagador' ? 'Al corriente' :
+                              cliente.estado === 'vencido' ? 'Vencido' :
+                              cliente.estado === 'por_vencer' ? 'Por vencer' :
+                              cliente.estado === 'critico' ? 'Crítico' :
+                              cliente.estado === 'bloqueado' ? 'Bloqueado' :
+                              cliente.estado
+                            }
+                            color={
+                              cliente.estado === 'buen-pagador' ? 'success' :
+                              cliente.estado === 'vencido' ? 'error' :
+                              cliente.estado === 'por_vencer' ? 'warning' :
+                              cliente.estado === 'critico' ? 'error' : 'default'
+                            }
+                            size='small' sx={{ fontWeight: 'bold', fontSize: 10 }}
                           />
                         </TableCell>
                         <TableCell>
