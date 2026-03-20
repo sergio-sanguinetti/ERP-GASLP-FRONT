@@ -598,6 +598,14 @@ export default function CreditosAbonosPage() {
           filtrosAPI.rutaId = rutaEncontrada.id
         }
       }
+      // Filtro por chofer — buscar todas las rutas que contengan el texto
+      if (filtroChofer.trim()) {
+        const rutasDelChofer = listaRutas.filter(r => r.nombre.toLowerCase().includes(filtroChofer.toLowerCase()))
+        if (rutasDelChofer.length === 1) {
+          filtrosAPI.rutaId = rutasDelChofer[0].id
+        }
+        // Si hay múltiples rutas con ese chofer, filtrar en frontend con cumpleChofer
+      }
       // No forzar primera ruta — mostrar todos los clientes con saldo por defecto
       if (!filtrosAPI.saldoMin && filtros.deuda !== 'sin-deuda') {
         filtrosAPI.saldoMin = '0.01'
@@ -1684,6 +1692,7 @@ export default function CreditosAbonosPage() {
                   <TextField fullWidth size='small' placeholder='Chofer/Operador...'
                     value={filtroChofer}
                     onChange={e => setFiltroChofer(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { setPageClientes(0); cargarDatos(undefined, { pageClientes: 0 }) } }}
                     InputProps={{ startAdornment: <InputAdornment position='start'><PersonIcon fontSize='small' /></InputAdornment> }} />
                 </Grid>
                 <Grid item xs={12} sm={6} md={2}>
