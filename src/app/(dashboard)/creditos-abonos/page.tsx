@@ -1400,7 +1400,8 @@ export default function CreditosAbonosPage() {
                     const clientesCon = clientesDashboard.filter(c => (c.saldoActual ?? 0) > 0)
                     const grupos = [
                       { label: 'Buen pagador', key: 'buen-pagador', color: '#2e7d32', bg: '#e8f5e9' },
-                      { label: 'Por vencer', key: 'vencido', color: '#f57c00', bg: '#fff3e0' },
+                      { label: 'Vencido', key: 'vencido', color: '#f57c00', bg: '#fff3e0' },
+                      { label: 'Por vencer', key: 'por_vencer', color: '#ed6c02', bg: '#fff3e0' },
                       { label: 'Crítico', key: 'critico', color: '#c62828', bg: '#ffebee' },
                       { label: 'Bloqueado', key: 'bloqueado', color: '#424242', bg: '#f5f5f5' },
                     ]
@@ -1478,8 +1479,8 @@ export default function CreditosAbonosPage() {
                       .slice(0, 10)
                       .map((c, idx) => {
                         const pct = c.limiteCredito > 0 ? Math.min(((c.saldoActual ?? 0) / c.limiteCredito) * 100, 100) : 0
-                        const estadoColor = c.estado === 'buen-pagador' ? 'success' : c.estado === 'critico' ? 'error' : c.estado === 'bloqueado' ? 'default' : 'warning'
-                        const estadoLabel = c.estado === 'buen-pagador' ? 'Al corriente' : c.estado === 'vencido' ? 'Por vencer' : c.estado === 'critico' ? 'Crítico' : 'Bloqueado'
+                        const estadoColor = c.estado === 'buen-pagador' ? 'success' : c.estado === 'critico' ? 'error' : c.estado === 'bloqueado' ? 'default' : c.estado === 'vencido' ? 'error' : 'warning'
+                        const estadoLabel = c.estado === 'buen-pagador' ? 'Al corriente' : c.estado === 'vencido' ? 'Vencido' : c.estado === 'por_vencer' ? 'Por vencer' : c.estado === 'critico' ? 'Crítico' : 'Bloqueado'
                         return (
                           <TableRow key={c.id} hover
                             sx={{ cursor: 'pointer' }}
