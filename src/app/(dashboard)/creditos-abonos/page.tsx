@@ -2219,13 +2219,27 @@ export default function CreditosAbonosPage() {
                     .map(pago => (
                     <TableRow key={pago.id} hover>
                       <TableCell sx={{ p: 0.5 }}>
-                        {pago.pagoCompleto?.notaCreditoId && (
-                          <Tooltip title='Ver ticket'>
-                            <IconButton size='small' onClick={() => pago.pagoCompleto?.notaCreditoId && abrirTicketSbc(pago.pagoCompleto.notaCreditoId)}>
-                              <ReceiptIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
-                          </Tooltip>
-                        )}
+                        <Tooltip title='Ver detalle del pago'>
+                          <IconButton size='small' onClick={async () => {
+                            try {
+                              // Obtener pedidoId desde la nota de crédito
+                              const nc = pago.pagoCompleto?.notaCreditoId
+                              if (!nc) { setError('Este pago no tiene nota asociada'); return }
+                              const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+                              const token = typeof window !== 'undefined' ? (localStorage.getItem('token') || sessionStorage.getItem('token') || '') : ''
+                              const res = await fetch(API + '/creditos-abonos/notas/' + nc, { headers: { 'Authorization': 'Bearer ' + token } })
+                              if (!res.ok) { setError('No se pudo cargar la nota'); return }
+                              const nota = await res.json()
+                              if (nota.pedidoId) {
+                                abrirTicketSbc(nota.pedidoId)
+                              } else {
+                                setError('Esta nota no tiene pedido asociado')
+                              }
+                            } catch(e: any) { setError(e.message) }
+                          }}>
+                            <ReceiptIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
                       </TableCell>
                       <TableCell>
                         <Typography variant='caption' fontWeight='bold'>{pago.cliente}</Typography>
@@ -3208,24 +3222,32 @@ export default function CreditosAbonosPage() {
             </DialogActions>
           </Dialog>
 
-          {/* Modal ticket SBC */}
-          <Dialog open={ticketSbcAbierto} onClose={() => { setTicketSbcAbierto(false); setPedidoTicketSbc(null); setHtmlTicketSbc('') }} maxWidth='sm' fullWidth>
-            <DialogTitle>Ticket — {pedidoTicketSbc?.numeroPedido}</DialogTitle>
-            <DialogContent>
-              {loadingTicketSbc ? <LinearProgress /> : htmlTicketSbc ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                  <iframe title='Ticket' srcDoc={htmlTicketSbc}
-                    style={{ width: '280px', minHeight: '400px', border: '1px solid #e0e0e0', borderRadius: 4 }} />
-                </Box>
-              ) : null}
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => { setTicketSbcAbierto(false); setPedidoTicketSbc(null); setHtmlTicketSbc('') }}>Cerrar</Button>
-            </DialogActions>
-          </Dialog>
         </Box>
       )}
 
+      {/* Modal ticket global — disponible en todas las vistas */}
+      <Dialog open={ticketSbcAbierto} onClose={() => { setTicketSbcAbierto(false); setPedidoTicketSbc(null); setHtmlTicketSbc('') }} maxWidth='sm' fullWidth>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Ticket — {pedidoTicketSbc?.numeroPedido}</span>
+          <Button size='small' onClick={() => {
+            if (htmlTicketSbc) {
+              const w = window.open('', '_blank', 'width=400,height=600')
+              if (w) { w.document.write(htmlTicketSbc); w.document.close(); setTimeout(() => w.print(), 500) }
+            }
+          }}>🖨️ Imprimir</Button>
+        </DialogTitle>
+        <DialogContent>
+          {loadingTicketSbc ? <LinearProgress /> : htmlTicketSbc ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+              <iframe title='Ticket' srcDoc={htmlTicketSbc}
+                style={{ width: '300px', minHeight: '450px', border: '1px solid #e0e0e0', borderRadius: 4 }} />
+            </Box>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setTicketSbcAbierto(false); setPedidoTicketSbc(null); setHtmlTicketSbc('') }}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Vista de Clientes Duplicados */}
       {vistaActual === 'clientes-duplicados' && (
