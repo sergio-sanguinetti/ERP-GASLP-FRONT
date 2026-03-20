@@ -649,7 +649,7 @@ export default function CreditosAbonosPage() {
       if (fechaDesdeHistorialPagos) historialFiltros.fechaDesde = fechaDesdeHistorialPagos
       if (fechaHastaHistorialPagos) historialFiltros.fechaHasta = fechaHastaHistorialPagos
 
-      const pagosPendientesFiltros: { estado: string; rutaId?: string } = { estado: 'pendiente' }
+      const pagosPendientesFiltros: { rutaId?: string } = {}
       if (filtroRutaPagosPendientes && filtroRutaPagosPendientes !== 'todas') {
         const rutaPed = listaRutas.find(r => r.nombre === filtroRutaPagosPendientes)
         if (rutaPed) pagosPendientesFiltros.rutaId = rutaPed.id
@@ -1455,14 +1455,7 @@ export default function CreditosAbonosPage() {
             onClick={() => setVistaActual('pagos-pendientes')}
             startIcon={<PaymentIcon />}
           >
-            Pagos Pendientes
-          </Button>
-          <Button
-            variant={vistaActual === 'historial-pagos' ? 'contained' : 'outlined'}
-            onClick={() => setVistaActual('historial-pagos')}
-            startIcon={<HistoryIcon />}
-          >
-            Historial de Pagos
+            Control de Pagos
           </Button>
 
           <Button
@@ -2150,31 +2143,32 @@ export default function CreditosAbonosPage() {
       {vistaActual === 'pagos-pendientes' && (
         <Box>
           {/* KPIs rápidos */}
-          <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-            {[
-              { label: 'Pendientes', valor: pagosPendientesAutorizacion.filter(p => !p.pagoCompleto?.estado || p.pagoCompleto?.estado === 'pendiente').length, color: 'warning.main' },
-              { label: 'En Revisión', valor: pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'en_revision').length, color: 'info.main' },
-              { label: 'Rechazados', valor: pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'rechazado').length, color: 'error.main' },
-            ].map(k => (
-              <Card key={k.label} sx={{ flex: 1, minWidth: 120, cursor: 'pointer', border: filtroEstadoPagos === k.label.toLowerCase().replace(' ', '_') ? '2px solid' : '1px solid #e0e0e0' }}
-                onClick={() => setFiltroEstadoPagos(k.label === 'Pendientes' ? 'pendiente' : k.label === 'En Revisión' ? 'en_revision' : 'rechazado')}>
-                <CardContent sx={{ pb: '8px !important', pt: 1.5 }}>
-                  <Typography variant='caption' color='text.secondary'>{k.label}</Typography>
-                  <Typography variant='h5' fontWeight='bold' sx={{ color: k.color }}>{k.valor}</Typography>
-                </CardContent>
-              </Card>
-            ))}
-            <Card sx={{ flex: 1, minWidth: 120, cursor: 'pointer', border: filtroEstadoPagos === 'todos' ? '2px solid' : '1px solid #e0e0e0' }}
-              onClick={() => setFiltroEstadoPagos('todos')}>
-              <CardContent sx={{ pb: '8px !important', pt: 1.5 }}>
-                <Typography variant='caption' color='text.secondary'>Todos</Typography>
-                <Typography variant='h5' fontWeight='bold'>{pagosPendientesAutorizacion.length}</Typography>
-              </CardContent>
-            </Card>
-          </Box>
-          <Typography variant='h6' gutterBottom>
-            {filtroEstadoPagos === 'pendiente' ? 'Pagos Pendientes' : filtroEstadoPagos === 'en_revision' ? 'En Revisión' : filtroEstadoPagos === 'rechazado' ? 'Rechazados' : 'Todos los Pagos'}
-          </Typography>
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            {(() => {
+              const pendientes = pagosPendientesAutorizacion.filter(p => !p.pagoCompleto?.estado || p.pagoCompleto?.estado === 'pendiente')
+              const enRevision = pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'en_revision')
+              const autorizados = pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'autorizado')
+              const rechazados = pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'rechazado')
+              const kpis = [
+                { label: 'Pendientes', count: pendientes.length, monto: pendientes.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'warning.main', val: 'pendiente' },
+                { label: 'En Revisión', count: enRevision.length, monto: enRevision.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'info.main', val: 'en_revision' },
+                { label: 'Autorizados', count: autorizados.length, monto: autorizados.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'success.main', val: 'autorizado' },
+                { label: 'Rechazados', count: rechazados.length, monto: rechazados.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'error.main', val: 'rechazado' },
+              ]
+              return kpis.map(k => (
+                <Grid item xs={6} sm={3} key={k.label}>
+                  <Card sx={{ cursor: 'pointer', border: filtroEstadoPagos === k.val ? '2px solid' : '1px solid #e0e0e0', borderColor: filtroEstadoPagos === k.val ? k.color : '#e0e0e0' }}
+                    onClick={() => setFiltroEstadoPagos(k.val)}>
+                    <CardContent sx={{ pb: '10px !important' }}>
+                      <Typography variant='caption' color='text.secondary' fontWeight='bold' textTransform='uppercase'>{k.label}</Typography>
+                      <Typography variant='h5' fontWeight='bold' sx={{ color: k.color, my: 0.3 }}>{k.count}</Typography>
+                      <Typography variant='caption' color='text.secondary'>${k.monto.toLocaleString('es-MX', { maximumFractionDigits: 0 })}</Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))
+            })()}
+          </Grid>
           
           <Card>
             <CardContent>
@@ -2185,6 +2179,7 @@ export default function CreditosAbonosPage() {
                   <Select value={filtroEstadoPagos} label='Estado' onChange={e => setFiltroEstadoPagos(e.target.value)}>
                     <MenuItem value='pendiente'>Pendientes</MenuItem>
                     <MenuItem value='en_revision'>En Revisión</MenuItem>
+                    <MenuItem value='autorizado'>Autorizados</MenuItem>
                     <MenuItem value='rechazado'>Rechazados</MenuItem>
                     <MenuItem value='todos'>Todos</MenuItem>
                   </Select>
