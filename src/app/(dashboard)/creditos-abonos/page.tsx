@@ -974,10 +974,14 @@ export default function CreditosAbonosPage() {
         <body><div class="page">
           <div class="header">
             <div class="logo-area">
-              <img src="https://erp-gaslp-front.vercel.app/logo.png" alt="Gas Providencia" style="height:60px;object-fit:contain" onerror="this.style.display='none';document.getElementById('logo-text').style.display='block'" />
-              <div id="logo-text" style="display:none"><h1 style="color:#8B5E3C;font-size:20px;font-weight:900">GAS PROVIDENCIA</h1></div>
-              <p style="font-size:11px;color:#666;margin-top:4px">Distribución de Gas LP • San Luis de la Paz, Gto.</p>
-              <p style="font-size:11px;color:#666">Tel: 4696863030</p>
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:52px;height:52px;background:#8B5E3C;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px">⛽</div>
+                <div>
+                  <h1 style="color:#8B5E3C;font-size:20px;font-weight:900;margin:0;letter-spacing:1px">GAS PROVIDENCIA</h1>
+                  <p style="font-size:11px;color:#666;margin:2px 0 0">Distribución de Gas LP · San Luis de la Paz, Gto.</p>
+                  <p style="font-size:11px;color:#666;margin:1px 0 0">Tel: 4696863030</p>
+                </div>
+              </div>
             </div>
             <div class="doc-info">
               <h2>ESTADO DE CUENTA</h2>
@@ -1019,11 +1023,10 @@ export default function CreditosAbonosPage() {
               <tr class="total-row"><td colspan="4">TOTAL PENDIENTE</td><td>$${totalPendiente.toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td></td></tr>
             </tbody>
           </table>
-          <div class="footer">
-            <div class="firma"><div class="linea">Firma del Cliente<br><small>${clienteSeleccionado.nombre}</small></div></div>
-            <div class="firma"><div class="linea">Autorizado por<br><small>Gas Providencia</small></div></div>
+          <div style="margin-top:24px;border-top:2px solid #8B5E3C;padding-top:12px;text-align:center">
+            <p style="font-size:11px;color:#888">Documento generado el ${fechaEmision} · Gas Providencia · Tel: 4696863030 · San Luis de la Paz, Gto.</p>
+            <p style="font-size:10px;color:#aaa;margin-top:4px">Para aclaraciones o pagos comuníquese con su repartidor o visítenos directamente.</p>
           </div>
-          <p class="nota-legal">Este documento es un comprobante de estado de cuenta generado el ${fechaEmision}. Para aclaraciones comuníquese con Gas Providencia.</p>
         </div></body></html>`
       const ventana = window.open('', '_blank')
       if (ventana) {
@@ -1972,13 +1975,15 @@ export default function CreditosAbonosPage() {
                   <TableContainer component={Paper} variant='outlined'>
                     <Table>
                       <TableHead>
-                        <TableRow>
-                          <TableCell>Número de Nota</TableCell>
-                          <TableCell>Fecha Venta</TableCell>
-                          <TableCell>Fecha Vencimiento</TableCell>
-                          <TableCell align='right'>Importe</TableCell>
-                          <TableCell align='right'>Días restantes</TableCell>
-                          <TableCell align='center'>Estado</TableCell>
+                        <TableRow sx={{ bgcolor: 'background.default' }}>
+                          <TableCell sx={{ fontWeight: 'bold', fontSize: 12 }}>Nota</TableCell>
+                          <TableCell sx={{ fontWeight: 'bold', fontSize: 12 }}>Fecha venta</TableCell>
+                          <TableCell sx={{ fontWeight: 'bold', fontSize: 12 }}>Vencimiento</TableCell>
+                          <TableCell align='right' sx={{ fontWeight: 'bold', fontSize: 12 }}>Importe</TableCell>
+                          <TableCell align='right' sx={{ fontWeight: 'bold', fontSize: 12 }}>Saldo</TableCell>
+                          <TableCell align='center' sx={{ fontWeight: 'bold', fontSize: 12 }}>Días</TableCell>
+                          <TableCell align='center' sx={{ fontWeight: 'bold', fontSize: 12 }}>Estado</TableCell>
+                          <TableCell align='center' sx={{ fontWeight: 'bold', fontSize: 12 }}>Acción</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1996,25 +2001,29 @@ export default function CreditosAbonosPage() {
                               {formatearFecha(nota.fechaVencimiento)}
                             </TableCell>
                             <TableCell align='right'>
-                              <Typography variant='h6' color='primary'>
-                                ${nota.importe.toLocaleString()}
+                              <Typography variant='caption' color='text.secondary' sx={{ textDecoration: nota.estado === 'pagada' ? 'none' : 'none' }}>
+                                ${(nota.importe ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                               </Typography>
                             </TableCell>
                             <TableCell align='right'>
+                              <Typography variant='caption' fontWeight='bold'>
+                                ${(nota.saldoPendiente ?? nota.importe ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align='center'>
                               {(() => {
                                 const ahora = new Date()
                                 const fv = nota.fechaVencimiento ? new Date(nota.fechaVencimiento) : null
                                 const dias = fv ? Math.floor((fv.getTime() - ahora.getTime()) / 86400000) : null
                                 const color = dias === null ? 'text.secondary' : dias < 0 ? 'error.main' : dias <= 5 ? 'warning.main' : 'success.main'
                                 return (
-                                  <Typography variant='body2' fontWeight='bold' sx={{ color }}>
-                                    {dias === null ? '—' : dias < 0 ? `${Math.abs(dias)} días vencida` : dias === 0 ? 'Vence hoy' : `${dias} días`}
+                                  <Typography variant='caption' fontWeight='bold' sx={{ color }}>
+                                    {dias === null ? '—' : dias < 0 ? `${Math.abs(dias)}d vencida` : dias === 0 ? 'Hoy' : `${dias}d`}
                                   </Typography>
                                 )
                               })()}
                             </TableCell>
                           <TableCell align='center'>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               {(() => {
                                 const ahora = new Date()
                                 const fv = nota.fechaVencimiento ? new Date(nota.fechaVencimiento) : null
@@ -2024,17 +2033,18 @@ export default function CreditosAbonosPage() {
                                   : dias < 0 ? 'vencida' : dias <= 5 ? 'por_vencer' : 'vigente'
                                 const colorChip = estadoReal === 'pagada' ? 'success' : estadoReal === 'vencida' ? 'error' : estadoReal === 'por_vencer' ? 'warning' : 'info'
                                 const labelChip = estadoReal === 'pagada' ? 'Pagada' : estadoReal === 'vencida' ? 'Vencida' : estadoReal === 'por_vencer' ? 'Por vencer' : 'Vigente'
-                                return <Chip label={labelChip} color={colorChip as any} size='small' sx={{ fontWeight: 'bold', fontSize: 10 }} />
+                                return <Chip label={labelChip} color={colorChip as any} size='small' sx={{ fontWeight: 'bold', fontSize: 10, height: 20 }} />
                               })()}
-                              <Tooltip title='Pagar esta nota'>
-                                <IconButton 
-                                  size='small' 
-                                  onClick={() => abrirDialogo('registrar-pago', clienteSeleccionado, nota)}
-                                >
-                                  <PaymentIcon />
+                          </TableCell>
+                          <TableCell align='center'>
+                            {nota.estado !== 'pagada' && (
+                              <Tooltip title='Registrar pago'>
+                                <IconButton size='small' color='primary'
+                                  onClick={() => abrirDialogo('registrar-pago', clienteSeleccionado, nota)}>
+                                  <PaymentIcon sx={{ fontSize: 16 }} />
                                 </IconButton>
                               </Tooltip>
-                            </Box>
+                            )}
                           </TableCell>
                           </TableRow>
                         ))}
