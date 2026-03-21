@@ -1061,23 +1061,28 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
     // Depósitos
     let depHtml = ''
     if (detalle.depositos && detalle.depositos.length > 0) {
-      const totalEf = detalle.depositos.reduce((s: number, d: any) => {
-        const dReal = parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000
-        return s + dReal + parseFloat(d.billetesRechazados || 0) + parseFloat(d.monedas || 0)
-      }, 0)
       const totalDep = detalle.depositos.reduce((s: number, d: any) => s + (parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000), 0)
+      const totalBilletes = detalle.depositos.reduce((s: number, d: any) => s + parseFloat(d.billetesRechazados || 0), 0)
+      const totalMonedas = detalle.depositos.reduce((s: number, d: any) => s + parseFloat(d.monedas || 0), 0)
+      const totalEfRecibido = totalDep + totalBilletes + totalMonedas
       const folios = detalle.depositos.map((d: any) => d.folio).filter(Boolean).join(', ')
       const depRows = detalle.depositos.map((d: any, i: number) => {
         const dReal = parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000
         return `<div class="row-sb"><span>Depósito ${i+1} — ${d.folio||''}</span><span>$${dReal.toFixed(2)}</span></div>`
       }).join('')
+      const billetesRow = totalBilletes > 0 ? `<div class="row-sb"><span>Bill. rechazados:</span><span>$${totalBilletes.toFixed(2)}</span></div>` : ''
+      const monedasRow = totalMonedas > 0 ? `<div class="row-sb"><span>Monedas:</span><span>$${totalMonedas.toFixed(2)}</span></div>` : ''
       depHtml = `
         <div class="section-header">EFECTIVO</div>
-        <div class="row-sb"><span>Total recibido:</span><span>$${totalEf.toFixed(2)}</span></div>
+        <div class="row-sb"><span>Total recibido:</span><span>$${totalEfRecibido.toFixed(2)}</span></div>
         <div class="row-sb"><span>Total depositado:</span><span>$${totalDep.toFixed(2)}</span></div>
+        ${billetesRow}
+        ${monedasRow}
         ${folios ? `<div class="row-sb"><span>Folios depósito:</span><span>${folios}</span></div>` : ''}
         <div class="section-header">DEPÓSITOS</div>
         ${depRows}
+        ${billetesRow ? `<div class="row-sb"><span>Bill. rechazados:</span><span>$${totalBilletes.toFixed(2)}</span></div>` : ''}
+        ${monedasRow ? `<div class="row-sb"><span>Monedas:</span><span>$${totalMonedas.toFixed(2)}</span></div>` : ''}
         <div class="row-sb bold"><span>Total Depósitos:</span><span>$${totalDep.toFixed(2)}</span></div>`
     }
 
@@ -1092,7 +1097,7 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
 <style>
   @page { margin: 2mm 3mm; size: 80mm auto; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, 'Helvetica Neue', sans-serif; font-size: 8.5pt; font-weight: 500; line-height: 1.45; width: 74mm; color: #000; padding: 2mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: Arial, 'Helvetica Neue', sans-serif; font-size: 8.5pt; font-weight: 500; line-height: 1.45; width: 74mm; color: #000; padding: 2mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; orphans: 3; widows: 3; }
   .center { text-align: center; }
   .bold { font-weight: 700; }
   .muted { color: #444; font-size: 7.5pt; }
@@ -1146,7 +1151,10 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
   <div class="divider-solid"></div>
   <div class="total-block">
     <div class="total-main"><span>TOTAL</span><span>$${totalCorteVal.toFixed(2)}</span></div>
-    ${fpHtml}
+    ${Object.entries(resumenFP).filter(([,v]) => (v as number) > 0).map(([k,v]) => {
+      const fpLabels2: Record<string,string> = {efectivo:'EFECTIVO',transferencia:'TRANSFERENCIA',tarjeta:'TARJETA',cheque:'CHEQUES',credito:'CRÉDITO',deposito:'DEPÓSITO',otros:'OTROS'}
+      return `<div class="row-sb"><span>${fpLabels2[k]||k.toUpperCase()}:</span><span>$${(v as number).toFixed(2)}</span></div>`
+    }).join('')}
     ${litrosSection}
   </div>
 
