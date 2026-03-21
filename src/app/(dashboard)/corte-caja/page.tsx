@@ -323,8 +323,22 @@ function VistaDetalle({
   const [reabriendo, setReabriendo] = useState(false)
   const [editDepIdx, setEditDepIdx] = useState<number | null>(null)
   const [editDepData, setEditDepData] = useState<any>(null)
-  const [depositosExtra, setDepositosExtra] = useState<{folio:string;monto:string;billetes:string;monedas:string}[]>([])
+  const [depositosExtra, setDepositosExtra] = useState<{folio:string;monto:string;billetes:string;monedas:string;guardado?:boolean}[]>([])
   const [savingDep, setSavingDep] = useState(false)
+  const [savingLitros, setSavingLitros] = useState(false)
+
+  // Auto-guardar litros reporte con debounce de 1.5s
+  useEffect(() => {
+    const hasLitros = Object.values(litrosReporte).some(v => parseFloat(v) > 0)
+    if (!hasLitros || !detalle?.id) return
+    const timer = setTimeout(async () => {
+      setSavingLitros(true)
+      try { await ventasAPI.guardarLitrosReporte(detalle.id, litrosReporte) }
+      catch(e) { /* silencioso */ }
+      finally { setSavingLitros(false) }
+    }, 1500)
+    return () => clearTimeout(timer)
+  }, [litrosReporte, detalle?.id])
 
   if (loading) {
     return (
@@ -345,6 +359,17 @@ function VistaDetalle({
 
   const esPipas = detalle.repartidor?.tipoRepartidor === 'pipas'
   const litrosApp = detalle.totalLitros || 0
+
+  // Restaurar litrosReporte guardados en stats al cargar
+  useEffect(() => {
+    if (!detalle?.stats) return
+    try {
+      const stats = typeof detalle.stats === 'string' ? JSON.parse(detalle.stats) : detalle.stats
+      if (stats?.litrosReporte && Object.keys(litrosReporte).length === 0) {
+        setLitrosReporte(stats.litrosReporte)
+      }
+    } catch(e) {}
+  }, [detalle?.id])
   const litrosMedidorNum = parseFloat(litrosMedidor) || 0
   const diferencia = litrosApp - litrosMedidorNum
   const alertaMedidor = litrosMedidor !== '' && litrosMedidorNum > 0 && Math.abs(diferencia) > 20
@@ -615,7 +640,7 @@ function VistaDetalle({
             <Paper sx={{ p: 2, mb: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                 <Typography variant="subtitle2" fontWeight="bold">🏦 Depósitos</Typography>
-                <Button size="small" startIcon={<Add />} onClick={() => setDepositosExtra(prev => [...prev, { folio: '', monto: '', billetes: '', monedas: '' }])}>
+                <Button size="small" startIcon={<Add />} onClick={() => setDepositosExtra(prev => [...prev, { folio: '', monto: '', billetes: '', monedas: '', guardado: false }])}>
                   Agregar depósito
                 </Button>
               </Box>
@@ -713,9 +738,29 @@ function VistaDetalle({
                         </TableCell>
                         <TableCell align="right"><b style={{ color: '#1976d2' }}>{fmt$(totalExtra)}</b></TableCell>
                         <TableCell align="center">
-                          <IconButton size="small" color="error" onClick={() => setDepositosExtra(prev => prev.filter((_,i) => i!==ei))}>
-                            <Close sx={{ fontSize: 14 }} />
-                          </IconButton>
+                          <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            <IconButton size="small" color="success" disabled={savingDep || !dep.monto}
+                              onClick={async () => {
+                                setSavingDep(true)
+                                try {
+                                  await ventasAPI.agregarDeposito(detalle.id, {
+                                    folio: dep.folio,
+                                    monto: parseFloat(dep.monto) || 0,
+                                    billetesRechazados: parseFloat(dep.billetes) || 0,
+                                    monedas: parseFloat(dep.monedas) || 0
+                                  })
+                                  setDepositosExtra(prev => prev.filter((_,i) => i!==ei))
+                                  // Recargar detalle para ver el nuevo depósito
+                                  window.location.reload()
+                                } catch(e: any) { alert('Error: ' + e.message) }
+                                finally { setSavingDep(false) }
+                              }}>
+                              <CheckCircle sx={{ fontSize: 14 }} />
+                            </IconButton>
+                            <IconButton size="small" color="error" onClick={() => setDepositosExtra(prev => prev.filter((_,i) => i!==ei))}>
+                              <Close sx={{ fontSize: 14 }} />
+                            </IconButton>
+                          </Box>
                         </TableCell>
                       </TableRow>
                     )

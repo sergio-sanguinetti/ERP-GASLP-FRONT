@@ -2218,6 +2218,32 @@ export const ventasAPI = {
     return response.json()
   },
 
+  agregarDeposito: async (corteId: string, data: { folio?: string; monto: number; billetesRechazados?: number; monedas?: number }): Promise<any> => {
+    const response = await fetchWithAuth(`/cortes-caja/${corteId}/depositos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error(error.message || 'Error al agregar depósito')
+    }
+    return response.json()
+  },
+
+  guardarLitrosReporte: async (corteId: string, litrosReporte: Record<string, string>): Promise<any> => {
+    const response = await fetchWithAuth(`/cortes-caja/${corteId}/litros-reporte`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ litrosReporte })
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error(error.message || 'Error al guardar litros')
+    }
+    return response.json()
+  },
+
   getResumenDia: async (fecha: string, sedeId?: string): Promise<any> => {
     const params = new URLSearchParams({ fecha })
     if (sedeId) params.append('sedeId', sedeId)
