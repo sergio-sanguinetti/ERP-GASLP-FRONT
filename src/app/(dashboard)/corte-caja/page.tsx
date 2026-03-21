@@ -1,1585 +1,574 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
-  Box,
-  Typography,
-  Card,
-  CardContent,
-  Grid,
-  Button,
-  Chip,
-  Alert,
-  AlertTitle,
-  Divider,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  IconButton,
-  Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Switch,
-  FormControlLabel,
-  LinearProgress,
-  Avatar,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  ListItemAvatar,
-  Badge,
-  Tabs,
-  Tab,
-  InputAdornment,
-  Checkbox,
-  RadioGroup,
-  Radio,
-  FormLabel,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent
+  Box, Typography, Card, CardContent, Grid, Button, Chip,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions,
+  TextField, FormControl, InputLabel, Select, MenuItem, Paper, Alert,
+  Divider, CircularProgress, Snackbar, LinearProgress
 } from '@mui/material'
 import {
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  AccountBalance as AccountBalanceIcon,
-  Warning as WarningIcon,
-  CheckCircle as CheckCircleIcon,
-  Schedule as ScheduleIcon,
-  AttachMoney as AttachMoneyIcon,
-  Search as SearchIcon,
-  FilterList as FilterListIcon,
-  Edit as EditIcon,
-  Send as SendIcon,
-  Block as BlockIcon,
-  Description as DescriptionIcon,
-  Assessment as AssessmentIcon,
-  Notifications as NotificationsIcon,
-  Person as PersonIcon,
-  Phone as PhoneIcon,
-  LocationOn as LocationOnIcon,
-  CreditCard as CreditCardIcon,
-  History as HistoryIcon,
-  Download as DownloadIcon,
-  Print as PrintIcon,
-  Share as ShareIcon,
-  Add as AddIcon,
-  Remove as RemoveIcon,
-  Visibility as VisibilityIcon,
-  LocalShipping as LocalShippingIcon,
-  GasMeter as GasMeterIcon,
-  Receipt as ReceiptIcon,
-  Payment as PaymentIcon,
-  AccountBalanceWallet as AccountBalanceWalletIcon,
-  ExpandMore as ExpandMoreIcon,
-  Check as CheckIcon,
-  Close as CloseIcon,
-  Error as ErrorIcon,
-  Info as InfoIcon
+  ArrowBack, CheckCircle, Edit, Print, Add, Visibility, Close, Warning
 } from '@mui/icons-material'
+import { ventasAPI } from '@/lib/api'
 
-import { ventasAPI, CorteRepartidor } from '@/lib/api'
+// ======================== TYPES ========================
 
-const TIMEZONE_MEXICO = 'America/Mexico_City'
-
-/** Fecha de hoy YYYY-MM-DD en Ciudad de México */
-function getHoyMexico(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: TIMEZONE_MEXICO })
-}
-
-/** Indica si una fecha ISO cae en el día "hoy" en Ciudad de México */
-function esHoyMexico(fechaIso: string | Date): boolean {
-  const d = typeof fechaIso === 'string' ? new Date(fechaIso) : fechaIso
-  const diaMexico = d.toLocaleDateString('en-CA', { timeZone: TIMEZONE_MEXICO })
-  return diaMexico === getHoyMexico()
-}
-
-// Tipos de datos
-type TipoCorte = 'venta_dia' | 'abono'
-
-interface RepartidorCorte {
+interface CorteResumen {
   id: string
-  nombre: string
-  ruta: string
-  tipo: 'pipas' | 'cilindros'
-  tipoCorte?: TipoCorte
-  horaEntrega: string
-  totalDia: number
-  estado: 'recibido' | 'validado' | 'pendiente'
-  ventas: {
-    montoTotal: number
-    litrosServicios: number
-    totalLitros?: number
-  }
-  abonos: {
-    montoTotal: number
-    cantidad: number
-  }
-  efectivo: {
-    metodo: 'depositado-cajero' | 'entregado-planta'
-    montoDepositado: number
-    billetesRechazados: number
-    monedasEntregadas: number
-  }
-  formasPago: {
-    terminal: { monto: number; operaciones: OperacionTerminal[] }
-    transferencias: { monto: number; operaciones: OperacionTransferencia[] }
-    cheques: { monto: number; operaciones: OperacionCheque[] }
-  }
-  /** Resumen de montos por forma de pago (venta o abono según tipoCorte). Claves: efectivo, transferencia, tarjeta, cheque, credito, otros */
-  resumenFormasPago?: Record<string, number>
-  dailySales?: any
-  stats?: any
-  /** Desglose de cilindros por kg (10/20/30) con cantidad y monto */
-  desgloseCilindros?: { kg: number; nombre: string; unidades: number; monto: number }[] | null
-  /** Detalle de pedidos pipas con forma de pago por servicio */
-  detallePedidos?: { numero: number; clienteNombre: string; monto: number; formasPago: { tipo: string; monto: number }[] }[] | null
-  reporteFisico?: {
-    totalServicios: number
-    totalLitros: number
-    rangoServicios: string
-  }
-}
-
-interface OperacionTerminal {
-  id: string
-  monto: number
-  folioTerminal: string
+  tipo: 'venta_dia' | 'abono'
+  dia: string
   fecha: string
-  folioValidacion?: string
-  archivoValidacion?: string
-}
-
-interface OperacionTransferencia {
-  id: string
-  monto: number
-  folioBancario: string
-  banco: string
-  fecha: string
-  folioValidacion?: string
-  archivoValidacion?: string
-}
-
-interface OperacionCheque {
-  id: string
-  monto: number
-  numeroCheque: string
-  banco: string
-  fecha: string
-  folioValidacion?: string
-  archivoValidacion?: string
-}
-
-interface ResumenCortes {
-  pipas: {
-    rutasProgramadas: number
-    cortesEntregados: number
-    cortesValidados: number
-    cortesPendientes: number
-    totalVentas: number
-    totalAbonos: number
-  }
-  cilindros: {
-    rutasProgramadas: number
-    cortesEntregados: number
-    cortesValidados: number
-    cortesPendientes: number
-    totalVentas: number
-    totalAbonos: number
-  }
-  granTotalOperacion: number
-  efectivoConsolidado: number
-}
-
-// Datos de ejemplo eliminados para usar datos reales de la API
-
-// Tipos adicionales para apertura/cierre de caja
-interface AperturaCierreCaja {
-  id: string
-  fecha: string
-  tipo: 'apertura' | 'cierre'
-  usuario: string
-  hora: string
-  montoInicial?: number
-  montoFinal?: number
-  observaciones: string
-  estado: 'activo' | 'cerrado' | 'pendiente'
-  efectivoFisico: number
-  diferencias: number
-  cortesValidados: number
-  cortesPendientes: number
-}
-
-interface DepositoBancario {
-  id: string
-  repartidorId: string
-  repartidorNombre: string
-  folioRepartidor: string
-  folioFisico?: string
-  monto: number
-  fechaDeposito: string
-  horaDeposito: string
-  estado: 'pendiente-validacion' | 'validado' | 'diferencia'
-  comprobanteRecibido: boolean
-  fotoComprobante?: string
+  estado: 'pendiente' | 'validado'
+  totalVentas: number
+  totalAbonos: number
+  totalEfectivo: number
+  totalLitros: number
+  totalProductosUnidades: number
   observaciones?: string
-  validadoPor?: string
-  fechaValidacion?: string
-}
-
-interface DepositoMultiple {
-  id: string
-  repartidorId: string
-  repartidorNombre: string
-  montoTotal: number
-  depositos: DepositoBancario[]
-  estado: 'pendiente-validacion' | 'validado' | 'diferencia'
-  fechaCreacion: string
-}
-
-// Datos de ejemplo para depósitos bancarios eliminados
-const depositosMultiples: DepositoMultiple[] = [
-  {
-    id: '1',
-    repartidorId: '1',
-    repartidorNombre: 'José Luis González',
-    montoTotal: 12500,
-    depositos: [
-      {
-        id: '1',
-        repartidorId: '1',
-        repartidorNombre: 'José Luis González',
-        folioRepartidor: 'DEP123456789',
-        folioFisico: 'DEP123456789',
-        monto: 8000,
-        fechaDeposito: '2024-01-25',
-        horaDeposito: '14:30',
-        estado: 'validado',
-        comprobanteRecibido: true,
-        validadoPor: 'María González',
-        fechaValidacion: '2024-01-25 15:00'
-      },
-      {
-        id: '2',
-        repartidorId: '1',
-        repartidorNombre: 'José Luis González',
-        folioRepartidor: 'DEP987654321',
-        folioFisico: 'DEP987654321',
-        monto: 4500,
-        fechaDeposito: '2024-01-25',
-        horaDeposito: '14:45',
-        estado: 'validado',
-        comprobanteRecibido: true,
-        validadoPor: 'María González',
-        fechaValidacion: '2024-01-25 15:15'
-      }
-    ],
-    estado: 'validado',
-    fechaCreacion: '2024-01-25'
+  repartidor: {
+    id: string
+    nombre: string
+    apellidoPaterno?: string
+    tipoRepartidor: 'pipas' | 'cilindros'
+    sede?: string
   }
+  depositos: any[]
+  detalles: any[]
+  resumenFormasPagoVenta: Record<string, number> | null
+  resumenFormasPagoAbono: Record<string, number> | null
+}
+
+interface PedidoDetalle {
+  numero: number
+  pedidoId: string
+  detalleId?: string
+  clienteNombre: string
+  fecha: string
+  total: number
+  litros: number
+  descuento: number
+  formasPago: { tipo: string; monto: number }[]
+  formaPagoCorte?: string
+  productos: {
+    nombre: string
+    kg?: number
+    cantidad: number
+    precio: number
+    descuento: number
+    subtotal: number
+  }[]
+}
+
+interface DesgloseCilindro {
+  kg: number
+  nombre: string
+  esNuevo: boolean
+  unidades: number
+  monto: number
+  descuento: number
+}
+
+interface CorteDetalle extends CorteResumen {
+  stats: Record<string, number> | null
+  dailySales: any[] | null
+  pedidos: PedidoDetalle[]
+  desgloseCilindros: DesgloseCilindro[] | null
+  resumenFormasPago: Record<string, number>
+}
+
+// ======================== HELPERS ========================
+
+const TIMEZONE_MX = 'America/Mexico_City'
+
+function getHoyMx(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: TIMEZONE_MX })
+}
+
+function esHoyMx(fecha: string): boolean {
+  try {
+    const d = new Date(fecha + (fecha.length === 10 ? 'T12:00:00' : ''))
+    return d.toLocaleDateString('en-CA', { timeZone: TIMEZONE_MX }) === getHoyMx()
+  } catch { return false }
+}
+
+function fmt$(n: number): string {
+  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n || 0)
+}
+
+function fmtFecha(fecha: string): string {
+  try {
+    const d = new Date(fecha + (fecha.length === 10 ? 'T12:00:00' : ''))
+    return d.toLocaleDateString('es-MX', {
+      timeZone: TIMEZONE_MX, day: '2-digit', month: 'short', year: 'numeric'
+    })
+  } catch { return fecha }
+}
+
+function nombreRepartidor(r: any): string {
+  if (!r) return '—'
+  return `${r.nombre || ''} ${r.apellidoPaterno || ''}`.trim()
+}
+
+function getEstadoColor(estado: string): 'success' | 'warning' | 'default' {
+  if (estado === 'validado') return 'success'
+  if (estado === 'pendiente') return 'warning'
+  return 'default'
+}
+
+function tipoIcon(tipo: string): string {
+  return tipo === 'pipas' ? '🚛' : '🔵'
+}
+
+// ======================== KPI CARD ========================
+
+function KPICard({ label, value, sub, color }: {
+  label: string; value: string; sub?: string; color?: string
+}) {
+  return (
+    <Card sx={{ height: '100%' }}>
+      <CardContent sx={{ pb: '12px !important' }}>
+        <Typography variant="caption" color="text.secondary"
+          sx={{ textTransform: 'uppercase', letterSpacing: 1, display: 'block' }}>
+          {label}
+        </Typography>
+        <Typography variant="h5" fontWeight="bold" color={color || 'text.primary'} sx={{ mt: 0.5 }}>
+          {value}
+        </Typography>
+        {sub && <Typography variant="caption" color="text.secondary">{sub}</Typography>}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ======================== RESUMEN FORMAS DE PAGO ========================
+
+const FP_CONFIG = [
+  { key: 'efectivo', label: 'Efectivo', color: '#4caf50' },
+  { key: 'transferencia', label: 'Transf.', color: '#2196f3' },
+  { key: 'tarjeta', label: 'Tarjeta', color: '#9c27b0' },
+  { key: 'cheque', label: 'Cheque', color: '#ff9800' },
+  { key: 'credito', label: 'Crédito', color: '#f44336' },
+  { key: 'deposito', label: 'Depósito', color: '#00bcd4' },
+  { key: 'otros', label: 'Otros', color: '#607d8b' },
 ]
 
-// Datos de ejemplo para historial eliminados
+function ResumenPago({ data, compact }: { data: Record<string, number>; compact?: boolean }) {
+  const activos = FP_CONFIG.filter(c => (data?.[c.key] || 0) > 0)
+  if (!data || activos.length === 0) return <Typography variant="caption" color="text.secondary">—</Typography>
 
-export default function CorteCajaPage() {
-  const [resumenCortes, setResumenCortes] = useState<ResumenCortes>({
-    pipas: { rutasProgramadas: 0, cortesEntregados: 0, cortesValidados: 0, cortesPendientes: 0, totalVentas: 0, totalAbonos: 0 },
-    cilindros: { rutasProgramadas: 0, cortesEntregados: 0, cortesValidados: 0, cortesPendientes: 0, totalVentas: 0, totalAbonos: 0 },
-    granTotalOperacion: 0,
-    efectivoConsolidado: 0
-  })
-  const [cortesHoyList, setCortesHoyList] = useState<(RepartidorCorte & { tipoCorte: TipoCorte })[]>([])
-  /** Tab dentro del dashboard: cortes por abono vs cortes por ventas */
-  const [tabCortesTipo, setTabCortesTipo] = useState<'abono' | 'ventas'>('ventas')
-  const repartidoresCorte = cortesHoyList.filter(
-    r => (r.tipoCorte === 'venta_dia') === (tabCortesTipo === 'ventas')
-  )
-  const [depositosBancarios, setDepositosBancarios] = useState<DepositoBancario[]>([])
-  const [historialCaja, setHistorialCaja] = useState<AperturaCierreCaja[]>([])
-  const [historialCortesList, setHistorialCortesList] = useState<(RepartidorCorte & { fechaCorte: string })[]>([])
-  const [historialFechaDesde, setHistorialFechaDesde] = useState<string>('')
-  const [historialFechaHasta, setHistorialFechaHasta] = useState<string>('')
-  const [historialTipo, setHistorialTipo] = useState<'todos' | 'pipas' | 'cilindros'>('todos')
-  const [historialLoading, setHistorialLoading] = useState(false)
-  const [loading, setLoading] = useState(true)
-
-  const [vistaActual, setVistaActual] = useState<
-    'dashboard' | 'validacion' | 'admin' | 'historial' | 'depositos'
-  >('dashboard')
-
-  useEffect(() => {
-    fetchData()
-  }, [])
-
-  const fetchData = async () => {
-    try {
-      setLoading(true)
-      const [pipas, cilindros, allCortes] = await Promise.all([
-        ventasAPI.getCortePipas(),
-        ventasAPI.getCorteCilindros(),
-        ventasAPI.getAllCortes()
-      ])
-
-      setResumenCortes({
-        pipas,
-        cilindros,
-        granTotalOperacion: pipas.totalVentas + cilindros.totalVentas,
-        efectivoConsolidado: pipas.totalAbonos + cilindros.totalAbonos
-      })
-
-      const tipoCorteVal = (t: string) => (t === 'abono' ? 'abono' : 'venta_dia') as TipoCorte
-      const sumDep = (depositos: any[], key: string) => {
-        if (!depositos?.length) return 0
-        const sum = depositos.reduce((s: number, d: any) => s + (Number(d[key] ?? d.total ?? d.monto) || 0), 0)
-        return Math.round(sum * 100) / 100
-      }
-
-      // Transformar cortes del backend e incluir tipo de corte (venta_dia | abono) y resumen formas de pago
-      const transformedCortes: (RepartidorCorte & { tipoCorte: TipoCorte })[] = allCortes.map((c: any) => {
-        const tipoCorte = tipoCorteVal(c.tipo ?? 'venta_dia')
-        const resumenFormasPago =
-          tipoCorte === 'venta_dia' ? c.resumenFormasPagoVenta : c.resumenFormasPagoAbono
-        
-        // Debug: Ver qué datos están llegando
-        const totalFormasPago = Object.values(c.resumenFormasPagoVenta || {}).reduce((sum: number, val: any) => sum + Number(val || 0), 0)
-        const totalFormasPagoAbono = Object.values(c.resumenFormasPagoAbono || {}).reduce((sum: number, val: any) => sum + Number(val || 0), 0)
-        
-        console.log('🔍 Corte raw data:', {
-          id: c.id,
-          repartidor: `${c.repartidor?.nombres} ${c.repartidor?.apellidoPaterno}`,
-          fecha: c.fecha,
-          tipo: c.tipo,
-          dailySales: c.dailySales ? 'PRESENTE' : 'NULL',
-          stats: c.stats ? 'PRESENTE' : 'NULL',
-          totalLitros: c.totalLitros,
-          totalVentas: c.totalVentas,
-          resumenFormasPagoVenta: c.resumenFormasPagoVenta,
-          totalFormasPagoVenta: totalFormasPago,
-          resumenFormasPagoAbono: c.resumenFormasPagoAbono,
-          totalFormasPagoAbono: totalFormasPagoAbono,
-          TIENE_DATOS: totalFormasPago > 0 || totalFormasPagoAbono > 0 ? '✅ SÍ' : '❌ NO'
-        })
-        
-        // Parse dailySales y stats si son strings JSON
-        let dailySales = null
-        let stats = null
-        try {
-          if (c.dailySales && typeof c.dailySales === 'string') {
-            dailySales = JSON.parse(c.dailySales)
-          } else if (c.dailySales) {
-            dailySales = c.dailySales
-          }
-        } catch (e) {
-          console.error('Error parsing dailySales:', e)
-        }
-        
-        try {
-          if (c.stats && typeof c.stats === 'string') {
-            stats = JSON.parse(c.stats)
-          } else if (c.stats) {
-            stats = c.stats
-          }
-        } catch (e) {
-          console.error('Error parsing stats:', e)
-        }
-        
-        console.log('✅ Parsed data:', { dailySales, stats, resumenFormasPago })
-        
-        return {
-          id: c.id,
-          nombre: `${c.repartidor?.nombres} ${c.repartidor?.apellidoPaterno}`,
-          ruta: 'Ruta 001',
-          tipo: c.repartidor?.tipoRepartidor || 'pipas',
-          tipoCorte,
-          horaEntrega: new Date(c.fecha).toLocaleTimeString('es-MX', { timeZone: TIMEZONE_MEXICO, hour: '2-digit', minute: '2-digit' }),
-          totalDia: (Number(c.totalVentas) || 0) + (Number(c.totalAbonos) || 0),
-          estado: c.estado === 'pendiente' ? 'recibido' : c.estado,
-          ventas: {
-            montoTotal: Number(c.totalVentas) || 0,
-            litrosServicios: stats?.sales || 0,
-            totalLitros: Number(c.totalLitros) || 0
-          },
-          abonos: {
-            montoTotal: Number(c.totalAbonos) || 0,
-            cantidad: 0
-          },
-          efectivo: {
-            metodo: c.depositos?.length > 0 ? 'depositado-cajero' : 'entregado-planta',
-            montoDepositado: sumDep(c.depositos, 'total') || sumDep(c.depositos, 'monto') || 0,
-            billetesRechazados: sumDep(c.depositos, 'billetesRechazados') || 0,
-            monedasEntregadas: sumDep(c.depositos, 'monedas') || 0
-          },
-          formasPago: {
-            terminal: { monto: 0, operaciones: [] },
-            transferencias: { monto: 0, operaciones: [] },
-            cheques: { monto: 0, operaciones: [] }
-          },
-          resumenFormasPago: resumenFormasPago && typeof resumenFormasPago === 'object' ? resumenFormasPago : undefined,
-          dailySales: dailySales,
-          stats: stats,
-          desgloseCilindros: c.desgloseCilindros ?? null,
-          detallePedidos: c.detallePedidos ?? null
-        }
-      })
-
-      // Solo cortes de hoy (Ciudad de México); guardar todos con tipo para filtrar por tab
-      const cortesHoy = transformedCortes.filter((_, i) => esHoyMexico(allCortes[i].fecha))
-      setCortesHoyList(cortesHoy)
-
-      // Transformar depósitos
-      const allDepositos: DepositoBancario[] = []
-      allCortes.forEach((c: any) => {
-        if (c.depositos && c.depositos.length > 0) {
-          c.depositos.forEach((d: any) => {
-            allDepositos.push({
-              id: d.id,
-              repartidorId: c.repartidorId,
-              repartidorNombre: `${c.repartidor?.nombres} ${c.repartidor?.apellidoPaterno}`,
-              folioRepartidor: d.folio,
-              monto: d.monto,
-              fechaDeposito: new Date(d.createdAt).toISOString().split('T')[0],
-              horaDeposito: new Date(d.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }),
-              estado: c.estado === 'validado' ? 'validado' : 'pendiente-validacion',
-              comprobanteRecibido: true
-            })
-          })
-        }
-      })
-      setDepositosBancarios(allDepositos)
-    } catch (error) {
-      console.error('Error fetching data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchHistorialCortes = async () => {
-    if (!historialFechaDesde || !historialFechaHasta) return
-    try {
-      setHistorialLoading(true)
-      const allCortes: any[] = await ventasAPI.getAllCortes()
-      const desde = new Date(historialFechaDesde)
-      const hasta = new Date(historialFechaHasta)
-      hasta.setHours(23, 59, 59, 999)
-      const transformed: (RepartidorCorte & { fechaCorte: string })[] = allCortes
-        .filter((c: any) => {
-          const fecha = new Date(c.fecha)
-          if (fecha < desde || fecha > hasta) return false
-          if (historialTipo === 'pipas') return (c.repartidor?.tipoRepartidor || 'pipas') === 'pipas'
-          if (historialTipo === 'cilindros') return (c.repartidor?.tipoRepartidor || 'pipas') === 'cilindros'
-          return true
-        })
-        .map((c: any) => ({
-          id: c.id,
-          fechaCorte: c.fecha,
-          nombre: `${c.repartidor?.nombres} ${c.repartidor?.apellidoPaterno}`,
-          ruta: 'Ruta 001',
-          tipo: c.repartidor?.tipoRepartidor || 'pipas',
-          horaEntrega: new Date(c.fecha).toLocaleTimeString('es-MX', { timeZone: TIMEZONE_MEXICO, hour: '2-digit', minute: '2-digit' }),
-          totalDia: c.totalVentas + c.totalAbonos,
-          estado: c.estado === 'pendiente' ? 'recibido' : c.estado,
-          ventas: { montoTotal: c.totalVentas, litrosServicios: 0 },
-          abonos: { montoTotal: c.totalAbonos, cantidad: 0 },
-          efectivo: {
-            metodo: c.depositos?.length > 0 ? 'depositado-cajero' : 'entregado-planta',
-            montoDepositado: c.depositos?.reduce((sum: number, d: any) => sum + d.monto, 0) || 0,
-            billetesRechazados: c.depositos?.reduce((sum: number, d: any) => sum + d.billetesRechazados, 0) || 0,
-            monedasEntregadas: c.depositos?.reduce((sum: number, d: any) => sum + d.monedas, 0) || 0
-          },
-          formasPago: { terminal: { monto: 0, operaciones: [] }, transferencias: { monto: 0, operaciones: [] }, cheques: { monto: 0, operaciones: [] } }
-        }))
-      setHistorialCortesList(transformed)
-    } catch (error) {
-      console.error('Error fetching historial cortes:', error)
-      setHistorialCortesList([])
-    } finally {
-      setHistorialLoading(false)
-    }
-  }
-
-  const [repartidorSeleccionado, setRepartidorSeleccionado] = useState<RepartidorCorte | null>(null)
-  const [dialogoAbierto, setDialogoAbierto] = useState(false)
-  const [tipoDialogo, setTipoDialogo] = useState<
-    'validacion' | 'resumen' | 'observaciones' | 'apertura' | 'cierre' | 'validar-deposito'
-  >('validacion')
-  const [modoAuxiliar, setModoAuxiliar] = useState(false)
-  const [pasoActual, setPasoActual] = useState(0)
-  const [depositoSeleccionado, setDepositoSeleccionado] = useState<DepositoBancario | null>(null)
-
-  const [validaciones, setValidaciones] = useState({
-    efectivo: false,
-    deposito: false,
-    terminal: false,
-    transferencias: false,
-    cheques: false,
-    reporteFisico: false
-  })
-
-  const [foliosArchivosValidacion, setFoliosArchivosValidacion] = useState({
-    terminal: { folio: '', archivo: '' },
-    transferencias: { folio: '', archivo: '' },
-    cheques: { folio: '', archivo: '' }
-  })
-
-  const [observaciones, setObservaciones] = useState('')
-  const [estadoFinal, setEstadoFinal] = useState('')
-  const [litrosSegunMedidor, setLitrosSegunMedidor] = useState<number>(0)
-  const [cajaAbierta, setCajaAbierta] = useState(true) // Estado actual de la caja
-
-  const [formularioCaja, setFormularioCaja] = useState({
-    montoInicial: 0,
-    montoFinal: 0,
-    efectivoFisico: 0,
-    observaciones: ''
-  })
-
-  const abrirValidacion = (repartidor: RepartidorCorte) => {
-    setRepartidorSeleccionado(repartidor)
-    setTipoDialogo('validacion')
-    setDialogoAbierto(true)
-    setPasoActual(0)
-  }
-
-  const abrirResumen = (repartidor: RepartidorCorte) => {
-    setRepartidorSeleccionado(repartidor)
-    setTipoDialogo('resumen')
-    setDialogoAbierto(true)
-  }
-
-  const abrirValidacionDeposito = (deposito: DepositoBancario) => {
-    setDepositoSeleccionado(deposito)
-    setTipoDialogo('validar-deposito')
-    setDialogoAbierto(true)
-  }
-
-  const getEstadoDepositoColor = (estado: string) => {
-    switch (estado) {
-      case 'validado':
-        return 'success'
-      case 'pendiente-validacion':
-        return 'warning'
-      case 'diferencia':
-        return 'error'
-      default:
-        return 'default'
-    }
-  }
-
-  const abrirDialogoCaja = (tipo: 'apertura' | 'cierre') => {
-    setTipoDialogo(tipo)
-    setFormularioCaja({
-      montoInicial: 0,
-      montoFinal: 0,
-      efectivoFisico: 0,
-      observaciones: ''
-    })
-    setDialogoAbierto(true)
-  }
-
-  const procesarAperturaCierre = () => {
-    if (tipoDialogo !== 'apertura' && tipoDialogo !== 'cierre') return
-    const nuevaOperacion: AperturaCierreCaja = {
-      id: Date.now().toString(),
-      fecha: new Date().toISOString().split('T')[0],
-      tipo: tipoDialogo,
-      usuario: 'Usuario Actual',
-      hora: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }),
-      montoInicial: tipoDialogo === 'apertura' ? formularioCaja.montoInicial : undefined,
-      montoFinal: tipoDialogo === 'cierre' ? formularioCaja.montoFinal : undefined,
-      observaciones: formularioCaja.observaciones,
-      estado: tipoDialogo === 'apertura' ? 'activo' : 'cerrado',
-      efectivoFisico: formularioCaja.efectivoFisico,
-      diferencias: 0,
-      cortesValidados: repartidoresCorte.filter(r => r.estado === 'validado').length,
-      cortesPendientes: repartidoresCorte.filter(r => r.estado === 'pendiente').length
-    }
-
-    setHistorialCaja(prev => [nuevaOperacion, ...prev])
-    setCajaAbierta(tipoDialogo === 'apertura')
-    cerrarDialogo()
-  }
-
-  const manejarCambioFormularioCaja = (campo: string, valor: any) => {
-    setFormularioCaja(prev => ({ ...prev, [campo]: valor }))
-  }
-
-  const cerrarDialogo = () => {
-    setDialogoAbierto(false)
-    setRepartidorSeleccionado(null)
-    setDepositoSeleccionado(null)
-    setPasoActual(0)
-    setValidaciones({
-      efectivo: false,
-      deposito: false,
-      terminal: false,
-      transferencias: false,
-      cheques: false,
-      reporteFisico: false
-    })
-    setFoliosArchivosValidacion({
-      terminal: { folio: '', archivo: '' },
-      transferencias: { folio: '', archivo: '' },
-      cheques: { folio: '', archivo: '' }
-    })
-    setObservaciones('')
-    setEstadoFinal('')
-  }
-
-  const manejarValidacion = (campo: string, valor: boolean) => {
-    setValidaciones(prev => ({ ...prev, [campo]: valor }))
-  }
-
-  const manejarCambioFolioArchivo = (
-    tipo: 'terminal' | 'transferencias' | 'cheques',
-    campo: 'folio' | 'archivo',
-    valor: string
-  ) => {
-    setFoliosArchivosValidacion(prev => ({
-      ...prev,
-      [tipo]: {
-        ...prev[tipo],
-        [campo]: valor
-      }
-    }))
-  }
-
-  const getEstadoIcon = (estado: string) => {
-    switch (estado) {
-      case 'recibido':
-        return '📄'
-      case 'validado':
-        return '✅'
-      case 'pendiente':
-        return '⏳'
-      default:
-        return '❓'
-    }
-  }
-
-  const getEstadoColor = (estado: string) => {
-    switch (estado) {
-      case 'recibido':
-        return 'warning'
-      case 'validado':
-        return 'success'
-      case 'pendiente':
-        return 'info'
-      default:
-        return 'default'
-    }
-  }
-
-  const pasosValidacion = [
-    'Resumen Recibido',
-    'Efectivo Registrado',
-    'Formas de Pago',
-    'Estado Final'
-  ]
-
-  const repartidoresPipas = repartidoresCorte.filter(r => r.tipo === 'pipas')
-  const repartidoresCilindros = repartidoresCorte.filter(r => r.tipo === 'cilindros')
-
-  const cortesPipasTab = cortesHoyList.filter(r => r.tipo === 'pipas' && (r.tipoCorte === 'venta_dia') === (tabCortesTipo === 'ventas'))
-  const cortesCilindrosTab = cortesHoyList.filter(r => r.tipo === 'cilindros' && (r.tipoCorte === 'venta_dia') === (tabCortesTipo === 'ventas'))
-  const resumenTab = {
-    cortesEntregados: cortesPipasTab.length + cortesCilindrosTab.length,
-    cortesValidados: cortesPipasTab.filter(r => r.estado === 'validado').length + cortesCilindrosTab.filter(r => r.estado === 'validado').length,
-    cortesPendientes: cortesPipasTab.filter(r => r.estado !== 'validado').length + cortesCilindrosTab.filter(r => r.estado !== 'validado').length,
-    totalVentas: tabCortesTipo === 'ventas' ? cortesPipasTab.reduce((s, r) => s + r.ventas.montoTotal, 0) + cortesCilindrosTab.reduce((s, r) => s + r.ventas.montoTotal, 0) : 0,
-    totalAbonos: tabCortesTipo === 'abono' ? cortesPipasTab.reduce((s, r) => s + r.abonos.montoTotal, 0) + cortesCilindrosTab.reduce((s, r) => s + r.abonos.montoTotal, 0) : 0
+  if (compact) {
+    return (
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+        {activos.map(c => (
+          <Chip key={c.key} label={`${c.label}: ${fmt$(data[c.key])}`} size="small"
+            sx={{ bgcolor: c.color + '20', color: c.color, fontWeight: 600, fontSize: '0.7rem' }} />
+        ))}
+      </Box>
+    )
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant='h4' component='h1' gutterBottom>
-        Corte de Caja
-      </Typography>
+    <Grid container spacing={1}>
+      {activos.map(c => (
+        <Grid item xs={6} sm={4} key={c.key}>
+          <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: c.color + '12', borderLeft: `3px solid ${c.color}` }}>
+            <Typography variant="caption" color="text.secondary" display="block">{c.label}</Typography>
+            <Typography fontWeight="bold">{fmt$(data[c.key])}</Typography>
+          </Box>
+        </Grid>
+      ))}
+    </Grid>
+  )
+}
 
-      {loading && <LinearProgress sx={{ mb: 2 }} />}
+// ======================== VISTA DASHBOARD ========================
 
-      {/* Navegación */}
-      <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <Button
-            variant={vistaActual === 'dashboard' ? 'contained' : 'outlined'}
-            onClick={() => setVistaActual('dashboard')}
-            startIcon={<AssessmentIcon />}
-          >
-            Dashboard Principal
-          </Button>
-          {/* <Button
-            variant={vistaActual === 'validacion' ? 'contained' : 'outlined'}
-            onClick={() => setVistaActual('validacion')}
-            startIcon={<CheckCircleIcon />}
-          >
-            Validación Individual
-          </Button> */}
-          <Button
-            variant={vistaActual === 'historial' ? 'contained' : 'outlined'}
-            onClick={() => setVistaActual('historial')}
-            startIcon={<HistoryIcon />}
-          >
-            Historial de Cortes
-          </Button>
-          <Button
-            variant={vistaActual === 'depositos' ? 'contained' : 'outlined'}
-            onClick={() => setVistaActual('depositos')}
-            startIcon={<AccountBalanceIcon />}
-          >
-            Validación Depósitos
-          </Button>
-          <Button
-            variant={vistaActual === 'admin' ? 'contained' : 'outlined'}
-            onClick={() => setVistaActual('admin')}
-            startIcon={<PersonIcon />}
-          >
-            Vista Administrador
-          </Button>
-        </Box>
+function VistaDashboard({
+  cortes, loading, onVerDetalle, onCrearManual, tabActual, setTabActual
+}: {
+  cortes: CorteResumen[]
+  loading: boolean
+  onVerDetalle: (id: string) => void
+  onCrearManual: () => void
+  tabActual: 'ventas' | 'abonos'
+  setTabActual: (t: 'ventas' | 'abonos') => void
+}) {
+  const [cerrarId, setCerrarId] = useState<string | null>(null)
+  const [cerrando, setCerrando] = useState(false)
+
+  const filtrados = cortes.filter(c =>
+    tabActual === 'ventas' ? c.tipo === 'venta_dia' : c.tipo === 'abono'
+  )
+
+  const totalDia = filtrados.reduce((s, c) =>
+    s + (tabActual === 'ventas' ? c.totalVentas : c.totalAbonos), 0)
+  const totalEfectivo = filtrados.reduce((s, c) => {
+    const fp = c.resumenFormasPagoVenta || c.resumenFormasPagoAbono || {}
+    return s + (fp.efectivo || 0)
+  }, 0)
+  const totalTransf = filtrados.reduce((s, c) => {
+    const fp = c.resumenFormasPagoVenta || c.resumenFormasPagoAbono || {}
+    return s + (fp.transferencia || 0)
+  }, 0)
+  const pendientes = filtrados.filter(c => c.estado === 'pendiente').length
+
+  return (
+    <Box>
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={6} sm={3}>
+          <KPICard label="Total del día" value={fmt$(totalDia)} color="primary.main" />
+        </Grid>
+        <Grid item xs={6} sm={3}>
+          <KPICard label="Efectivo" value={fmt$(totalEfectivo)} color="#4caf50" />
+        </Grid>
+        <Grid item xs={6} sm={3}>
+          <KPICard label="Transferencias" value={fmt$(totalTransf)} color="#2196f3" />
+        </Grid>
+        <Grid item xs={6} sm={3}>
+          <KPICard label="Pendientes de cerrar" value={String(pendientes)}
+            sub={pendientes > 0 ? 'cortes sin validar' : 'todos cerrados'}
+            color={pendientes > 0 ? 'warning.main' : 'success.main'} />
+        </Grid>
+      </Grid>
+
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+        <Button variant={tabActual === 'ventas' ? 'contained' : 'outlined'} size="small"
+          onClick={() => setTabActual('ventas')}>
+          Ventas del día
+        </Button>
+        <Button variant={tabActual === 'abonos' ? 'contained' : 'outlined'} size="small"
+          onClick={() => setTabActual('abonos')}>
+          Abonos
+        </Button>
+        <Box sx={{ flex: 1 }} />
+        <Button startIcon={<Add />} variant="outlined" size="small" onClick={onCrearManual}>
+          Crear corte manual
+        </Button>
       </Box>
 
-      {/* Dashboard Principal de Cortes */}
-      {vistaActual === 'dashboard' && (
-        <Box>
-          {/* Encabezado Principal */}
-          <Card sx={{ mb: 2, bgcolor: 'primary.main', color: 'white' }}>
-            <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
-              <Typography variant='h4' gutterBottom sx={{ color: 'white' }}>
-                CORTES DEL DÍA DE HOY - PENDIENTES VALIDACIÓN
-              </Typography>
-              <Typography variant='h6' sx={{ color: 'white' }}>
-                Fecha:{' '}
-                {new Date().toLocaleDateString('es-MX', {
-                  timeZone: TIMEZONE_MEXICO,
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
-                {' · '}
-                Hora Ciudad de México:{' '}
-                {new Date().toLocaleTimeString('es-MX', {
-                  timeZone: TIMEZONE_MEXICO,
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit'
-                })}
-              </Typography>
-            </CardContent>
-          </Card>
-
-          {/* Tabs: Cortes Abono / Cortes Ventas */}
-          <Tabs
-            value={tabCortesTipo}
-            onChange={(_, v) => setTabCortesTipo(v)}
-            sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
-          >
-            <Tab label='Cortes Ventas' value='ventas' />
-            <Tab label='Cortes Abono' value='abono' />
-          </Tabs>
-
-          <Grid container spacing={3}>
-            {/* Sección Repartidores Pipas */}
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                    <LocalShippingIcon color='primary' sx={{ mr: 1, fontSize: 30 }} />
-                    <Typography variant='h5' color='primary'>
-                      REPARTIDORES PIPAS {tabCortesTipo === 'ventas' ? '(VENTAS)' : '(ABONOS)'}
-                    </Typography>
-                  </Box>
-
-                  <TableContainer component={Paper} variant='outlined'>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Repartidor</TableCell>
-                          <TableCell>Ruta</TableCell>
-                          <TableCell>Hora Entrega</TableCell>
-                          <TableCell align='right'>{tabCortesTipo === 'ventas' ? 'Ventas' : 'Abonos'}</TableCell>
-                          <TableCell align='center'>Estado</TableCell>
-                          <TableCell align='center'>Acción</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {repartidoresPipas.map(repartidor => (
-                          <TableRow key={repartidor.id} hover>
-                            <TableCell>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Avatar sx={{ width: 40, height: 40 }}>{repartidor.nombre.charAt(0)}</Avatar>
-                                <Typography variant='subtitle2' fontWeight='bold'>
-                                  {repartidor.nombre}
-                                </Typography>
-                              </Box>
-                            </TableCell>
-                            <TableCell>
-                              <Chip label={repartidor.ruta} size='small' variant='outlined' />
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant='body2'>{repartidor.horaEntrega}</Typography>
-                            </TableCell>
-                            <TableCell align='right'>
-                              <Typography variant='h6' color='primary'>
-                                ${(tabCortesTipo === 'ventas' ? repartidor.ventas.montoTotal : repartidor.abonos.montoTotal).toLocaleString()}
-                              </Typography>
-                            </TableCell>
-                            <TableCell align='center'>
-                              <Chip
-                                label={`${repartidor.estado.toUpperCase()} ${getEstadoIcon(repartidor.estado)}`}
-                                color={getEstadoColor(repartidor.estado) as any}
-                                size='small'
-                              />
-                            </TableCell>
-                            <TableCell align='center'>
-                              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
-                                <Button
-                                  variant='outlined'
-                                  size='small'
-                                  onClick={() => abrirResumen(repartidor)}
-                                  startIcon={<VisibilityIcon />}
-                                >
-                                  VER DETALLE
-                                </Button>
-                                {repartidor.estado === 'validado' ? (
-                                  <Button
-                                    variant='outlined'
-                                    size='small'
-                                    color='primary'
-                                    onClick={() => abrirValidacion(repartidor)}
-                                    startIcon={<EditIcon />}
-                                  >
-                                    EDITAR
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    variant='contained'
-                                    size='small'
-                                    onClick={() => abrirValidacion(repartidor)}
-                                    startIcon={<CheckIcon />}
-                                  >
-                                    VALIDAR
-                                  </Button>
-                                )}
-                              </Box>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Sección Repartidores Cilindros */}
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                    <GasMeterIcon color='secondary' sx={{ mr: 1, fontSize: 30 }} />
-                    <Typography variant='h5' color='secondary'>
-                      REPARTIDORES CILINDROS {tabCortesTipo === 'ventas' ? '(VENTAS)' : '(ABONOS)'}
-                    </Typography>
-                  </Box>
-
-                  <TableContainer component={Paper} variant='outlined'>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Repartidor</TableCell>
-                          <TableCell>Ruta</TableCell>
-                          <TableCell>Hora Entrega</TableCell>
-                          <TableCell align='right'>{tabCortesTipo === 'ventas' ? 'Ventas' : 'Abonos'}</TableCell>
-                          <TableCell align='center'>Estado</TableCell>
-                          <TableCell align='center'>Acción</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {repartidoresCilindros.map(repartidor => (
-                          <TableRow key={repartidor.id} hover>
-                            <TableCell>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Avatar sx={{ width: 40, height: 40 }}>{repartidor.nombre.charAt(0)}</Avatar>
-                                <Typography variant='subtitle2' fontWeight='bold'>
-                                  {repartidor.nombre}
-                                </Typography>
-                              </Box>
-                            </TableCell>
-                            <TableCell>
-                              <Chip label={repartidor.ruta} size='small' variant='outlined' />
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant='body2'>{repartidor.horaEntrega}</Typography>
-                            </TableCell>
-                            <TableCell align='right'>
-                              <Typography variant='h6' color='primary'>
-                                ${(tabCortesTipo === 'ventas' ? repartidor.ventas.montoTotal : repartidor.abonos.montoTotal).toLocaleString()}
-                              </Typography>
-                            </TableCell>
-                            <TableCell align='center'>
-                              <Chip
-                                label={`${repartidor.estado.toUpperCase()} ${getEstadoIcon(repartidor.estado)}`}
-                                color={getEstadoColor(repartidor.estado) as any}
-                                size='small'
-                              />
-                            </TableCell>
-                            <TableCell align='center'>
-                              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
-                                <Button
-                                  variant='outlined'
-                                  size='small'
-                                  onClick={() => abrirResumen(repartidor)}
-                                  startIcon={<VisibilityIcon />}
-                                >
-                                  VER DETALLE
-                                </Button>
-                                {repartidor.estado === 'validado' ? (
-                                  <Button
-                                    variant='outlined'
-                                    size='small'
-                                    color='primary'
-                                    onClick={() => abrirValidacion(repartidor)}
-                                    startIcon={<EditIcon />}
-                                  >
-                                    EDITAR
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    variant='contained'
-                                    size='small'
-                                    onClick={() => abrirValidacion(repartidor)}
-                                    startIcon={<CheckIcon />}
-                                  >
-                                    VALIDAR
-                                  </Button>
-                                )}
-                              </Box>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </Box>
+      {loading ? (
+        <LinearProgress />
+      ) : filtrados.length === 0 ? (
+        <Paper sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
+          <Typography>No hay cortes de {tabActual === 'ventas' ? 'ventas' : 'abonos'} para hoy</Typography>
+        </Paper>
+      ) : (
+        <TableContainer component={Paper}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: 'grey.50' }}>
+                <TableCell><b>Repartidor</b></TableCell>
+                <TableCell><b>Tipo</b></TableCell>
+                <TableCell><b>Estado</b></TableCell>
+                <TableCell align="right"><b>Total</b></TableCell>
+                <TableCell><b>Formas de Pago</b></TableCell>
+                {tabActual === 'ventas' && <TableCell align="right"><b>Litros / Cil.</b></TableCell>}
+                <TableCell align="center"><b>Acciones</b></TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filtrados.map(c => {
+                const fp = c.resumenFormasPagoVenta || c.resumenFormasPagoAbono || {}
+                const total = tabActual === 'ventas' ? c.totalVentas : c.totalAbonos
+                return (
+                  <TableRow key={c.id} hover>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight="medium">
+                        {tipoIcon(c.repartidor?.tipoRepartidor)} {nombreRepartidor(c.repartidor)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption">
+                        {c.repartidor?.tipoRepartidor === 'pipas' ? 'Pipas' : 'Cilindros'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={c.estado === 'validado' ? 'Validado' : 'Pendiente'}
+                        color={getEstadoColor(c.estado)} size="small"
+                        icon={c.estado === 'validado' ? <CheckCircle sx={{ fontSize: 14 }} /> : <Warning sx={{ fontSize: 14 }} />}
+                      />
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography fontWeight="bold">{fmt$(total)}</Typography>
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 200 }}>
+                      <ResumenPago data={fp} compact />
+                    </TableCell>
+                    {tabActual === 'ventas' && (
+                      <TableCell align="right">
+                        <Typography variant="caption">
+                          {c.repartidor?.tipoRepartidor === 'pipas'
+                            ? `${(c.totalLitros || 0).toFixed(1)} L`
+                            : `${c.totalProductosUnidades || 0} cil`}
+                        </Typography>
+                      </TableCell>
+                    )}
+                    <TableCell align="center">
+                      <Tooltip title="Ver detalle completo">
+                        <IconButton size="small" onClick={() => onVerDetalle(c.id)}>
+                          <Visibility fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      {c.estado === 'pendiente' && (
+                        <Tooltip title="Cerrar y validar corte">
+                          <IconButton size="small" color="success" onClick={() => setCerrarId(c.id)}>
+                            <CheckCircle fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
 
-      {/* Vista para Administrador/Encargado */}
-      {vistaActual === 'admin' && (
-        <Box>
-          {/* Dashboard General de Cortes */}
-          <Card sx={{ mb: 3, bgcolor: 'primary.main', color: 'white' }}>
-            <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
-              <Typography variant='h4' gutterBottom sx={{ color: 'white' }}>
-                CONTROL GENERAL DE CORTES
-              </Typography>
-              <Typography variant='h6' sx={{ color: 'white' }}>Fecha: {new Date().toLocaleDateString('es-MX')}</Typography>
-            </CardContent>
-          </Card>
+      {/* Dialog confirmar cierre rápido */}
+      <Dialog open={!!cerrarId} onClose={() => setCerrarId(null)} maxWidth="xs">
+        <DialogTitle>Cerrar corte</DialogTitle>
+        <DialogContent>
+          <Typography>
+            ¿Confirmas cerrar el corte de{' '}
+            <b>{nombreRepartidor(filtrados.find(c => c.id === cerrarId)?.repartidor)}</b>?
+          </Typography>
+          <Alert severity="info" sx={{ mt: 1.5, fontSize: '0.8rem' }}>
+            Para validar litros del medidor, usa "Ver detalle" primero.
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCerrarId(null)}>Cancelar</Button>
+          <Button variant="contained" color="success" disabled={cerrando}
+            onClick={async () => {
+              if (!cerrarId) return
+              setCerrando(true)
+              try {
+                await ventasAPI.cerrarCorte(cerrarId, {})
+                setCerrarId(null)
+                // Reload - the parent will handle this via a callback or re-fetch
+                window.location.reload()
+              } catch (e) {
+                setCerrando(false)
+              }
+            }}>
+            {cerrando ? <CircularProgress size={16} /> : '✅ Confirmar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  )
+}
 
-          <Grid container spacing={3}>
-            {/* Sección Consolidada Pipas */}
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                    <LocalShippingIcon color='primary' sx={{ mr: 1, fontSize: 30 }} />
-                    <Typography variant='h5' color='primary'>
-                      PIPAS
-                    </Typography>
-                  </Box>
+// ======================== VISTA DETALLE ========================
 
-                  <Grid container spacing={2} sx={{ mb: 3 }}>
-                    <Grid item xs={6}>
-                      <Typography variant='body2' color='text.secondary'>
-                        Cortes Entregados
-                      </Typography>
-                      <Typography variant='h6' color='success.main'>
-                        {cortesPipasTab.length}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant='body2' color='text.secondary'>
-                        Cortes Validados
-                      </Typography>
-                      <Typography variant='h6' color='primary'>
-                        {cortesPipasTab.filter(r => r.estado === 'validado').length}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant='body2' color='text.secondary'>
-                        Cortes Pendientes
-                      </Typography>
-                      <Typography variant='h6' color='warning.main'>
-                        {cortesPipasTab.filter(r => r.estado !== 'validado').length}
-                      </Typography>
-                    </Grid>
-                  </Grid>
+function VistaDetalle({
+  detalle, loading, onVolver, onCerrarCorte, onCorregirPago, onReimprimir
+}: {
+  detalle: CorteDetalle | null
+  loading: boolean
+  onVolver: () => void
+  onCerrarCorte: (id: string, litrosMedidor?: number, observaciones?: string) => void
+  onCorregirPago: (pedidoId: string, pedidoNombre: string) => void
+  onReimprimir: () => void
+}) {
+  const [litrosMedidor, setLitrosMedidor] = useState<string>('')
+  const [obsDialog, setObsDialog] = useState(false)
+  const [observaciones, setObservaciones] = useState('')
 
-                  <Divider sx={{ my: 2 }} />
+  if (loading) {
+    return (
+      <Box sx={{ p: 4 }}>
+        <Button startIcon={<ArrowBack />} onClick={onVolver} sx={{ mb: 2 }}>Volver</Button>
+        <LinearProgress />
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+          Cargando detalle del corte...
+        </Typography>
+      </Box>
+    )
+  }
 
-                  <Grid container spacing={2}>
-                    {tabCortesTipo === 'ventas' && (
-                      <Grid item xs={12}>
-                        <Typography variant='body2' color='text.secondary'>
-                          Total Ventas
-                        </Typography>
-                        <Typography variant='h6' color='primary'>
-                          ${cortesPipasTab.reduce((s, r) => s + r.ventas.montoTotal, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </Typography>
-                      </Grid>
-                    )}
-                    {tabCortesTipo === 'abono' && (
-                      <Grid item xs={12}>
-                        <Typography variant='body2' color='text.secondary'>
-                          Total Abonos
-                        </Typography>
-                        <Typography variant='h6' color='success.main'>
-                          ${cortesPipasTab.reduce((s, r) => s + r.abonos.montoTotal, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </Typography>
-                      </Grid>
-                    )}
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Grid>
+  if (!detalle) {
+    return (
+      <Box sx={{ p: 4, textAlign: 'center' }}>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>No se pudo cargar el detalle</Typography>
+        <Button startIcon={<ArrowBack />} onClick={onVolver}>Volver</Button>
+      </Box>
+    )
+  }
 
-            {/* Sección Consolidada Cilindros */}
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                    <GasMeterIcon color='secondary' sx={{ mr: 1, fontSize: 30 }} />
-                    <Typography variant='h5' color='secondary'>
-                      CILINDROS
-                    </Typography>
-                  </Box>
+  const esPipas = detalle.repartidor?.tipoRepartidor === 'pipas'
+  const litrosApp = detalle.totalLitros || 0
+  const litrosMedidorNum = parseFloat(litrosMedidor) || 0
+  const diferencia = litrosApp - litrosMedidorNum
+  const alertaMedidor = litrosMedidor !== '' && litrosMedidorNum > 0 && Math.abs(diferencia) > 20
 
-                  <Grid container spacing={2} sx={{ mb: 3 }}>
-                    <Grid item xs={6}>
-                      <Typography variant='body2' color='text.secondary'>
-                        Cortes Entregados
-                      </Typography>
-                      <Typography variant='h6' color='success.main'>
-                        {cortesCilindrosTab.length}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant='body2' color='text.secondary'>
-                        Cortes Validados
-                      </Typography>
-                      <Typography variant='h6' color='primary'>
-                        {cortesCilindrosTab.filter(r => r.estado === 'validado').length}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant='body2' color='text.secondary'>
-                        Cortes Pendientes
-                      </Typography>
-                      <Typography variant='h6' color='warning.main'>
-                        {cortesCilindrosTab.filter(r => r.estado !== 'validado').length}
-                      </Typography>
-                    </Grid>
-                  </Grid>
-
-                  <Divider sx={{ my: 2 }} />
-
-                  <Grid container spacing={2}>
-                    {tabCortesTipo === 'ventas' && (
-                      <Grid item xs={12}>
-                        <Typography variant='body2' color='text.secondary'>
-                          Total Ventas
-                        </Typography>
-                        <Typography variant='h6' color='primary'>
-                          ${cortesCilindrosTab.reduce((s, r) => s + r.ventas.montoTotal, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </Typography>
-                      </Grid>
-                    )}
-                    {tabCortesTipo === 'abono' && (
-                      <Grid item xs={12}>
-                        <Typography variant='body2' color='text.secondary'>
-                          Total Abonos
-                        </Typography>
-                        <Typography variant='h6' color='success.main'>
-                          ${cortesCilindrosTab.reduce((s, r) => s + r.abonos.montoTotal, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </Typography>
-                      </Grid>
-                    )}
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Gran Total Operación (según tab) */}
-            <Grid item xs={12}>
-              <Card sx={{ bgcolor: 'primary.main', color: 'white' }}>
-                <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                      <Typography variant='h6' gutterBottom sx={{ color: 'white' }}>
-                        {tabCortesTipo === 'ventas' ? 'TOTAL VENTAS (CORTES VENTA DÍA)' : 'TOTAL ABONOS (CORTES ABONO)'}
-                      </Typography>
-                      <Typography variant='h3' sx={{ color: 'white' }}>
-                        ${(tabCortesTipo === 'ventas' ? resumenTab.totalVentas : resumenTab.totalAbonos).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ textAlign: 'right' }}>
-                      <Typography variant='h6' gutterBottom sx={{ color: 'white' }}>
-                        Cortes en esta pestaña
-                      </Typography>
-                      <Typography variant='h4' sx={{ color: 'white' }}>{resumenTab.cortesEntregados}</Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-
-          {/* Función de Auxiliar Rápida */}
-          <Card sx={{ mt: 3 }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant='h6'>Función de Auxiliar Rápida</Typography>
-                <Button
-                  variant={modoAuxiliar ? 'contained' : 'outlined'}
-                  onClick={() => setModoAuxiliar(!modoAuxiliar)}
-                  startIcon={<PersonIcon />}
-                >
-                  {modoAuxiliar ? 'SALIR MODO AUXILIAR' : 'RECIBIR CORTES COMO AUXILIAR'}
-                </Button>
-              </Box>
-
-              {modoAuxiliar && (
-                <Box>
-                  <Typography variant='h6' gutterBottom>
-                    Repartidores Pendientes de Validar
-                  </Typography>
-
-                  <List>
-                    {repartidoresCorte
-                      .filter(r => r.estado === 'recibido')
-                      .map(repartidor => (
-                        <ListItem key={repartidor.id}>
-                          <ListItemAvatar>
-                            <Avatar>{repartidor.nombre.charAt(0)}</Avatar>
-                          </ListItemAvatar>
-                          <ListItemText
-                            primary={
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Typography variant='subtitle2' fontWeight='bold'>
-                                  {repartidor.nombre} - {repartidor.ruta}
-                                </Typography>
-                                <Chip
-                                  label={repartidor.tipo.toUpperCase()}
-                                  size='small'
-                                  color={repartidor.tipo === 'pipas' ? 'primary' : 'secondary'}
-                                />
-                              </Box>
-                            }
-                            secondary={
-                              <Box>
-                                <Typography variant='body2' color='text.secondary'>
-                                  Total: ${repartidor.totalDia.toLocaleString()} • Hora: {repartidor.horaEntrega}
-                                </Typography>
-                                <Typography variant='caption' color='text.secondary'>
-                                  Estado: {repartidor.estado.toUpperCase()} {getEstadoIcon(repartidor.estado)}
-                                </Typography>
-                              </Box>
-                            }
-                          />
-                          <Button variant='outlined' size='small' onClick={() => abrirValidacion(repartidor)}>
-                            Validar
-                          </Button>
-                        </ListItem>
-                      ))}
-                  </List>
-                </Box>
-              )}
-            </CardContent>
-          </Card>
+  return (
+    <Box>
+      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 3 }}>
+        <Button startIcon={<ArrowBack />} onClick={onVolver} variant="text" color="inherit" sx={{ mt: 0.5 }}>
+          Volver
+        </Button>
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="h6" fontWeight="bold">
+            {tipoIcon(detalle.repartidor?.tipoRepartidor)} {nombreRepartidor(detalle.repartidor)}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {detalle.repartidor?.tipoRepartidor === 'pipas' ? 'Pipas' : 'Cilindros'}
+            {' · '}{fmtFecha(detalle.dia)}
+            {' · '}ID: {detalle.id.slice(-8).toUpperCase()}
+          </Typography>
         </Box>
-      )}
+        <Chip
+          label={detalle.estado === 'validado' ? '✅ Validado' : '⏳ Pendiente'}
+          color={getEstadoColor(detalle.estado)}
+        />
+      </Box>
 
-      {/* Vista Historial de Cortes */}
-      {vistaActual === 'historial' && (
-        <Box>
-          <Typography variant='h6' gutterBottom>
-            Historial de Cortes
-          </Typography>
-          <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
-            Seleccione un rango de fechas y el tipo de servicio para consultar los cortes.
-          </Typography>
+      <Grid container spacing={3}>
+        {/* Columna principal */}
+        <Grid item xs={12} md={8}>
 
-          <Card sx={{ mb: 3 }}>
-            <CardContent>
-              <Grid container spacing={2} alignItems='center'>
-                <Grid item xs={12} sm={6} md={3}>
-                  <TextField
-                    fullWidth
-                    label='Fecha desde'
-                    type='date'
-                    value={historialFechaDesde}
-                    onChange={e => setHistorialFechaDesde(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                    inputProps={{ max: historialFechaHasta || undefined }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <TextField
-                    fullWidth
-                    label='Fecha hasta'
-                    type='date'
-                    value={historialFechaHasta}
-                    onChange={e => setHistorialFechaHasta(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                    inputProps={{ min: historialFechaDesde || undefined }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <FormControl fullWidth size='medium'>
-                    <InputLabel>Tipo</InputLabel>
-                    <Select
-                      value={historialTipo}
-                      label='Tipo'
-                      onChange={e => setHistorialTipo(e.target.value as 'todos' | 'pipas' | 'cilindros')}
-                    >
-                      <MenuItem value='todos'>Todos</MenuItem>
-                      <MenuItem value='pipas'>Pipas</MenuItem>
-                      <MenuItem value='cilindros'>Cilindros</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <Button
-                    variant='contained'
-                    onClick={fetchHistorialCortes}
-                    disabled={!historialFechaDesde || !historialFechaHasta || historialLoading}
-                    startIcon={historialLoading ? undefined : <SearchIcon />}
-                  >
-                    {historialLoading ? 'Buscando...' : 'Buscar'}
-                  </Button>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-
-          {historialLoading && <LinearProgress sx={{ mb: 2 }} />}
-
-          <Card>
-            <CardContent>
-              {historialCortesList.length === 0 && !historialLoading ? (
-                <Typography color='text.secondary' align='center' sx={{ py: 4 }}>
-                  {historialFechaDesde && historialFechaHasta
-                    ? 'No hay cortes en el rango seleccionado. Seleccione fechas y pulse Buscar.'
-                    : 'Seleccione un rango de fechas y pulse Buscar para ver el historial de cortes.'}
-                </Typography>
-              ) : (
-                <TableContainer component={Paper} variant='outlined'>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Fecha</TableCell>
-                        <TableCell>Hora</TableCell>
-                        <TableCell>Repartidor</TableCell>
-                        <TableCell>Tipo</TableCell>
-                        <TableCell align='right'>Total Día</TableCell>
-                        <TableCell align='center'>Estado</TableCell>
-                        <TableCell align='center'>Acción</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {historialCortesList.map(corte => (
-                        <TableRow key={corte.id} hover>
-                          <TableCell>
-                            {new Date(corte.fechaCorte).toLocaleDateString('es-MX', { timeZone: TIMEZONE_MEXICO })}
-                          </TableCell>
-                          <TableCell>{corte.horaEntrega}</TableCell>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Avatar sx={{ width: 32, height: 32 }}>{corte.nombre.charAt(0)}</Avatar>
-                              <Typography variant='body2' fontWeight='medium'>
-                                {corte.nombre}
-                              </Typography>
-                            </Box>
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              label={corte.tipo === 'pipas' ? 'PIPAS' : 'CILINDROS'}
-                              color={corte.tipo === 'pipas' ? 'primary' : 'secondary'}
-                              size='small'
-                              variant='outlined'
-                            />
-                          </TableCell>
-                          <TableCell align='right'>
-                            <Typography variant='body1' fontWeight='bold' color='primary'>
-                              ${corte.totalDia.toLocaleString()}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align='center'>
-                            <Chip
-                              label={corte.estado.toUpperCase()}
-                              color={getEstadoColor(corte.estado) as any}
-                              size='small'
-                            />
-                          </TableCell>
-                          <TableCell align='center'>
-                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
-                              <Button
-                                variant='outlined'
-                                size='small'
-                                onClick={() => abrirResumen(corte)}
-                                startIcon={<VisibilityIcon />}
-                              >
-                                VER DETALLE
-                              </Button>
-                              {corte.estado === 'validado' ? (
-                                <Button
-                                  variant='outlined'
-                                  size='small'
-                                  color='primary'
-                                  onClick={() => abrirValidacion(corte)}
-                                  startIcon={<EditIcon />}
-                                >
-                                  EDITAR
-                                </Button>
-                              ) : (
-                                <Button
-                                  variant='contained'
-                                  size='small'
-                                  onClick={() => abrirValidacion(corte)}
-                                  startIcon={<CheckIcon />}
-                                >
-                                  VALIDAR
-                                </Button>
-                              )}
-                            </Box>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </CardContent>
-          </Card>
-        </Box>
-      )}
-
-      {/* Vista de Validación de Depósitos Bancarios */}
-      {vistaActual === 'depositos' && (
-        <Box>
-          <Typography variant='h6' gutterBottom>
-            Validación de Depósitos Bancarios
-          </Typography>
-
-          {/* Resumen de Depósitos */}
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Typography variant='h6' gutterBottom>
-                    Total Depositado
-                  </Typography>
-                  <Typography variant='h4' color='primary'>
-                    ${depositosBancarios.reduce((sum, d) => sum + d.monto, 0).toLocaleString()}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Typography variant='h6' gutterBottom>
-                    Depósitos Validados
-                  </Typography>
-                  <Typography variant='h4' color='success.main'>
-                    {depositosBancarios.filter(d => d.estado === 'validado').length}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Typography variant='h6' gutterBottom>
-                    Pendientes Validación
-                  </Typography>
-                  <Typography variant='h4' color='warning.main'>
-                    {depositosBancarios.filter(d => d.estado === 'pendiente-validacion').length}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Typography variant='h6' gutterBottom>
-                    Con Diferencias
-                  </Typography>
-                  <Typography variant='h4' color='error.main'>
-                    {depositosBancarios.filter(d => d.estado === 'diferencia').length}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-
-          {/* Tabla de Depósitos */}
-          <Card>
-            <CardContent>
-              <Typography variant='h6' gutterBottom>
-                Depósitos Bancarios
+          {/* Desglose cilindros */}
+          {!esPipas && detalle.desgloseCilindros && detalle.desgloseCilindros.length > 0 && (
+            <Paper sx={{ p: 2, mb: 2 }}>
+              <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1.5 }}>
+                🔵 Desglose por tipo de cilindro
               </Typography>
-
-              <TableContainer component={Paper} variant='outlined'>
-                <Table>
+              <TableContainer>
+                <Table size="small">
                   <TableHead>
-                    <TableRow>
-                      <TableCell>Repartidor</TableCell>
-                      <TableCell>Folio Repartidor</TableCell>
-                      <TableCell>Folio Físico</TableCell>
-                      <TableCell align='right'>Monto</TableCell>
-                      <TableCell>Fecha/Hora</TableCell>
-                      <TableCell align='center'>Estado</TableCell>
-                      <TableCell align='center'>Comprobante</TableCell>
-                      <TableCell align='center'>Acciones</TableCell>
+                    <TableRow sx={{ bgcolor: 'grey.50' }}>
+                      <TableCell><b>Producto</b></TableCell>
+                      <TableCell align="center"><b>Unidades</b></TableCell>
+                      <TableCell align="right"><b>Subtotal</b></TableCell>
+                      {detalle.desgloseCilindros.some(d => d.descuento > 0) && (
+                        <TableCell align="right"><b>Descuento</b></TableCell>
+                      )}
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {depositosBancarios.map(deposito => (
-                      <TableRow key={deposito.id} hover>
+                    {detalle.desgloseCilindros.map((d, i) => (
+                      <TableRow key={i}>
                         <TableCell>
-                          <Typography variant='subtitle2' fontWeight='bold'>
-                            {deposito.repartidorNombre}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='body2' fontWeight='bold'>
-                            {deposito.folioRepartidor}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant='body2' fontWeight='bold'>
-                            {deposito.folioFisico || '-'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align='right'>
-                          <Typography variant='h6' color='primary'>
-                            ${deposito.monto.toLocaleString()}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Box>
-                            <Typography variant='body2'>
-                              {new Date(deposito.fechaDeposito).toLocaleDateString('es-MX')}
-                            </Typography>
-                            <Typography variant='caption' color='text.secondary'>
-                              {deposito.horaDeposito}
-                            </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2">{d.nombre}</Typography>
+                            {d.esNuevo && (
+                              <Chip label="NUEVO" size="small" color="info" sx={{ height: 18, fontSize: '0.65rem' }} />
+                            )}
                           </Box>
                         </TableCell>
-                        <TableCell align='center'>
-                          <Chip
-                            label={deposito.estado.replace('-', ' ').toUpperCase()}
-                            color={getEstadoDepositoColor(deposito.estado) as any}
-                            size='small'
-                          />
-                        </TableCell>
-                        <TableCell align='center'>
-                          <Chip
-                            label={deposito.comprobanteRecibido ? 'RECIBIDO' : 'PENDIENTE'}
-                            color={deposito.comprobanteRecibido ? 'success' : 'warning'}
-                            size='small'
-                          />
-                        </TableCell>
-                        <TableCell align='center'>
-                          <Box sx={{ display: 'flex', gap: 0.5 }}>
-                            <Tooltip title='Validar depósito'>
-                              <IconButton size='small' onClick={() => abrirValidacionDeposito(deposito)}>
-                                <CheckCircleIcon />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title='Ver detalles'>
-                              <IconButton size='small'>
-                                <VisibilityIcon />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        </TableCell>
+                        <TableCell align="center"><b>{d.unidades}</b></TableCell>
+                        <TableCell align="right"><b>{fmt$(d.monto)}</b></TableCell>
+                        {detalle.desgloseCilindros!.some(dd => dd.descuento > 0) && (
+                          <TableCell align="right" sx={{ color: 'error.main' }}>
+                            {d.descuento > 0 ? `-${fmt$(d.descuento)}` : '—'}
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
+                    <TableRow sx={{ bgcolor: 'primary.50' }}>
+                      <TableCell><b>Total</b></TableCell>
+                      <TableCell align="center">
+                        <b>{detalle.desgloseCilindros.reduce((s, d) => s + d.unidades, 0)} cil</b>
+                      </TableCell>
+                      <TableCell align="right">
+                        <b>{fmt$(detalle.desgloseCilindros.reduce((s, d) => s + d.monto, 0))}</b>
+                      </TableCell>
+                      {detalle.desgloseCilindros.some(d => d.descuento > 0) && (
+                        <TableCell align="right">
+                          <b style={{ color: '#f44336' }}>
+                            -{fmt$(detalle.desgloseCilindros.reduce((s, d) => s + d.descuento, 0))}
+                          </b>
+                        </TableCell>
+                      )}
+                    </TableRow>
                   </TableBody>
                 </Table>
               </TableContainer>
-            </CardContent>
-          </Card>
+            </Paper>
+          )}
 
-          {/* Depósitos Múltiples */}
-          <Card sx={{ mt: 3 }}>
-            <CardContent>
-              <Typography variant='h6' gutterBottom>
-                Depósitos Múltiples
+          {/* Pedidos / Servicios */}
+          <Paper sx={{ p: 2, mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
+              <Typography variant="subtitle2" fontWeight="bold">
+                {esPipas ? '🚛 Servicios del día' : '📦 Detalle de pedidos'}
               </Typography>
+              <Chip label={`${detalle.pedidos.length}`} size="small" sx={{ ml: 1 }} />
+            </Box>
 
-              <TableContainer component={Paper} variant='outlined'>
-                <Table>
+            {detalle.pedidos.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">Sin pedidos registrados en este corte</Typography>
+            ) : (
+              <TableContainer>
+                <Table size="small">
                   <TableHead>
-                    <TableRow>
-                      <TableCell>Repartidor</TableCell>
-                      <TableCell align='right'>Monto Total</TableCell>
-                      <TableCell align='center'>Cantidad Depósitos</TableCell>
-                      <TableCell align='center'>Estado</TableCell>
-                      <TableCell align='center'>Acciones</TableCell>
+                    <TableRow sx={{ bgcolor: 'grey.50' }}>
+                      <TableCell sx={{ width: 32 }}><b>#</b></TableCell>
+                      <TableCell><b>Cliente</b></TableCell>
+                      {esPipas
+                        ? <TableCell align="right"><b>Litros</b></TableCell>
+                        : <TableCell><b>Productos</b></TableCell>
+                      }
+                      <TableCell><b>Forma de pago</b></TableCell>
+                      <TableCell align="right"><b>Total</b></TableCell>
+                      <TableCell align="center" sx={{ width: 40 }}></TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {depositosMultiples.map(depositoMultiple => (
-                      <TableRow key={depositoMultiple.id} hover>
+                    {detalle.pedidos.map(p => (
+                      <TableRow key={p.pedidoId} hover>
                         <TableCell>
-                          <Typography variant='subtitle2' fontWeight='bold'>
-                            {depositoMultiple.repartidorNombre}
-                          </Typography>
+                          <Typography variant="caption" color="text.secondary">{p.numero}</Typography>
                         </TableCell>
-                        <TableCell align='right'>
-                          <Typography variant='h6' color='primary'>
-                            ${depositoMultiple.montoTotal.toLocaleString()}
-                          </Typography>
+                        <TableCell>
+                          <Typography variant="body2">{p.clienteNombre}</Typography>
                         </TableCell>
-                        <TableCell align='center'>
-                          <Typography variant='h6'>{depositoMultiple.depositos.length}</Typography>
+                        {esPipas ? (
+                          <TableCell align="right">
+                            <Typography variant="body2">{(p.litros || 0).toFixed(1)} L</Typography>
+                            {p.descuento > 0 && (
+                              <Typography variant="caption" color="error.main" display="block">
+                                -{fmt$(p.descuento)}
+                              </Typography>
+                            )}
+                          </TableCell>
+                        ) : (
+                          <TableCell>
+                            {(p.productos || []).map((prod, pi) => (
+                              <Typography key={pi} variant="caption" display="block">
+                                {prod.cantidad} × {prod.nombre}
+                                {prod.descuento > 0 && (
+                                  <span style={{ color: '#f44336' }}> (-{fmt$(prod.descuento)})</span>
+                                )}
+                              </Typography>
+                            ))}
+                          </TableCell>
+                        )}
+                        <TableCell>
+                          {p.formasPago && p.formasPago.length > 0
+                            ? p.formasPago.map((f, fi) => (
+                              <Typography key={fi} variant="caption" display="block">
+                                {f.tipo}: <b>{fmt$(f.monto)}</b>
+                              </Typography>
+                            ))
+                            : <Typography variant="caption" color="text.secondary">
+                                {p.formaPagoCorte || '—'}
+                              </Typography>
+                          }
                         </TableCell>
-                        <TableCell align='center'>
-                          <Chip
-                            label={depositoMultiple.estado.replace('-', ' ').toUpperCase()}
-                            color={getEstadoDepositoColor(depositoMultiple.estado) as any}
-                            size='small'
-                          />
+                        <TableCell align="right">
+                          <Typography fontWeight="medium">{fmt$(p.total)}</Typography>
                         </TableCell>
-                        <TableCell align='center'>
-                          <Tooltip title='Ver detalles'>
-                            <IconButton size='small'>
-                              <VisibilityIcon />
+                        <TableCell align="center">
+                          <Tooltip title="Corregir forma de pago">
+                            <IconButton size="small" onClick={() => onCorregirPago(p.pedidoId, p.clienteNombre)}>
+                              <Edit sx={{ fontSize: 15 }} />
                             </IconButton>
                           </Tooltip>
                         </TableCell>
@@ -1588,1064 +577,710 @@ export default function CorteCajaPage() {
                   </TableBody>
                 </Table>
               </TableContainer>
-            </CardContent>
-          </Card>
+            )}
+          </Paper>
+
+          {/* Depósitos */}
+          {detalle.depositos && detalle.depositos.length > 0 && (
+            <Paper sx={{ p: 2, mb: 2 }}>
+              <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1.5 }}>
+                🏦 Depósitos
+              </Typography>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Folio</TableCell>
+                    <TableCell align="right">Monto</TableCell>
+                    <TableCell align="right">Monedas</TableCell>
+                    <TableCell align="right">Total</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {detalle.depositos.map((dep: any, i: number) => (
+                    <TableRow key={i}>
+                      <TableCell>{dep.folio || '—'}</TableCell>
+                      <TableCell align="right">{fmt$(dep.monto)}</TableCell>
+                      <TableCell align="right">{dep.monedas ? fmt$(dep.monedas) : '—'}</TableCell>
+                      <TableCell align="right"><b>{fmt$(dep.total || dep.monto)}</b></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Paper>
+          )}
+        </Grid>
+
+        {/* Sidebar derecho */}
+        <Grid item xs={12} md={4}>
+
+          {/* Resumen de pago */}
+          <Paper sx={{ p: 2, mb: 2 }}>
+            <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1.5 }}>
+              💰 Resumen de pago
+            </Typography>
+            <ResumenPago data={detalle.resumenFormasPago} />
+            <Divider sx={{ my: 1.5 }} />
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography fontWeight="bold">Total del corte</Typography>
+              <Typography fontWeight="bold" variant="h6" color="primary.main">
+                {fmt$(detalle.totalVentas || detalle.totalAbonos)}
+              </Typography>
+            </Box>
+          </Paper>
+
+          {/* Validación de litros (solo pipas) */}
+          {esPipas && (
+            <Paper sx={{ p: 2, mb: 2 }}>
+              <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1.5 }}>
+                📊 Validación de litros
+              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+                <Typography variant="body2" color="text.secondary">App reporta:</Typography>
+                <Typography fontWeight="bold">{litrosApp.toFixed(2)} L</Typography>
+              </Box>
+              <TextField
+                label="Medidor físico (reporte de pipa)"
+                type="number"
+                value={litrosMedidor}
+                onChange={e => setLitrosMedidor(e.target.value)}
+                size="small"
+                fullWidth
+                sx={{ mb: 1 }}
+                InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5 }}>L</Typography> }}
+                placeholder="Ej: 1965.80"
+              />
+              {litrosMedidor !== '' && litrosMedidorNum > 0 && (
+                <Box sx={{
+                  p: 1.5, borderRadius: 1,
+                  bgcolor: alertaMedidor ? 'error.50' : 'success.50',
+                  border: `1px solid ${alertaMedidor ? '#f44336' : '#4caf50'}`
+                }}>
+                  <Typography variant="body2" color={alertaMedidor ? 'error.main' : 'success.main'} fontWeight="medium">
+                    {alertaMedidor ? '⚠️' : '✅'} Diferencia: {diferencia > 0 ? '+' : ''}{diferencia.toFixed(2)} L
+                  </Typography>
+                  <Typography variant="caption" color={alertaMedidor ? 'error.main' : 'success.main'}>
+                    {alertaMedidor ? 'Supera el límite de ±20 L — verificar' : 'Dentro del rango aceptable (±20 L)'}
+                  </Typography>
+                </Box>
+              )}
+            </Paper>
+          )}
+
+          {/* Observaciones del corte */}
+          {detalle.observaciones && (
+            <Paper sx={{ p: 2, mb: 2 }}>
+              <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 0.5 }}>Observaciones</Typography>
+              <Typography variant="body2" color="text.secondary">{detalle.observaciones}</Typography>
+            </Paper>
+          )}
+
+          {/* Acciones */}
+          <Paper sx={{ p: 2 }}>
+            <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1.5 }}>Acciones</Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Button startIcon={<Print />} variant="outlined" fullWidth onClick={onReimprimir}>
+                Reimprimir corte
+              </Button>
+              {detalle.estado === 'pendiente' && (
+                <Button startIcon={<CheckCircle />} variant="contained" color="success" fullWidth
+                  onClick={() => setObsDialog(true)}>
+                  Cerrar y validar corte
+                </Button>
+              )}
+            </Box>
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {/* Dialog confirmar cierre con observaciones */}
+      <Dialog open={obsDialog} onClose={() => setObsDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Cerrar corte — {nombreRepartidor(detalle.repartidor)}</DialogTitle>
+        <DialogContent>
+          {esPipas && litrosMedidor !== '' && litrosMedidorNum > 0 && (
+            <Alert severity={alertaMedidor ? 'warning' : 'success'} sx={{ mb: 2 }}>
+              Diferencia de litros: {diferencia > 0 ? '+' : ''}{diferencia.toFixed(2)} L
+              {alertaMedidor ? ' — Supera ±20L, verifica el reporte físico' : ' — Dentro del rango aceptable'}
+            </Alert>
+          )}
+          <TextField
+            label="Observaciones (opcional)"
+            multiline rows={3}
+            value={observaciones}
+            onChange={e => setObservaciones(e.target.value)}
+            fullWidth size="small"
+            placeholder="Notas sobre el cierre de este corte..."
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setObsDialog(false)}>Cancelar</Button>
+          <Button variant="contained" color="success" onClick={() => {
+            onCerrarCorte(
+              detalle.id,
+              esPipas && litrosMedidorNum > 0 ? litrosMedidorNum : undefined,
+              observaciones || undefined
+            )
+            setObsDialog(false)
+          }}>
+            ✅ Confirmar cierre
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  )
+}
+
+// ======================== VISTA HISTORIAL ========================
+
+function VistaHistorial({
+  cortes, loading, onVerDetalle
+}: {
+  cortes: CorteResumen[]
+  loading: boolean
+  onVerDetalle: (id: string) => void
+}) {
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
+  const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'pipas' | 'cilindros'>('todos')
+  const [estadoFiltro, setEstadoFiltro] = useState<'todos' | 'pendiente' | 'validado'>('todos')
+
+  const filtrados = cortes.filter(c => {
+    if (fechaDesde && c.dia < fechaDesde) return false
+    if (fechaHasta && c.dia > fechaHasta) return false
+    if (tipoFiltro !== 'todos' && c.repartidor?.tipoRepartidor !== tipoFiltro) return false
+    if (estadoFiltro !== 'todos' && c.estado !== estadoFiltro) return false
+    return true
+  })
+
+  return (
+    <Box>
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} sm={3}>
+            <TextField label="Desde" type="date" size="small" fullWidth
+              value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
+              InputLabelProps={{ shrink: true }} />
+          </Grid>
+          <Grid item xs={12} sm={3}>
+            <TextField label="Hasta" type="date" size="small" fullWidth
+              value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
+              InputLabelProps={{ shrink: true }} />
+          </Grid>
+          <Grid item xs={6} sm={2}>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Tipo</InputLabel>
+              <Select value={tipoFiltro} label="Tipo"
+                onChange={e => setTipoFiltro(e.target.value as typeof tipoFiltro)}>
+                <MenuItem value="todos">Todos</MenuItem>
+                <MenuItem value="pipas">🚛 Pipas</MenuItem>
+                <MenuItem value="cilindros">🔵 Cilindros</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={6} sm={2}>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Estado</InputLabel>
+              <Select value={estadoFiltro} label="Estado"
+                onChange={e => setEstadoFiltro(e.target.value as typeof estadoFiltro)}>
+                <MenuItem value="todos">Todos</MenuItem>
+                <MenuItem value="pendiente">⏳ Pendientes</MenuItem>
+                <MenuItem value="validado">✅ Validados</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={2}>
+            <Typography variant="caption" color="text.secondary">
+              {filtrados.length} corte{filtrados.length !== 1 ? 's' : ''}
+            </Typography>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {loading ? (
+        <LinearProgress />
+      ) : filtrados.length === 0 ? (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <Typography color="text.secondary">No hay cortes con esos filtros</Typography>
+        </Paper>
+      ) : (
+        <TableContainer component={Paper}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: 'grey.50' }}>
+                <TableCell><b>Fecha</b></TableCell>
+                <TableCell><b>Repartidor</b></TableCell>
+                <TableCell><b>Tipo</b></TableCell>
+                <TableCell><b>Estado</b></TableCell>
+                <TableCell align="right"><b>Total</b></TableCell>
+                <TableCell><b>Formas de Pago</b></TableCell>
+                <TableCell align="center"><b>Acción</b></TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filtrados.map(c => {
+                const fp = c.resumenFormasPagoVenta || c.resumenFormasPagoAbono || {}
+                const total = c.tipo === 'venta_dia' ? c.totalVentas : c.totalAbonos
+                return (
+                  <TableRow key={c.id} hover>
+                    <TableCell>
+                      <Typography variant="caption">{fmtFecha(c.dia)}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {tipoIcon(c.repartidor?.tipoRepartidor)} {nombreRepartidor(c.repartidor)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption">
+                        {c.repartidor?.tipoRepartidor === 'pipas' ? 'Pipas' : 'Cilindros'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip label={c.estado === 'validado' ? 'Validado' : 'Pendiente'}
+                        color={getEstadoColor(c.estado)} size="small" />
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography fontWeight="bold">{fmt$(total)}</Typography>
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 180 }}>
+                      <ResumenPago data={fp} compact />
+                    </TableCell>
+                    <TableCell align="center">
+                      <Tooltip title="Ver detalle completo">
+                        <IconButton size="small" onClick={() => onVerDetalle(c.id)}>
+                          <Visibility fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+    </Box>
+  )
+}
+
+// ======================== DIALOG CORTE MANUAL ========================
+
+function DialogCorteManual({ open, onClose, onCrear }: {
+  open: boolean
+  onClose: () => void
+  onCrear: (data: any) => Promise<void>
+}) {
+  const [repartidorId, setRepartidorId] = useState('')
+  const [tipo, setTipo] = useState('venta_dia')
+  const [dia, setDia] = useState(getHoyMx())
+  const [observaciones, setObservaciones] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleCrear = async () => {
+    if (!repartidorId.trim()) { setError('El ID del repartidor es requerido'); return }
+    setLoading(true)
+    setError('')
+    try {
+      await onCrear({ repartidorId: repartidorId.trim(), tipo, dia, observaciones })
+      setRepartidorId('')
+      setObservaciones('')
+      onClose()
+    } catch (e: any) {
+      setError(e.message || 'Error al crear corte')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Crear corte manual</DialogTitle>
+      <DialogContent>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <Alert severity="info" sx={{ fontSize: '0.8rem' }}>
+            Úsalo cuando el repartidor no generó corte desde la app.
+          </Alert>
+          <TextField label="ID del repartidor" value={repartidorId}
+            onChange={e => setRepartidorId(e.target.value)}
+            size="small" fullWidth helperText="ID interno del repartidor en el sistema" />
+          <FormControl size="small" fullWidth>
+            <InputLabel>Tipo de corte</InputLabel>
+            <Select value={tipo} label="Tipo de corte" onChange={e => setTipo(e.target.value)}>
+              <MenuItem value="venta_dia">Venta del día</MenuItem>
+              <MenuItem value="abono">Abonos</MenuItem>
+            </Select>
+          </FormControl>
+          <TextField label="Fecha" type="date" value={dia}
+            onChange={e => setDia(e.target.value)}
+            size="small" fullWidth InputLabelProps={{ shrink: true }} />
+          <TextField label="Observaciones" multiline rows={2}
+            value={observaciones} onChange={e => setObservaciones(e.target.value)}
+            size="small" fullWidth />
+          {error && <Alert severity="error">{error}</Alert>}
         </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancelar</Button>
+        <Button variant="contained" onClick={handleCrear} disabled={loading}>
+          {loading ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+          Crear corte
+        </Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
+// ======================== DIALOG CORREGIR PAGO ========================
+
+function DialogCorregirPago({ open, onClose, pedidoId, pedidoNombre, corteId, onCorregido }: {
+  open: boolean
+  onClose: () => void
+  pedidoId: string
+  pedidoNombre: string
+  corteId: string
+  onCorregido: () => void
+}) {
+  const TIPOS_PAGO = ['efectivo', 'transferencia', 'tarjeta', 'cheque', 'credito']
+  const [formasPago, setFormasPago] = useState([{ tipo: 'efectivo', monto: '' }])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSave = async () => {
+    const payload = formasPago
+      .filter(f => parseFloat(f.monto) > 0)
+      .map(f => ({ tipo: f.tipo, monto: parseFloat(f.monto) }))
+    if (payload.length === 0) { setError('Ingresa al menos un monto válido'); return }
+    setLoading(true)
+    setError('')
+    try {
+      await ventasAPI.corregirFormaPago(corteId, pedidoId, { formasPago: payload })
+      onCorregido()
+      onClose()
+      setFormasPago([{ tipo: 'efectivo', monto: '' }])
+    } catch (e: any) {
+      setError(e.message || 'Error al corregir')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>Corregir forma de pago</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Pedido de: <b>{pedidoNombre}</b>
+        </Typography>
+        {formasPago.map((fp, i) => (
+          <Box key={i} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
+            <FormControl size="small" sx={{ flex: 1 }}>
+              <InputLabel>Tipo</InputLabel>
+              <Select value={fp.tipo} label="Tipo" onChange={e => {
+                const u = [...formasPago]; u[i].tipo = e.target.value; setFormasPago(u)
+              }}>
+                {TIPOS_PAGO.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <TextField label="Monto" type="number" size="small" sx={{ flex: 1 }}
+              value={fp.monto} onChange={e => {
+                const u = [...formasPago]; u[i].monto = e.target.value; setFormasPago(u)
+              }} />
+            {i > 0 && (
+              <IconButton size="small" onClick={() => setFormasPago(formasPago.filter((_, j) => j !== i))}>
+                <Close fontSize="small" />
+              </IconButton>
+            )}
+          </Box>
+        ))}
+        <Button size="small" sx={{ mt: 0.5 }}
+          onClick={() => setFormasPago([...formasPago, { tipo: 'efectivo', monto: '' }])}>
+          + Agregar
+        </Button>
+        {error && <Alert severity="error" sx={{ mt: 1 }}>{error}</Alert>}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancelar</Button>
+        <Button variant="contained" onClick={handleSave} disabled={loading}>
+          {loading ? <CircularProgress size={16} /> : 'Guardar'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
+// ======================== DIALOG REIMPRIMIR ========================
+
+function DialogReimprimir({ open, onClose, detalle }: {
+  open: boolean
+  onClose: () => void
+  detalle: CorteDetalle | null
+}) {
+  if (!detalle) return null
+  const printRef = useRef<HTMLDivElement>(null)
+
+  const handlePrint = () => {
+    const content = printRef.current
+    if (!content) return
+    const w = window.open('', '_blank', 'width=400,height=700')
+    if (!w) return
+    w.document.write(`
+      <html><head><title>Corte de Caja</title>
+      <style>
+        body { font-family: 'Courier New', monospace; font-size: 11px; margin: 16px; }
+        .center { text-align: center; }
+        .bold { font-weight: bold; }
+        .line { border-top: 1px dashed #000; margin: 6px 0; }
+        .row { display: flex; justify-content: space-between; }
+        .indent { padding-left: 16px; }
+      </style></head><body>`)
+    w.document.write(content.innerHTML)
+    w.document.write('</body></html>')
+    w.document.close()
+    w.print()
+  }
+
+  const resumen = detalle.resumenFormasPago || {}
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>
+        Vista previa — Corte de {nombreRepartidor(detalle.repartidor)}
+        <IconButton sx={{ position: 'absolute', right: 8, top: 8 }} onClick={onClose} size="small">
+          <Close />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent>
+        <Box ref={printRef} sx={{
+          fontFamily: 'monospace', fontSize: '0.78rem', p: 2,
+          border: '1px dashed #ccc', borderRadius: 1, bgcolor: 'grey.50'
+        }}>
+          <Box className="center"><b>GAS PROVIDENCIA</b></Box>
+          <Box className="center">CORTE DE CAJA</Box>
+          <Box className="center">{fmtFecha(detalle.dia)}</Box>
+          <Divider sx={{ my: 1, borderStyle: 'dashed' }} />
+          <Box>Repartidor: <b>{nombreRepartidor(detalle.repartidor)}</b></Box>
+          <Box>Tipo: {detalle.repartidor?.tipoRepartidor === 'pipas' ? 'PIPAS' : 'CILINDROS'}</Box>
+          <Box>Estado: {detalle.estado.toUpperCase()}</Box>
+          <Divider sx={{ my: 1, borderStyle: 'dashed' }} />
+          {detalle.pedidos.map(p => (
+            <Box key={p.pedidoId} sx={{ mb: 0.5 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{p.numero}. {p.clienteNombre.substring(0, 22)}</span>
+                <span><b>{fmt$(p.total)}</b></span>
+              </Box>
+              {p.formasPago.map((f, fi) => (
+                <Box key={fi} sx={{ pl: 2, color: 'text.secondary', fontSize: '0.72rem' }}>
+                  {f.tipo}: {fmt$(f.monto)}
+                </Box>
+              ))}
+            </Box>
+          ))}
+          <Divider sx={{ my: 1, borderStyle: 'dashed' }} />
+          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+            <b>TOTAL</b>
+            <b>{fmt$(detalle.totalVentas || detalle.totalAbonos)}</b>
+          </Box>
+          {Object.entries(resumen).filter(([, v]) => (v as number) > 0).map(([k, v]) => (
+            <Box key={k} sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>{k.toUpperCase()}</span>
+              <span>{fmt$(v as number)}</span>
+            </Box>
+          ))}
+          {detalle.repartidor?.tipoRepartidor === 'pipas' && detalle.totalLitros > 0 && (
+            <>
+              <Divider sx={{ my: 1, borderStyle: 'dashed' }} />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>LITROS (app)</span>
+                <span>{(detalle.totalLitros || 0).toFixed(2)} L</span>
+              </Box>
+            </>
+          )}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cerrar</Button>
+        <Button variant="contained" startIcon={<Print />} onClick={handlePrint}>
+          Imprimir
+        </Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
+// ======================== MAIN PAGE ========================
+
+export default function CorteCajaPage() {
+  const [vista, setVista] = useState<'dashboard' | 'detalle' | 'historial'>('dashboard')
+  const [cortes, setCortes] = useState<CorteResumen[]>([])
+  const [loading, setLoading] = useState(true)
+  const [corteDetalle, setCorteDetalle] = useState<CorteDetalle | null>(null)
+  const [loadingDetalle, setLoadingDetalle] = useState(false)
+  const [tabDashboard, setTabDashboard] = useState<'ventas' | 'abonos'>('ventas')
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' })
+  const [dialogManual, setDialogManual] = useState(false)
+  const [dialogCorregir, setDialogCorregir] = useState({ open: false, pedidoId: '', pedidoNombre: '' })
+  const [dialogReimprimir, setDialogReimprimir] = useState(false)
+
+  const showSnack = (message: string, severity: 'success' | 'error' = 'success') => {
+    setSnackbar({ open: true, message, severity })
+  }
+
+  const loadCortes = useCallback(async () => {
+    setLoading(true)
+    try {
+      const data = await ventasAPI.getAllCortes()
+      setCortes(data || [])
+    } catch (e: any) {
+      showSnack(e.message || 'Error al cargar cortes', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { loadCortes() }, [loadCortes])
+
+  const handleVerDetalle = async (id: string, destino: 'dashboard' | 'historial' = 'dashboard') => {
+    setLoadingDetalle(true)
+    setCorteDetalle(null)
+    setVista('detalle')
+    try {
+      const data = await ventasAPI.getCorteDetalle(id)
+      setCorteDetalle(data)
+    } catch (e: any) {
+      showSnack(e.message || 'Error al cargar detalle', 'error')
+      setVista(destino)
+    } finally {
+      setLoadingDetalle(false)
+    }
+  }
+
+  const handleCerrarCorte = async (id: string, litrosMedidor?: number, observaciones?: string) => {
+    try {
+      await ventasAPI.cerrarCorte(id, { litrosMedidor, observaciones })
+      showSnack('✅ Corte cerrado y validado correctamente')
+      await loadCortes()
+      // Refresh detalle si estamos en él
+      if (corteDetalle?.id === id) {
+        const updated = await ventasAPI.getCorteDetalle(id)
+        setCorteDetalle(updated)
+      }
+    } catch (e: any) {
+      showSnack(e.message || 'Error al cerrar el corte', 'error')
+    }
+  }
+
+  const handleCrearManual = async (data: any) => {
+    await ventasAPI.createCorteManual(data)
+    showSnack('✅ Corte manual creado')
+    await loadCortes()
+  }
+
+  const handlePagoCorregido = async () => {
+    showSnack('✅ Forma de pago corregida')
+    if (corteDetalle) {
+      const updated = await ventasAPI.getCorteDetalle(corteDetalle.id)
+      setCorteDetalle(updated)
+    }
+  }
+
+  const cortesHoy = cortes.filter(c => esHoyMx(c.dia || c.fecha))
+
+  return (
+    <Box sx={{ p: { xs: 2, sm: 3 } }}>
+      {/* Header de página */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="h5" fontWeight="bold">Corte de Caja</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {vista === 'dashboard' && `Hoy · ${cortesHoy.length} repartidores`}
+            {vista === 'historial' && `Historial · ${cortes.length} cortes totales`}
+            {vista === 'detalle' && corteDetalle && `Detalle de ${nombreRepartidor(corteDetalle.repartidor)}`}
+          </Typography>
+        </Box>
+        {vista !== 'detalle' && (
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button variant={vista === 'dashboard' ? 'contained' : 'outlined'} size="small"
+              onClick={() => setVista('dashboard')}>
+              📊 Hoy
+            </Button>
+            <Button variant={vista === 'historial' ? 'contained' : 'outlined'} size="small"
+              onClick={() => setVista('historial')}>
+              📋 Historial
+            </Button>
+          </Box>
+        )}
+      </Box>
+
+      {/* Vistas */}
+      {vista === 'dashboard' && (
+        <VistaDashboard
+          cortes={cortesHoy}
+          loading={loading}
+          onVerDetalle={(id) => handleVerDetalle(id, 'dashboard')}
+          onCrearManual={() => setDialogManual(true)}
+          tabActual={tabDashboard}
+          setTabActual={setTabDashboard}
+        />
       )}
 
-      {/* Modal Validación / Resumen */}
-      <Dialog open={dialogoAbierto} onClose={cerrarDialogo} maxWidth='lg' fullWidth>
-        <DialogTitle>
-          {repartidorSeleccionado && (
-            <Box>
-              <Typography variant='h6'>
-                {tipoDialogo === 'resumen'
-                  ? `RESUMEN CORTE - ${repartidorSeleccionado.nombre.toUpperCase()} - ${repartidorSeleccionado.ruta} - ${repartidorSeleccionado.tipo.toUpperCase()}`
-                  : `VALIDACIÓN CORTE - ${repartidorSeleccionado.nombre.toUpperCase()} - ${repartidorSeleccionado.ruta} - ${repartidorSeleccionado.tipo.toUpperCase()}`
-                }
-              </Typography>
-            </Box>
-          )}
-        </DialogTitle>
-        <DialogContent>
-          {repartidorSeleccionado && tipoDialogo === 'resumen' && (
-            <Box>
-              <Grid container spacing={3}>
-                {repartidorSeleccionado.tipoCorte === 'venta_dia' && (
-                  <Grid item xs={12} md={6}>
-                    <Card variant='outlined'>
-                      <CardContent>
-                        <Typography variant='h6' gutterBottom>Resumen de Ventas</Typography>
-                        <Typography variant='h4' color='primary'>
-                          ${Number(repartidorSeleccionado.ventas.montoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </Typography>
-                        <Typography variant='body2' color='text.secondary'>
-                          {repartidorSeleccionado.ventas.litrosServicios} {repartidorSeleccionado.tipo === 'pipas' ? 'litros' : 'servicios'}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                )}
-                {repartidorSeleccionado.tipoCorte === 'abono' && (
-                  <Grid item xs={12} md={6}>
-                    <Card variant='outlined'>
-                      <CardContent>
-                        <Typography variant='h6' gutterBottom>Resumen de Abonos</Typography>
-                        <Typography variant='h4' color='success.main'>
-                          ${Number(repartidorSeleccionado.abonos.montoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </Typography>
-                        <Typography variant='body2' color='text.secondary'>
-                          {repartidorSeleccionado.abonos.cantidad} abonos
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                )}
-                <Grid item xs={12}>
-                  <Card sx={{ bgcolor: 'primary.main', color: 'white' }}>
-                    <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
-                      <Typography variant='h6' gutterBottom sx={{ color: 'white' }}>
-                        {repartidorSeleccionado.tipoCorte === 'venta_dia' ? 'TOTAL DÍA (VENTAS)' : 'TOTAL DÍA (ABONOS)'}
-                      </Typography>
-                      <Typography variant='h3' sx={{ color: 'white' }}>
-                        ${(repartidorSeleccionado.tipoCorte === 'venta_dia'
-                          ? Number(repartidorSeleccionado.ventas.montoTotal)
-                          : Number(repartidorSeleccionado.abonos.montoTotal)
-                        ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-                <Grid item xs={12}>
-                  <Typography variant='body2' color='text.secondary'>
-                    Efectivo: ${Number(repartidorSeleccionado.efectivo.montoDepositado).toFixed(2)} • Estado: {repartidorSeleccionado.estado.toUpperCase()}
-                  </Typography>
-                </Grid>
-              </Grid>
-            </Box>
-          )}
-          {repartidorSeleccionado && tipoDialogo === 'resumen' && (
-            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-              <Button
-                variant='outlined'
-                color='primary'
-                startIcon={<EditIcon />}
-                onClick={() => {
-                  setTipoDialogo('validacion')
-                  setPasoActual(0)
-                }}
-              >
-                EDITAR
-              </Button>
-            </Box>
-          )}
-          {repartidorSeleccionado && tipoDialogo === 'validacion' && (
-            <Box>
-              <Stepper activeStep={pasoActual} orientation='vertical'>
-                {/* Paso 1: Resumen Recibido */}
-                <Step>
-                  <StepLabel>Resumen Recibido</StepLabel>
-                  <StepContent>
-                    <Grid container spacing={3}>
-                      {repartidorSeleccionado.tipoCorte === 'venta_dia' && (
-                        <>
-                          <Grid item xs={12}>
-                            <Card variant='outlined'>
-                              <CardContent>
-                                <Typography variant='h6' gutterBottom>
-                                  Resumen de Ventas
-                                </Typography>
-                                <Typography variant='h4' color='primary' gutterBottom>
-                                  ${Number(repartidorSeleccionado.ventas.montoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </Typography>
-                                <Typography variant='body2' color='text.secondary' gutterBottom>
-                                  {repartidorSeleccionado.ventas.litrosServicios} servicios
-                                </Typography>
+      {vista === 'detalle' && (
+        <VistaDetalle
+          detalle={corteDetalle}
+          loading={loadingDetalle}
+          onVolver={() => {
+            const eraHoy = corteDetalle ? esHoyMx(corteDetalle.dia) : true
+            setVista(eraHoy ? 'dashboard' : 'historial')
+          }}
+          onCerrarCorte={handleCerrarCorte}
+          onCorregirPago={(pedidoId, pedidoNombre) =>
+            setDialogCorregir({ open: true, pedidoId, pedidoNombre })}
+          onReimprimir={() => setDialogReimprimir(true)}
+        />
+      )}
 
-                                {/* PIPAS: litros totales + detalle por servicio con forma de pago */}
-                                {repartidorSeleccionado.tipo === 'pipas' && (
-                                  <Box sx={{ mt: 3 }}>
-                                    <Typography variant='subtitle1' fontWeight='bold' gutterBottom sx={{ color: 'warning.main' }}>
-                                      Litros vendidos: {Number(repartidorSeleccionado.ventas.totalLitros || 0).toFixed(2)} L
-                                    </Typography>
-                                    <Typography variant='subtitle2' fontWeight='bold' sx={{ mt: 2, mb: 1 }}>
-                                      Detalle por servicio
-                                    </Typography>
-                                    <TableContainer component={Paper} variant='outlined'>
-                                      <Table size='small'>
-                                        <TableHead>
-                                          <TableRow sx={{ bgcolor: 'grey.100' }}>
-                                            <TableCell sx={{ fontWeight: 'bold' }}>#</TableCell>
-                                            <TableCell sx={{ fontWeight: 'bold' }}>Cliente</TableCell>
-                                            <TableCell sx={{ fontWeight: 'bold' }}>Forma de pago</TableCell>
-                                            <TableCell align='right' sx={{ fontWeight: 'bold' }}>Monto</TableCell>
-                                          </TableRow>
-                                        </TableHead>
-                                        <TableBody>
-                                          {repartidorSeleccionado.detallePedidos && repartidorSeleccionado.detallePedidos.length > 0 ? (
-                                            <>
-                                              {repartidorSeleccionado.detallePedidos.map((s: any) => (
-                                                <TableRow key={s.numero} hover>
-                                                  <TableCell>
-                                                    <Chip label={`S${s.numero}`} size='small' variant='outlined' color='primary' />
-                                                  </TableCell>
-                                                  <TableCell>
-                                                    <Typography variant='body2' fontWeight='medium'>{s.clienteNombre}</Typography>
-                                                  </TableCell>
-                                                  <TableCell>
-                                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                                                      {s.formasPago && s.formasPago.length > 0 ? (
-                                                        s.formasPago.map((fp: any, i: number) => {
-                                                          const t = (fp.tipo || '').toLowerCase()
-                                                          const bg = t.includes('efectivo') ? '#e8f5e9' : t.includes('transferencia') ? '#e3f2fd' : t.includes('tarjeta') || t.includes('terminal') ? '#f3e5f5' : t.includes('cheque') ? '#fff8e1' : '#f5f5f5'
-                                                          const fg = t.includes('efectivo') ? '#2e7d32' : t.includes('transferencia') ? '#1565c0' : t.includes('tarjeta') || t.includes('terminal') ? '#7b1fa2' : t.includes('cheque') ? '#f57f17' : '#424242'
-                                                          return (
-                                                            <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                              <Chip label={fp.tipo?.toUpperCase() || 'OTRO'} size='small' sx={{ bgcolor: bg, color: fg, fontWeight: 'bold', fontSize: '0.6rem', height: 20 }} />
-                                                              <Typography variant='caption' fontWeight='bold'>
-                                                                ${Number(fp.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                                              </Typography>
-                                                            </Box>
-                                                          )
-                                                        })
-                                                      ) : (
-                                                        <Typography variant='caption' color='text.secondary'>—</Typography>
-                                                      )}
-                                                    </Box>
-                                                  </TableCell>
-                                                  <TableCell align='right'>
-                                                    <Typography variant='body2' fontWeight='bold' color='primary'>
-                                                      ${Number(s.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                                    </Typography>
-                                                  </TableCell>
-                                                </TableRow>
-                                              ))}
-                                              <TableRow sx={{ bgcolor: 'action.hover' }}>
-                                                <TableCell colSpan={3}><Typography variant='body2' fontWeight='bold'>Total</Typography></TableCell>
-                                                <TableCell align='right'>
-                                                  <Typography variant='body2' fontWeight='bold' color='primary'>
-                                                    ${repartidorSeleccionado.detallePedidos.reduce((s: number, p: any) => s + Number(p.monto || 0), 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                                  </Typography>
-                                                </TableCell>
-                                              </TableRow>
-                                            </>
-                                          ) : (
-                                            <TableRow>
-                                              <TableCell colSpan={4} align='center'>
-                                                <Typography variant='body2' color='text.secondary'>No hay detalle de servicios disponible</Typography>
-                                              </TableCell>
-                                            </TableRow>
-                                          )}
-                                        </TableBody>
-                                      </Table>
-                                    </TableContainer>
-                                  </Box>
-                                )}
+      {vista === 'historial' && (
+        <VistaHistorial
+          cortes={cortes}
+          loading={loading}
+          onVerDetalle={(id) => handleVerDetalle(id, 'historial')}
+        />
+      )}
 
-                                {/* CILINDROS: desglose por tipo (10/20/30 kg) */}
-                                {repartidorSeleccionado.tipo === 'cilindros' && (
-                                  <Box sx={{ mt: 3 }}>
-                                    <Typography variant='subtitle2' fontWeight='bold' sx={{ mb: 1 }}>
-                                      Desglose por tipo de cilindro
-                                    </Typography>
-                                    <TableContainer component={Paper} variant='outlined'>
-                                      <Table size='small'>
-                                        <TableHead>
-                                          <TableRow sx={{ bgcolor: 'grey.100' }}>
-                                            <TableCell sx={{ fontWeight: 'bold' }}>Tipo</TableCell>
-                                            <TableCell align='center' sx={{ fontWeight: 'bold' }}>Cantidad</TableCell>
-                                            <TableCell align='right' sx={{ fontWeight: 'bold' }}>Total</TableCell>
-                                          </TableRow>
-                                        </TableHead>
-                                        <TableBody>
-                                          {repartidorSeleccionado.desgloseCilindros && repartidorSeleccionado.desgloseCilindros.length > 0 ? (
-                                            <>
-                                              {repartidorSeleccionado.desgloseCilindros.map((d: any) => (
-                                                <TableRow key={d.kg} hover>
-                                                  <TableCell>
-                                                    <Chip
-                                                      label={`${d.kg} kg`}
-                                                      size='small'
-                                                      color={d.kg === 10 ? 'primary' : d.kg === 20 ? 'secondary' : 'warning'}
-                                                      variant='outlined'
-                                                      sx={{ fontWeight: 'bold' }}
-                                                    />
-                                                  </TableCell>
-                                                  <TableCell align='center'>
-                                                    <Typography variant='body2' fontWeight='bold'>{d.unidades}</Typography>
-                                                  </TableCell>
-                                                  <TableCell align='right'>
-                                                    <Typography variant='body2' fontWeight='bold' color='primary'>
-                                                      ${Number(d.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                                    </Typography>
-                                                  </TableCell>
-                                                </TableRow>
-                                              ))}
-                                              <TableRow sx={{ bgcolor: 'action.hover' }}>
-                                                <TableCell><Typography variant='body2' fontWeight='bold'>Total</Typography></TableCell>
-                                                <TableCell align='center'>
-                                                  <Typography variant='body2' fontWeight='bold'>
-                                                    {repartidorSeleccionado.desgloseCilindros.reduce((s: number, d: any) => s + Number(d.unidades || 0), 0)}
-                                                  </Typography>
-                                                </TableCell>
-                                                <TableCell align='right'>
-                                                  <Typography variant='body2' fontWeight='bold' color='primary'>
-                                                    ${repartidorSeleccionado.desgloseCilindros.reduce((s: number, d: any) => s + Number(d.monto || 0), 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                                  </Typography>
-                                                </TableCell>
-                                              </TableRow>
-                                            </>
-                                          ) : (
-                                            <TableRow>
-                                              <TableCell colSpan={3} align='center'>
-                                                <Typography variant='body2' color='text.secondary'>No hay desglose disponible</Typography>
-                                              </TableCell>
-                                            </TableRow>
-                                          )}
-                                        </TableBody>
-                                      </Table>
-                                    </TableContainer>
-                                  </Box>
-                                )}
-                              </CardContent>
-                            </Card>
-                          </Grid>
-                        </>
-                      )}
-                      
-                      {repartidorSeleccionado.tipoCorte === 'abono' && (
-                        <Grid item xs={12}>
-                          <Card variant='outlined'>
-                            <CardContent>
-                              <Typography variant='h6' gutterBottom>
-                                Resumen de Abonos
-                              </Typography>
-                              <Typography variant='h4' color='success.main' gutterBottom>
-                                ${Number(repartidorSeleccionado.abonos.montoTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </Typography>
-                              <Typography variant='body2' color='text.secondary'>
-                                {repartidorSeleccionado.abonos.cantidad} abonos
-                              </Typography>
-                            </CardContent>
-                          </Card>
-                        </Grid>
-                      )}
-                      
-                      <Grid item xs={12}>
-                        <Card sx={{ bgcolor: 'warning.main', color: 'white' }}>
-                          <CardContent sx={{ color: 'white', '& .MuiTypography-root': { color: 'white' } }}>
-                            <Typography variant='h6' gutterBottom sx={{ color: 'white' }}>
-                              {repartidorSeleccionado.tipoCorte === 'venta_dia' ? 'TOTAL DÍA (VENTAS)' : 'TOTAL DÍA (ABONOS)'}
-                            </Typography>
-                            <Typography variant='h3' sx={{ color: 'white' }}>
-                              ${(repartidorSeleccionado.tipoCorte === 'venta_dia'
-                                ? Number(repartidorSeleccionado.ventas.montoTotal)
-                                : Number(repartidorSeleccionado.abonos.montoTotal)
-                              ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </Typography>
-                          </CardContent>
-                        </Card>
-                      </Grid>
-                    </Grid>
-                    <Box sx={{ mt: 2 }}>
-                      <Button variant='contained' onClick={() => setPasoActual(1)}>
-                        Continuar
-                      </Button>
-                    </Box>
-                  </StepContent>
-                </Step>
+      {/* Dialogs globales */}
+      <DialogCorteManual
+        open={dialogManual}
+        onClose={() => setDialogManual(false)}
+        onCrear={handleCrearManual}
+      />
 
-                {/* Paso 2: Efectivo Registrado */}
-                <Step>
-                  <StepLabel>Efectivo Registrado</StepLabel>
-                  <StepContent>
-                    <Card variant='outlined'>
-                      <CardContent>
-                        <Typography variant='h6' gutterBottom>
-                          EFECTIVO REGISTRADO POR REPARTIDOR
-                        </Typography>
+      {dialogCorregir.open && corteDetalle && (
+        <DialogCorregirPago
+          open={dialogCorregir.open}
+          onClose={() => setDialogCorregir(p => ({ ...p, open: false }))}
+          pedidoId={dialogCorregir.pedidoId}
+          pedidoNombre={dialogCorregir.pedidoNombre}
+          corteId={corteDetalle.id}
+          onCorregido={handlePagoCorregido}
+        />
+      )}
 
-                        <Grid container spacing={2} sx={{ mb: 3 }}>
-                          <Grid item xs={12} md={4}>
-                            <TextField
-                              fullWidth
-                              label='Monto Depositado'
-                              value={Number(repartidorSeleccionado.efectivo.montoDepositado).toFixed(2)}
-                              InputProps={{
-                                startAdornment: <InputAdornment position='start'>$</InputAdornment>
-                              }}
-                              inputProps={{ readOnly: true }}
-                            />
-                          </Grid>
-                          <Grid item xs={12} md={4}>
-                            <TextField
-                              fullWidth
-                              label='Billetes Rechazados'
-                              value={Number(repartidorSeleccionado.efectivo.billetesRechazados).toFixed(2)}
-                              InputProps={{
-                                startAdornment: <InputAdornment position='start'>$</InputAdornment>
-                              }}
-                              inputProps={{ readOnly: true }}
-                            />
-                          </Grid>
-                          <Grid item xs={12} md={4}>
-                            <TextField
-                              fullWidth
-                              label='Monedas Entregadas'
-                              value={Number(repartidorSeleccionado.efectivo.monedasEntregadas).toFixed(2)}
-                              InputProps={{
-                                startAdornment: <InputAdornment position='start'>$</InputAdornment>
-                              }}
-                              inputProps={{ readOnly: true }}
-                            />
-                          </Grid>
-                        </Grid>
+      <DialogReimprimir
+        open={dialogReimprimir}
+        onClose={() => setDialogReimprimir(false)}
+        detalle={corteDetalle}
+      />
 
-                        {/* Validación Litros vs Medidor - Solo para pipas y VENTA (no abonos) */}
-                        {repartidorSeleccionado.tipo === 'pipas' && (repartidorSeleccionado as any).tipoCorte === 'venta_dia' && (
-                          <Box sx={{ mt: 3, p: 3, bgcolor: '#f5f5f5', borderRadius: 2, border: '1px solid #e0e0e0' }}>
-                            <Typography variant='h6' gutterBottom sx={{ color: 'primary.main', mb: 2 }}>
-                              Validación Litros vs Medidor
-                            </Typography>
-                            <Grid container spacing={2} alignItems='stretch'>
-                              <Grid item xs={12} md={4}>
-                                <Box sx={{ height: '100%' }}>
-                                  <Typography variant='caption' sx={{ display: 'block', mb: 0.5, color: 'success.dark', fontWeight: 'bold' }}>
-                                    Litros vendidos (sistema)
-                                  </Typography>
-                                  <TextField
-                                    fullWidth
-                                    value={Number(repartidorSeleccionado.ventas.totalLitros || 0).toFixed(2)}
-                                    InputProps={{
-                                      endAdornment: <InputAdornment position='end'>L</InputAdornment>,
-                                      readOnly: true
-                                    }}
-                                    sx={{ 
-                                      bgcolor: '#e8f5e9',
-                                      '& .MuiInputBase-input': { 
-                                        color: '#2e7d32', 
-                                        fontWeight: 'bold',
-                                        fontSize: '1.1rem'
-                                      },
-                                      '& .MuiOutlinedInput-root': {
-                                        '& fieldset': {
-                                          borderColor: '#66bb6a',
-                                          borderWidth: 2
-                                        }
-                                      }
-                                    }}
-                                  />
-                                </Box>
-                              </Grid>
-                              <Grid item xs={12} md={4}>
-                                <Box sx={{ height: '100%' }}>
-                                  <Typography variant='caption' sx={{ display: 'block', mb: 0.5, color: 'warning.dark', fontWeight: 'bold' }}>
-                                    Litros según medidor
-                                  </Typography>
-                                  <TextField
-                                    fullWidth
-                                    type='number'
-                                    value={litrosSegunMedidor}
-                                    onChange={(e) => setLitrosSegunMedidor(Number(e.target.value))}
-                                    placeholder='Ingrese litros del medidor'
-                                    InputProps={{
-                                      endAdornment: <InputAdornment position='end'>L</InputAdornment>
-                                    }}
-                                    sx={{ 
-                                      bgcolor: 'white',
-                                      '& .MuiInputBase-input': {
-                                        fontSize: '1.1rem',
-                                        fontWeight: 'bold'
-                                      },
-                                      '& .MuiOutlinedInput-root': {
-                                        '& fieldset': {
-                                          borderColor: '#ff9800',
-                                          borderWidth: 2
-                                        },
-                                        '&:hover fieldset': {
-                                          borderColor: '#f57c00'
-                                        },
-                                        '&.Mui-focused fieldset': {
-                                          borderColor: '#ef6c00'
-                                        }
-                                      }
-                                    }}
-                                  />
-                                </Box>
-                              </Grid>
-                              <Grid item xs={12} md={4}>
-                                <Box sx={{ height: '100%' }}>
-                                  <Typography variant='caption' sx={{ display: 'block', mb: 0.5, fontWeight: 'bold',
-                                    color: Math.abs(Number(repartidorSeleccionado.ventas.totalLitros || 0) - litrosSegunMedidor) < 0.01 ? 'success.dark' : 'error.dark'
-                                  }}>
-                                    Diferencia
-                                  </Typography>
-                                  <TextField
-                                    fullWidth
-                                    value={(Number(repartidorSeleccionado.ventas.totalLitros || 0) - litrosSegunMedidor).toFixed(2)}
-                                    InputProps={{
-                                      endAdornment: <InputAdornment position='end'>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                          L
-                                          {Math.abs(Number(repartidorSeleccionado.ventas.totalLitros || 0) - litrosSegunMedidor) < 0.01 ? (
-                                            <CheckIcon sx={{ color: 'success.main', fontSize: 20 }} />
-                                          ) : (
-                                            <ErrorIcon sx={{ color: 'error.main', fontSize: 20 }} />
-                                          )}
-                                        </Box>
-                                      </InputAdornment>,
-                                      readOnly: true
-                                    }}
-                                    sx={{ 
-                                      bgcolor: Math.abs(Number(repartidorSeleccionado.ventas.totalLitros || 0) - litrosSegunMedidor) < 0.01 ? '#e8f5e9' : '#ffebee',
-                                      '& .MuiInputBase-input': { 
-                                        color: Math.abs(Number(repartidorSeleccionado.ventas.totalLitros || 0) - litrosSegunMedidor) < 0.01 ? '#2e7d32' : '#c62828',
-                                        fontWeight: 'bold',
-                                        fontSize: '1.1rem'
-                                      },
-                                      '& .MuiOutlinedInput-root': {
-                                        '& fieldset': {
-                                          borderColor: Math.abs(Number(repartidorSeleccionado.ventas.totalLitros || 0) - litrosSegunMedidor) < 0.01 ? '#66bb6a' : '#ef5350',
-                                          borderWidth: 2
-                                        }
-                                      }
-                                    }}
-                                  />
-                                </Box>
-                              </Grid>
-                            </Grid>
-                          </Box>
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
-                      <Button onClick={() => setPasoActual(0)}>Anterior</Button>
-                      <Button variant='contained' onClick={() => setPasoActual(2)}>
-                        Continuar
-                      </Button>
-                    </Box>
-                  </StepContent>
-                </Step>
-
-                {/* Paso 3: Formas de Pago */}
-                <Step>
-                  <StepLabel>Formas de Pago</StepLabel>
-                  <StepContent>
-                    <Card variant='outlined'>
-                      <CardContent>
-                        <Typography variant='h6' gutterBottom>
-                          Resumen por forma de pago
-                        </Typography>
-
-                        {repartidorSeleccionado.resumenFormasPago && Object.keys(repartidorSeleccionado.resumenFormasPago).length > 0 ? (
-                          <>
-                            {/* console.log('🔍 [Paso 3] resumenFormasPago:', repartidorSeleccionado.resumenFormasPago) */}
-                            {/* console.log('🔍 [Paso 3] Formas con monto > 0:', Object.entries(repartidorSeleccionado.resumenFormasPago).filter(([_, monto]) => Number(monto) > 0)) */}
-                            <TableContainer component={Paper} variant='outlined' sx={{ mt: 2 }}>
-                            <Table>
-                              <TableHead>
-                                <TableRow>
-                                  <TableCell>Forma de pago</TableCell>
-                                  <TableCell align='center'>Servicios</TableCell>
-                                  <TableCell align='right'>Monto</TableCell>
-                                  <TableCell align='center'>Validar</TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {/* Mapear las formas de pago dinámicamente */}
-                                {Object.entries(repartidorSeleccionado.resumenFormasPago)
-                                  .filter(([_, monto]) => Number(monto) > 0)
-                                  .map(([formaPago, monto]) => {
-                                    const getChipColor = (fp: string) => {
-                                      const tipo = fp.toLowerCase()
-                                      if (tipo.includes('efectivo')) return { bgcolor: '#e8f5e9', color: '#2e7d32', border: '1px solid #a5d6a7' } // Green 50 / 800 / 200
-                                      if (tipo.includes('transferencia')) return { bgcolor: '#e3f2fd', color: '#1565c0', border: '1px solid #90caf9' } // Blue 50 / 800 / 200
-                                      if (tipo.includes('tarjeta') || tipo.includes('terminal')) return { bgcolor: '#f3e5f5', color: '#7b1fa2', border: '1px solid #ce93d8' } // Purple 50 / 800 / 200
-                                      if (tipo.includes('cheque')) return { bgcolor: '#fff8e1', color: '#f57f17', border: '1px solid #ffe082' } // Amber 50 / 900 / 200
-                                      if (tipo.includes('credito')) return { bgcolor: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80' } // Orange 50 / 900 / 200
-                                      return { bgcolor: '#f5f5f5', color: '#424242', border: '1px solid #bdbdbd' } // Grey 50 / 800 / 400
-                                    }
-                                    const chipStyle = getChipColor(formaPago)
-                                    return (
-                                      <TableRow key={formaPago}>
-                                        <TableCell>
-                                          <Chip 
-                                            label={formaPago.toUpperCase()} 
-                                            size='small' 
-                                            sx={{ ...chipStyle, fontWeight: 'bold' }} 
-                                          />
-                                        </TableCell>
-                                        <TableCell align='center'>-</TableCell>
-                                        <TableCell align='right'>
-                                          <Typography variant='body1' fontWeight='bold'>
-                                            ${Number(monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                          </Typography>
-                                        </TableCell>
-                                        <TableCell align='center'>
-                                          <Checkbox defaultChecked color='success' />
-                                        </TableCell>
-                                      </TableRow>
-                                    )
-                                  })}
-                                {Object.entries(repartidorSeleccionado.resumenFormasPago).filter(([_, monto]) => Number(monto) > 0).length > 0 && (
-                                  <TableRow sx={{ bgcolor: 'action.hover' }}>
-                                    <TableCell colSpan={2}>
-                                      <Typography variant='h6' fontWeight='bold'>Total:</Typography>
-                                    </TableCell>
-                                    <TableCell align='right'>
-                                      <Typography variant='h6' fontWeight='bold'>-</Typography>
-                                    </TableCell>
-                                    <TableCell align='right'>
-                                      <Typography variant='h6' fontWeight='bold' color='primary'>
-                                        ${Object.values(repartidorSeleccionado.resumenFormasPago)
-                                          .reduce((sum, val) => sum + Number(val || 0), 0)
-                                          .toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                      </Typography>
-                                    </TableCell>
-                                  </TableRow>
-                                )}
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
-                          </>
-                        ) : (
-                          <Box sx={{ mt: 2, p: 3, bgcolor: 'warning.light', borderRadius: 2 }}>
-                            <Typography variant='body1' color='warning.dark' sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <InfoIcon />
-                              No hay información de formas de pago disponible para este corte
-                            </Typography>
-                            <Typography variant='body2' color='text.secondary' sx={{ mt: 1 }}>
-                              Esto puede ocurrir si el corte no tiene ventas registradas o si los datos aún no se han sincronizado.
-                            </Typography>
-                          </Box>
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
-                      <Button onClick={() => setPasoActual(1)}>Anterior</Button>
-                      <Button variant='contained' onClick={() => setPasoActual(3)}>
-                        Continuar
-                      </Button>
-                    </Box>
-                  </StepContent>
-                </Step>
-
-
-                {/* Paso 4: Estado Final */}
-                <Step>
-                  <StepLabel>Estado Final</StepLabel>
-                  <StepContent>
-                    <Card variant='outlined'>
-                      <CardContent>
-                        <Typography variant='h6' gutterBottom>
-                          OBSERVACIONES DEL CORTE
-                        </Typography>
-
-                        <TextField
-                          fullWidth
-                          multiline
-                          rows={4}
-                          placeholder='Ingrese observaciones...'
-                          value={observaciones}
-                          onChange={e => setObservaciones(e.target.value)}
-                          sx={{ mb: 3 }}
-                        />
-
-                        <Typography variant='h6' gutterBottom>
-                          Estado Final
-                        </Typography>
-
-                        <RadioGroup value={estadoFinal} onChange={e => setEstadoFinal(e.target.value)}>
-                          <FormControlLabel
-                            value='aprobado-sin-observaciones'
-                            control={<Radio />}
-                            label='APROBADO SIN OBSERVACIONES'
-                          />
-                          <FormControlLabel
-                            value='aprobado-con-observaciones'
-                            control={<Radio />}
-                            label='APROBADO CON OBSERVACIONES'
-                          />
-                          <FormControlLabel
-                            value='rechazado'
-                            control={<Radio />}
-                            label='RECHAZADO, REQUIERE CORRECCIÓN'
-                          />
-                        </RadioGroup>
-                      </CardContent>
-                    </Card>
-
-                    <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
-                      <Button onClick={() => setPasoActual(2)}>
-                        Anterior
-                      </Button>
-                      <Button 
-                        variant='contained' 
-                        color='success' 
-                        startIcon={<CheckIcon />}
-                        onClick={async () => {
-                          if (!repartidorSeleccionado) return
-                          
-                          try {
-                            // Determinar el estado final basado en la selección
-                            let estadoFinalCorte = 'validado'
-                            if (estadoFinal === 'rechazado') {
-                              estadoFinalCorte = 'pendiente'
-                            } else if (estadoFinal === 'aprobado-con-observaciones' || estadoFinal === 'aprobado-sin-observaciones') {
-                              estadoFinalCorte = 'validado'
-                            }
-                            
-                            // Validar que se haya seleccionado un estado
-                            if (!estadoFinal) {
-                              alert('Por favor selecciona un estado final para el corte')
-                              return
-                            }
-
-                            await ventasAPI.validarCorte(repartidorSeleccionado.id, {
-                              estado: estadoFinalCorte,
-                              observaciones: observaciones,
-                              validaciones: {
-                                efectivo: validaciones.efectivo,
-                                deposito: validaciones.deposito,
-                                terminal: validaciones.terminal,
-                                transferencias: validaciones.transferencias,
-                                cheques: validaciones.cheques,
-                                reporteFisico: validaciones.reporteFisico,
-                                foliosArchivosValidacion: foliosArchivosValidacion
-                              }
-                            })
-
-                            cerrarDialogo()
-                            await fetchData()
-                          } catch (error: any) {
-                            console.error('Error validando corte:', error)
-                            alert(error.message || 'Error al validar el corte')
-                          }
-                        }}
-                        disabled={!estadoFinal}
-                      >
-                        ✓ Validar Corte
-                      </Button>
-                    </Box>
-                  </StepContent>
-                </Step>
-              </Stepper>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={cerrarDialogo}>Cancelar</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Modal Apertura de Caja */}
-      <Dialog open={dialogoAbierto && tipoDialogo === 'apertura'} onClose={cerrarDialogo} maxWidth='sm' fullWidth>
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <AccountBalanceWalletIcon color='success' />
-            Apertura de Caja
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Alert severity='info' sx={{ mb: 3 }}>
-              <AlertTitle>Información</AlertTitle>
-              Al abrir la caja, se registrará el monto inicial y se iniciarán las operaciones del día.
-            </Alert>
-
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label='Monto Inicial de Caja'
-                  type='number'
-                  value={formularioCaja.montoInicial}
-                  onChange={e => manejarCambioFormularioCaja('montoInicial', Number(e.target.value))}
-                  required
-                  InputProps={{
-                    startAdornment: <InputAdornment position='start'>$</InputAdornment>
-                  }}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label='Efectivo Físico Verificado'
-                  type='number'
-                  value={formularioCaja.efectivoFisico}
-                  onChange={e => manejarCambioFormularioCaja('efectivoFisico', Number(e.target.value))}
-                  required
-                  InputProps={{
-                    startAdornment: <InputAdornment position='start'>$</InputAdornment>
-                  }}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label='Observaciones'
-                  multiline
-                  rows={3}
-                  value={formularioCaja.observaciones}
-                  onChange={e => manejarCambioFormularioCaja('observaciones', e.target.value)}
-                  placeholder='Observaciones sobre la apertura de caja...'
-                />
-              </Grid>
-            </Grid>
-
-            {formularioCaja.montoInicial !== formularioCaja.efectivoFisico && (
-              <Alert severity='warning' sx={{ mt: 2 }}>
-                <AlertTitle>Diferencia Detectada</AlertTitle>
-                El monto inicial y el efectivo físico no coinciden. Verifique los montos antes de continuar.
-              </Alert>
-            )}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={cerrarDialogo}>Cancelar</Button>
-          <Button
-            onClick={procesarAperturaCierre}
-            variant='contained'
-            color='success'
-            startIcon={<AddIcon />}
-            disabled={formularioCaja.montoInicial <= 0 || formularioCaja.efectivoFisico <= 0}
-          >
-            Abrir Caja
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Modal Cierre de Caja */}
-      <Dialog open={dialogoAbierto && tipoDialogo === 'cierre'} onClose={cerrarDialogo} maxWidth='sm' fullWidth>
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <AccountBalanceWalletIcon color='error' />
-            Cierre de Caja
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Alert severity='warning' sx={{ mb: 3 }}>
-              <AlertTitle>Advertencia</AlertTitle>
-              Al cerrar la caja, se finalizarán las operaciones del día. Asegúrese de que todos los cortes estén
-              validados.
-            </Alert>
-
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label='Monto Final de Caja'
-                  type='number'
-                  value={formularioCaja.montoFinal}
-                  onChange={e => manejarCambioFormularioCaja('montoFinal', Number(e.target.value))}
-                  required
-                  InputProps={{
-                    startAdornment: <InputAdornment position='start'>$</InputAdornment>
-                  }}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label='Efectivo Físico Verificado'
-                  type='number'
-                  value={formularioCaja.efectivoFisico}
-                  onChange={e => manejarCambioFormularioCaja('efectivoFisico', Number(e.target.value))}
-                  required
-                  InputProps={{
-                    startAdornment: <InputAdornment position='start'>$</InputAdornment>
-                  }}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label='Observaciones'
-                  multiline
-                  rows={3}
-                  value={formularioCaja.observaciones}
-                  onChange={e => manejarCambioFormularioCaja('observaciones', e.target.value)}
-                  placeholder='Observaciones sobre el cierre de caja...'
-                />
-              </Grid>
-            </Grid>
-
-            {/* Resumen de Cortes */}
-            <Card variant='outlined' sx={{ mt: 3 }}>
-              <CardContent>
-                <Typography variant='h6' gutterBottom>
-                  Resumen de Cortes del Día
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <Typography variant='body2' color='text.secondary'>
-                      Cortes Entregados
-                    </Typography>
-                    <Typography variant='h6' color='primary'>
-                      {repartidoresCorte.length}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant='body2' color='text.secondary'>
-                      Cortes Validados
-                    </Typography>
-                    <Typography variant='h6' color='success.main'>
-                      {repartidoresCorte.filter(r => r.estado === 'validado').length}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant='body2' color='text.secondary'>
-                      Cortes Pendientes
-                    </Typography>
-                    <Typography variant='h6' color='warning.main'>
-                      {repartidoresCorte.filter(r => r.estado === 'pendiente').length}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant='body2' color='text.secondary'>
-                      Total del Día
-                    </Typography>
-                    <Typography variant='h6' color='primary'>
-                      ${repartidoresCorte.reduce((sum, r) => sum + r.totalDia, 0).toLocaleString()}
-                    </Typography>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-
-            {formularioCaja.montoFinal !== formularioCaja.efectivoFisico && (
-              <Alert severity='error' sx={{ mt: 2 }}>
-                <AlertTitle>Diferencia Detectada</AlertTitle>
-                El monto final y el efectivo físico no coinciden. Verifique los montos antes de continuar.
-              </Alert>
-            )}
-
-            {repartidoresCorte.filter(r => r.estado === 'pendiente').length > 0 && (
-              <Alert severity='warning' sx={{ mt: 2 }}>
-                <AlertTitle>Cortes Pendientes</AlertTitle>
-                Hay {repartidoresCorte.filter(r => r.estado === 'pendiente').length} cortes pendientes de validar. Se
-                recomienda validarlos antes del cierre.
-              </Alert>
-            )}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={cerrarDialogo}>Cancelar</Button>
-          <Button
-            onClick={procesarAperturaCierre}
-            variant='contained'
-            color='error'
-            startIcon={<CloseIcon />}
-            disabled={formularioCaja.montoFinal <= 0 || formularioCaja.efectivoFisico <= 0}
-          >
-            Cerrar Caja
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Modal Validación de Depósito */}
-      <Dialog
-        open={dialogoAbierto && tipoDialogo === 'validar-deposito'}
-        onClose={cerrarDialogo}
-        maxWidth='md'
-        fullWidth
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar(p => ({ ...p, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <AccountBalanceIcon color='primary' />
-            Validación de Depósito Bancario
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          {depositoSeleccionado && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant='h6' gutterBottom>
-                Repartidor: {depositoSeleccionado.repartidorNombre}
-              </Typography>
-
-              <Card variant='outlined' sx={{ mb: 3 }}>
-                <CardContent>
-                  <Typography variant='h6' gutterBottom>
-                    Información del Depósito
-                  </Typography>
-
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant='body2' color='text.secondary'>
-                        Folio reportado por repartidor
-                      </Typography>
-                      <Typography variant='h6' fontWeight='bold'>
-                        {depositoSeleccionado.folioRepartidor}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant='body2' color='text.secondary'>
-                        Monto depositado
-                      </Typography>
-                      <Typography variant='h6' color='primary'>
-                        ${depositoSeleccionado.monto.toLocaleString()}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant='body2' color='text.secondary'>
-                        Fecha y hora del depósito
-                      </Typography>
-                      <Typography variant='body2'>
-                        {new Date(depositoSeleccionado.fechaDeposito).toLocaleDateString('es-MX')} -{' '}
-                        {depositoSeleccionado.horaDeposito}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant='body2' color='text.secondary'>
-                        Estado actual
-                      </Typography>
-                      <Chip
-                        label={depositoSeleccionado.estado.replace('-', ' ').toUpperCase()}
-                        color={getEstadoDepositoColor(depositoSeleccionado.estado) as any}
-                        size='small'
-                      />
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-
-              <Typography variant='h6' gutterBottom>
-                Validación del Auxiliar
-              </Typography>
-
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label='Folio en comprobante físico'
-                    placeholder='Capturar folio del comprobante físico'
-                    required
-                    helperText='Campo obligatorio para validar'
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label='Monto verificado'
-                    type='number'
-                    defaultValue={depositoSeleccionado.monto}
-                    InputProps={{
-                      startAdornment: <InputAdornment position='start'>$</InputAdornment>
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <FormControlLabel control={<Checkbox />} label='Comprobante físico recibido' />
-                </Grid>
-                <Grid item xs={12}>
-                  <Button variant='outlined' startIcon={<AddIcon />} sx={{ mb: 2 }}>
-                    Subir foto del ticket físico
-                  </Button>
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label='Observaciones'
-                    multiline
-                    rows={3}
-                    placeholder='Observaciones sobre la validación...'
-                  />
-                </Grid>
-              </Grid>
-
-              {/* Comparación de Folios */}
-              <Card variant='outlined' sx={{ mt: 3 }}>
-                <CardContent>
-                  <Typography variant='h6' gutterBottom>
-                    Comparación de Folios
-                  </Typography>
-
-                  <TableContainer component={Paper} variant='outlined'>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Concepto</TableCell>
-                          <TableCell align='center'>Folio Repartidor</TableCell>
-                          <TableCell align='center'>Folio Físico</TableCell>
-                          <TableCell align='center'>Estado</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        <TableRow>
-                          <TableCell>Folio de Depósito</TableCell>
-                          <TableCell align='center'>{depositoSeleccionado.folioRepartidor}</TableCell>
-                          <TableCell align='center'>
-                            <TextField size='small' placeholder='Capturar folio físico' />
-                          </TableCell>
-                          <TableCell align='center'>
-                            <Chip label='PENDIENTE' color='warning' size='small' />
-                          </TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </CardContent>
-              </Card>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={cerrarDialogo}>Cancelar</Button>
-          <Button variant='contained' color='error'>
-            Marcar Diferencia
-          </Button>
-          <Button variant='contained' color='success'>
-            Validar Depósito
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar(p => ({ ...p, open: false }))}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   )
 }
