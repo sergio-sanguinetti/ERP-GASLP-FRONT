@@ -323,6 +323,8 @@ function VistaDetalle({
   const [reabriendo, setReabriendo] = useState(false)
   const [editDepIdx, setEditDepIdx] = useState<number | null>(null)
   const [editDepData, setEditDepData] = useState<any>(null)
+  const [depositosExtra, setDepositosExtra] = useState<{folio:string;monto:string;billetes:string;monedas:string}[]>([])
+  const [savingDep, setSavingDep] = useState(false)
 
   if (loading) {
     return (
@@ -609,9 +611,14 @@ function VistaDetalle({
           </Paper>
 
           {/* Depósitos */}
-          {detalle.depositos && detalle.depositos.length > 0 && (
+          {(detalle.depositos && detalle.depositos.length > 0 || true) && (
             <Paper sx={{ p: 2, mb: 2 }}>
-              <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1.5 }}>🏦 Depósitos</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                <Typography variant="subtitle2" fontWeight="bold">🏦 Depósitos</Typography>
+                <Button size="small" startIcon={<Add />} onClick={() => setDepositosExtra(prev => [...prev, { folio: '', monto: '', billetes: '', monedas: '' }])}>
+                  Agregar depósito
+                </Button>
+              </Box>
               <Alert severity="info" sx={{ mb: 1.5, fontSize: '0.75rem', py: 0.5 }}>
                 Total efectivo = Depósito + Billetes rechazados + Monedas
               </Alert>
@@ -678,12 +685,50 @@ function VistaDetalle({
                       </TableRow>
                     )
                   })}
+                  {/* Depósitos extras agregados desde web */}
+                  {depositosExtra.map((dep, ei) => {
+                    const totalExtra = (parseFloat(dep.monto)||0) + (parseFloat(dep.billetes)||0) + (parseFloat(dep.monedas)||0)
+                    const inputSx = { '& input': { p: '3px 6px', fontSize: '0.78rem', textAlign: 'right' as const }, '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': { WebkitAppearance: 'none' } }
+                    return (
+                      <TableRow key={`extra-${ei}`} sx={{ bgcolor: 'info.50' }}>
+                        <TableCell>
+                          <TextField size="small" placeholder="Folio" value={dep.folio}
+                            onChange={e => setDepositosExtra(prev => prev.map((d,i) => i===ei ? {...d, folio: e.target.value} : d))}
+                            sx={{ width: 80, '& input': { p: '3px 6px', fontSize: '0.78rem' } }} />
+                        </TableCell>
+                        <TableCell align="right">
+                          <TextField size="small" type="number" placeholder="0.00" value={dep.monto}
+                            onChange={e => setDepositosExtra(prev => prev.map((d,i) => i===ei ? {...d, monto: e.target.value} : d))}
+                            onWheel={e => (e.target as HTMLInputElement).blur()} inputProps={{ style: { MozAppearance: 'textfield' } }} sx={{ width: 80, ...inputSx }} />
+                        </TableCell>
+                        <TableCell align="right">
+                          <TextField size="small" type="number" placeholder="0.00" value={dep.billetes}
+                            onChange={e => setDepositosExtra(prev => prev.map((d,i) => i===ei ? {...d, billetes: e.target.value} : d))}
+                            onWheel={e => (e.target as HTMLInputElement).blur()} inputProps={{ style: { MozAppearance: 'textfield' } }} sx={{ width: 80, ...inputSx }} />
+                        </TableCell>
+                        <TableCell align="right">
+                          <TextField size="small" type="number" placeholder="0.00" value={dep.monedas}
+                            onChange={e => setDepositosExtra(prev => prev.map((d,i) => i===ei ? {...d, monedas: e.target.value} : d))}
+                            onWheel={e => (e.target as HTMLInputElement).blur()} inputProps={{ style: { MozAppearance: 'textfield' } }} sx={{ width: 80, ...inputSx }} />
+                        </TableCell>
+                        <TableCell align="right"><b style={{ color: '#1976d2' }}>{fmt$(totalExtra)}</b></TableCell>
+                        <TableCell align="center">
+                          <IconButton size="small" color="error" onClick={() => setDepositosExtra(prev => prev.filter((_,i) => i!==ei))}>
+                            <Close sx={{ fontSize: 14 }} />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
                   <TableRow sx={{ bgcolor: 'grey.50' }}>
                     <TableCell><b>Total</b></TableCell>
-                    <TableCell align="right"><b>{fmt$(detalle.depositos.reduce((s: number, d: any) => {
-                      const dReal = parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000
-                      return s + dReal
-                    }, 0))}</b></TableCell>
+                    <TableCell align="right"><b>{fmt$(
+                      detalle.depositos.reduce((s: number, d: any) => {
+                        const dReal = parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000
+                        return s + dReal
+                      }, 0) +
+                      depositosExtra.reduce((s, d) => s + (parseFloat(d.monto)||0), 0)
+                    )}</b></TableCell>
                     <TableCell align="right">
                       <Typography fontWeight="bold" color="warning.main">
                         {detalle.depositos.reduce((s: number, d: any) => s + parseFloat(d.billetesRechazados || 0), 0) > 0
@@ -699,11 +744,14 @@ function VistaDetalle({
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
-                      <b>{fmt$(detalle.depositos.reduce((s: number, d: any) => {
-                        const dReal = parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000
-                        const b = parseFloat(d.billetesRechazados || 0), mo = parseFloat(d.monedas || 0)
-                        return s + dReal + b + mo
-                      }, 0))}</b>
+                      <b>{fmt$(
+                        detalle.depositos.reduce((s: number, d: any) => {
+                          const dReal = parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000
+                          const b = parseFloat(d.billetesRechazados || 0), mo = parseFloat(d.monedas || 0)
+                          return s + dReal + b + mo
+                        }, 0) +
+                        depositosExtra.reduce((s, d) => s + (parseFloat(d.monto)||0) + (parseFloat(d.billetes)||0) + (parseFloat(d.monedas)||0), 0)
+                      )}</b>
                     </TableCell>
                     <TableCell />
                   </TableRow>
