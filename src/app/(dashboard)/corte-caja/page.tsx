@@ -12,7 +12,8 @@ import {
   ArrowBack, CheckCircle, Edit, Print, Add, Visibility, Close,
   Warning, LockOpen, Refresh
 } from '@mui/icons-material'
-import { ventasAPI } from '@/lib/api'
+import { ventasAPI, sedesAPI, authAPI } from '@/lib/api'
+import type { Sede } from '@/lib/api'
 
 // ======================== TYPES ========================
 
@@ -77,12 +78,17 @@ const FP_ORDER: { key: keyof ResumenFP; label: string; color: string }[] = [
   { key: 'credito',       label: 'Crédito',        color: '#A32D2D' },
 ]
 
-function VistaDashboard({ resumen, loading, fecha, onFechaChange, onVerDetalle, onCrearManual, onCerrarRapido }: {
+function VistaDashboard({ resumen, loading, fecha, onFechaChange, onVerDetalle, onCrearManual, onCerrarRapido, sedes, sedeId, sedeSeleccionada, esSuperAdmin, onSedeChange }: {
   resumen: ResumenDia | null; loading: boolean; fecha: string
   onFechaChange: (f: string) => void
   onVerDetalle: (id: string) => void
   onCrearManual: () => void
   onCerrarRapido: (id: string) => void
+  sedes: Sede[]
+  sedeId: string | null
+  sedeSeleccionada: string | null
+  esSuperAdmin: boolean
+  onSedeChange: (id: string) => void
 }) {
   if (loading) return <LinearProgress sx={{ mt: 2 }} />
 
@@ -980,13 +986,17 @@ export default function CorteCajaPage() {
   const [dialogReimprimir, setDialogReimprimir] = useState(false)
   const [reimprimirExtras, setReimprimirExtras] = useState<{ litrosReporte: Record<string, string>; servicioNum: Record<string, string> }>({ litrosReporte: {}, servicioNum: {} })
   const [cerrarRapidoId, setCerrarRapidoId] = useState<string | null>(null)
+  const [sedes, setSedes] = useState<Sede[]>([])
+  const [sedeId, setSedeId] = useState<string | null>(null)
+  const [sedeSeleccionada, setSedeSeleccionada] = useState<string | null>(null)
+  const [esSuperAdmin, setEsSuperAdmin] = useState(false)
 
   const showSnack = (message: string, severity: 'success' | 'error' = 'success') => setSnackbar({ open: true, message, severity })
 
   const loadDashboard = useCallback(async (f: string) => {
     setLoading(true)
     try {
-      const data = await ventasAPI.getResumenDia(f)
+      const data = await ventasAPI.getResumenDia(f, sedeId || undefined)
       setResumen(data)
     } catch (e: any) {
       showSnack(e.message || 'Error al cargar', 'error')
@@ -1002,7 +1012,30 @@ export default function CorteCajaPage() {
     } catch (e: any) { showSnack(e.message || 'Error', 'error') }
   }, [])
 
-  useEffect(() => { if (vista === 'dashboard') loadDashboard(fecha) }, [fecha, vista, loadDashboard])
+  // Cargar usuario y sedes al montar
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const user = await authAPI.getProfile()
+        const sedesData = await sedesAPI.getAll()
+        setSedes(sedesData)
+        const esSuper = user.rol === 'superAdministrador'
+        setEsSuperAdmin(esSuper)
+        if (user.sede) {
+          const found = sedesData.find((s: Sede) => s.id === user.sede || s.nombre === user.sede || s.nombre?.toUpperCase() === user.sede?.toUpperCase())
+          const id = found?.id || null
+          setSedeId(esSuper ? (id || sedesData[0]?.id || null) : id)
+          setSedeSeleccionada(esSuper ? (id || sedesData[0]?.id || null) : id)
+        } else if (esSuper) {
+          setSedeId(sedesData[0]?.id || null)
+          setSedeSeleccionada(sedesData[0]?.id || null)
+        }
+      } catch (e) { /* ignore */ }
+    }
+    init()
+  }, [])
+
+  useEffect(() => { if (vista === 'dashboard') loadDashboard(fecha) }, [fecha, vista, sedeId, loadDashboard])
   useEffect(() => { if (vista === 'historial') loadHistorial() }, [vista, loadHistorial])
 
   const handleVerDetalle = async (id: string, destino: 'dashboard' | 'historial' = 'dashboard') => {
@@ -1038,6 +1071,9 @@ export default function CorteCajaPage() {
             onVerDetalle={id => handleVerDetalle(id, 'dashboard')}
             onCrearManual={() => setDialogManual(true)}
             onCerrarRapido={id => setCerrarRapidoId(id)}
+            sedes={sedes} sedeId={sedeId} sedeSeleccionada={sedeSeleccionada}
+            esSuperAdmin={esSuperAdmin}
+            onSedeChange={id => { setSedeSeleccionada(id); setSedeId(id) }}
           />
           {/* Botón historial abajo */}
           <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
