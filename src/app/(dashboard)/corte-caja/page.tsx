@@ -108,7 +108,7 @@ function fmtFecha(fecha: string): string {
 
 function nombreRepartidor(r: any): string {
   if (!r) return '—'
-  return `${r.nombre || ''} ${r.apellidoPaterno || ''}`.trim()
+  return `${r.nombres || r.nombre || ''} ${r.apellidoPaterno || ''}`.trim()
 }
 
 function getEstadoColor(estado: string): 'success' | 'warning' | 'default' {
