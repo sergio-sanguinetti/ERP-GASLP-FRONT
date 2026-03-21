@@ -893,7 +893,7 @@ function DialogCorteManual({ open, onClose, onCrear, sedeId }: {
   useEffect(() => {
     if (!open) return
     setLoadingReps(true)
-    const filtros: any = { rol: 'repartidor', estado: 'activo' }
+    const filtros: any = { rol: 'repartidor' }
     if (sedeId) filtros.sede = sedeId
     usuariosAPI.getAll(filtros)
       .then(data => setRepartidores(data || []))
