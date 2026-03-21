@@ -580,6 +580,57 @@ function VistaDetalle({
             )}
           </Paper>
 
+          {/* Validación de litros medidor — solo pipas, columna principal */}
+          {esPipas && (
+            <Paper sx={{ p: 2, mb: 2, border: '2px solid', borderColor: alertaMedidor ? 'error.light' : 'primary.light' }}>
+              <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1.5 }}>
+                📊 Reporte del medidor físico de pipa
+              </Typography>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} sm={4}>
+                  <Box sx={{ p: 1.5, bgcolor: 'primary.50', borderRadius: 1, textAlign: 'center' }}>
+                    <Typography variant="caption" color="text.secondary" display="block">App reporta</Typography>
+                    <Typography variant="h6" fontWeight="bold" color="primary.main">{litrosApp.toFixed(2)} L</Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    label="Medidor físico"
+                    type="number"
+                    value={litrosMedidor}
+                    onChange={e => setLitrosMedidor(e.target.value)}
+                    size="small"
+                    fullWidth
+                    InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5 }}>L</Typography> }}
+                    placeholder="Ej: 2903.60"
+                    helperText="Lectura del medidor de la pipa"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  {litrosMedidor !== '' && litrosMedidorNum > 0 ? (
+                    <Box sx={{
+                      p: 1.5, borderRadius: 1,
+                      bgcolor: alertaMedidor ? '#fff3f3' : '#f3fff3',
+                      border: `1px solid ${alertaMedidor ? '#f44336' : '#4caf50'}`,
+                      textAlign: 'center'
+                    }}>
+                      <Typography variant="body2" color={alertaMedidor ? 'error.main' : 'success.main'} fontWeight="bold">
+                        {alertaMedidor ? '⚠️' : '✅'} {diferencia > 0 ? '+' : ''}{diferencia.toFixed(2)} L
+                      </Typography>
+                      <Typography variant="caption" color={alertaMedidor ? 'error.main' : 'success.main'}>
+                        {alertaMedidor ? 'Verificar — supera ±20 L' : 'Dentro del rango (±20 L)'}
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1, textAlign: 'center' }}>
+                      <Typography variant="caption" color="text.secondary">Ingresa la lectura del medidor para comparar</Typography>
+                    </Box>
+                  )}
+                </Grid>
+              </Grid>
+            </Paper>
+          )}
+
           {/* Depósitos */}
           {detalle.depositos && detalle.depositos.length > 0 && (
             <Paper sx={{ p: 2, mb: 2 }}>
@@ -596,14 +647,28 @@ function VistaDetalle({
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {detalle.depositos.map((dep: any, i: number) => (
-                    <TableRow key={i}>
-                      <TableCell>{dep.folio || '—'}</TableCell>
-                      <TableCell align="right">{fmt$(dep.monto)}</TableCell>
-                      <TableCell align="right">{dep.monedas ? fmt$(dep.monedas) : '—'}</TableCell>
-                      <TableCell align="right"><b>{fmt$(dep.total || dep.monto)}</b></TableCell>
-                    </TableRow>
-                  ))}
+                  {detalle.depositos.map((dep: any, i: number) => {
+                    const totalDep = parseFloat(dep.total || 0) > parseFloat(dep.monto || 0)
+                      ? parseFloat(dep.total || 0)
+                      : parseFloat(dep.monto || 0)
+                    return (
+                      <TableRow key={i}>
+                        <TableCell>{dep.folio || '—'}</TableCell>
+                        <TableCell align="right">{parseFloat(dep.monedas || 0) > 0 ? fmt$(parseFloat(dep.monto || 0)) : '—'}</TableCell>
+                        <TableCell align="right">{parseFloat(dep.monedas || 0) > 0 ? fmt$(parseFloat(dep.monedas || 0)) : '—'}</TableCell>
+                        <TableCell align="right"><b>{fmt$(totalDep)}</b></TableCell>
+                      </TableRow>
+                    )
+                  })}
+                  <TableRow sx={{ bgcolor: 'grey.50' }}>
+                    <TableCell colSpan={3}><b>Total depositado</b></TableCell>
+                    <TableCell align="right">
+                      <b>{fmt$(detalle.depositos.reduce((s: number, d: any) => {
+                        const t = parseFloat(d.total || 0) > parseFloat(d.monto || 0) ? parseFloat(d.total || 0) : parseFloat(d.monto || 0)
+                        return s + t
+                      }, 0))}</b>
+                    </TableCell>
+                  </TableRow>
                 </TableBody>
               </Table>
             </Paper>
@@ -628,43 +693,7 @@ function VistaDetalle({
             </Box>
           </Paper>
 
-          {/* Validación de litros (solo pipas) */}
-          {esPipas && (
-            <Paper sx={{ p: 2, mb: 2 }}>
-              <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1.5 }}>
-                📊 Validación de litros
-              </Typography>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
-                <Typography variant="body2" color="text.secondary">App reporta:</Typography>
-                <Typography fontWeight="bold">{litrosApp.toFixed(2)} L</Typography>
-              </Box>
-              <TextField
-                label="Medidor físico (reporte de pipa)"
-                type="number"
-                value={litrosMedidor}
-                onChange={e => setLitrosMedidor(e.target.value)}
-                size="small"
-                fullWidth
-                sx={{ mb: 1 }}
-                InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5 }}>L</Typography> }}
-                placeholder="Ej: 1965.80"
-              />
-              {litrosMedidor !== '' && litrosMedidorNum > 0 && (
-                <Box sx={{
-                  p: 1.5, borderRadius: 1,
-                  bgcolor: alertaMedidor ? 'error.50' : 'success.50',
-                  border: `1px solid ${alertaMedidor ? '#f44336' : '#4caf50'}`
-                }}>
-                  <Typography variant="body2" color={alertaMedidor ? 'error.main' : 'success.main'} fontWeight="medium">
-                    {alertaMedidor ? '⚠️' : '✅'} Diferencia: {diferencia > 0 ? '+' : ''}{diferencia.toFixed(2)} L
-                  </Typography>
-                  <Typography variant="caption" color={alertaMedidor ? 'error.main' : 'success.main'}>
-                    {alertaMedidor ? 'Supera el límite de ±20 L — verificar' : 'Dentro del rango aceptable (±20 L)'}
-                  </Typography>
-                </Box>
-              )}
-            </Paper>
-          )}
+
 
           {/* Observaciones del corte */}
           {detalle.observaciones && (
