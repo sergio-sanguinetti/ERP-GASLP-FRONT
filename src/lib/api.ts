@@ -2146,6 +2146,67 @@ export const ventasAPI = {
     }
 
     return response.json()
+  },
+
+  /** Obtiene el detalle enriquecido de un corte (pedidos, productos, formas de pago, desglose). */
+  getCorteDetalle: async (id: string): Promise<any> => {
+    const response = await fetchWithAuth(`/cortes-caja/${id}/detalle`)
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error(error.message || 'Error al obtener detalle del corte')
+    }
+    return response.json()
+  },
+
+  /** Cierra (valida) un corte desde el web. */
+  cerrarCorte: async (id: string, data: { observaciones?: string; litrosMedidor?: number }): Promise<any> => {
+    const response = await fetchWithAuth(`/cortes-caja/${id}/cerrar`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error(error.message || 'Error al cerrar el corte')
+    }
+    return response.json()
+  },
+
+  /** Corrige la forma de pago de un pedido dentro de un corte. */
+  corregirFormaPago: async (
+    corteId: string,
+    pedidoId: string,
+    data: { formasPago: { tipo: string; monto: number }[] }
+  ): Promise<any> => {
+    const response = await fetchWithAuth(`/cortes-caja/${corteId}/pedidos/${pedidoId}/forma-pago`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error(error.message || 'Error al corregir forma de pago')
+    }
+    return response.json()
+  },
+
+  /** Crea un corte manualmente desde el web (sin app). */
+  createCorteManual: async (data: {
+    repartidorId: string
+    tipo?: string
+    dia?: string
+    observaciones?: string
+  }): Promise<any> => {
+    const response = await fetchWithAuth('/cortes-caja/manual', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error(error.message || 'Error al crear corte manual')
+    }
+    return response.json()
   }
 }
 
