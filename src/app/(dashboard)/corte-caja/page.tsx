@@ -327,29 +327,32 @@ function VistaDetalle({
   const [savingDep, setSavingDep] = useState(false)
   const [savingLitros, setSavingLitros] = useState(false)
 
-  // Restaurar litrosReporte guardados en stats al cargar
+  // Restaurar litrosReporte guardados en stats al cargar (solo una vez por corte)
+  const restoredRef = useRef<string>('')
   useEffect(() => {
+    if (!detalle?.id || restoredRef.current === detalle.id) return
+    restoredRef.current = detalle.id
     if (!detalle?.stats) return
     try {
       const stats = typeof detalle.stats === 'string' ? JSON.parse(detalle.stats) : detalle.stats
-      if (stats?.litrosReporte && Object.keys(litrosReporte).length === 0) {
+      if (stats?.litrosReporte && Object.keys(stats.litrosReporte).length > 0) {
         setLitrosReporte(stats.litrosReporte)
       }
     } catch(e) {}
   }, [detalle?.id])
 
-  // Auto-guardar litros reporte con debounce de 1.5s
+  // Auto-guardar litros reporte con debounce de 2s
   useEffect(() => {
     const hasLitros = Object.values(litrosReporte).some(v => parseFloat(v) > 0)
     if (!hasLitros || !detalle?.id) return
-    const timer = setTimeout(async () => {
+    const timer = setTimeout(() => {
       setSavingLitros(true)
-      try { await ventasAPI.guardarLitrosReporte(detalle.id, litrosReporte) }
-      catch(e) { /* silencioso */ }
-      finally { setSavingLitros(false) }
-    }, 1500)
+      ventasAPI.guardarLitrosReporte(detalle.id, litrosReporte)
+        .catch(() => {})
+        .finally(() => setSavingLitros(false))
+    }, 2000)
     return () => clearTimeout(timer)
-  }, [litrosReporte, detalle?.id])
+  }, [JSON.stringify(litrosReporte), detalle?.id])
 
   if (loading) {
     return (
@@ -751,8 +754,10 @@ function VistaDetalle({
                                     monedas: parseFloat(dep.monedas) || 0
                                   })
                                   setDepositosExtra(prev => prev.filter((_,i) => i!==ei))
-                                  // Recargar detalle para ver el nuevo depósito
-                                  window.location.reload()
+                                  // Recargar detalle sin recargar toda la página
+                                  const updated = await ventasAPI.getCorteDetalle(detalle.id)
+                                  if (updated) window.dispatchEvent(new CustomEvent('recargarDetalle', { detail: updated }))
+                                  else window.location.reload()
                                 } catch(e: any) { alert('Error: ' + e.message) }
                                 finally { setSavingDep(false) }
                               }}>
