@@ -498,10 +498,8 @@ function VistaDetalle({
                 <Grid item xs={12} sm={6}>
                   <TextField label="Medidor físico total" type="number" value={litrosMedidor}
                     onChange={e => setLitrosMedidor(e.target.value)}
-                    onWheel={e => (e.target as HTMLInputElement).blur()}
                     size="small" fullWidth
-                    inputProps={{ style: { MozAppearance: 'textfield' } }}
-                    sx={{ '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': { WebkitAppearance: 'none', margin: 0 } }}
+                    inputProps={{ inputMode: 'decimal', autoComplete: 'off' }}
                     InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5 }}>L</Typography> }}
                     placeholder="Ej: 2903.60" helperText="Lectura total del odómetro de la pipa" />
                 </Grid>
@@ -556,11 +554,10 @@ function VistaDetalle({
                           <TableCell sx={{ py: 0.5 }}>
                             <TextField size="small" type="number"
                               value={servicioNum[fila.rowKey] || ''}
-                              onChange={e => setServicioNum(prev => ({ ...prev, [fila.rowKey]: e.target.value }))}
-                              onWheel={e => (e.target as HTMLInputElement).blur()}
+                              onChange={e => { const v = e.target.value.replace(/[^0-9]/g, ''); setServicioNum(prev => ({ ...prev, [fila.rowKey]: v })) }}
                               placeholder={String(rowIdx + 1)}
-                              inputProps={{ style: { MozAppearance: 'textfield' } }}
-                              sx={{ width: 52, '& input': { p: '4px 6px', fontSize: '0.75rem', textAlign: 'center' }, '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': { WebkitAppearance: 'none', margin: 0 } }} />
+                              inputProps={{ inputMode: 'numeric', autoComplete: 'off' }}
+                              sx={{ width: 52, '& input': { p: '4px 6px', fontSize: '0.75rem', textAlign: 'center' } }} />
                           </TableCell>
                         ) : (
                           <TableCell><Typography variant="caption" color="text.secondary">{rowIdx + 1}</Typography></TableCell>
@@ -579,11 +576,10 @@ function VistaDetalle({
                             <TableCell align="right" sx={{ py: 0.5 }}>
                               <TextField size="small" type="number"
                                 value={litrosReporte[fila.rowKey] || ''}
-                                onChange={e => setLitrosReporte(prev => ({ ...prev, [fila.rowKey]: e.target.value }))}
-                                onWheel={e => (e.target as HTMLInputElement).blur()}
+                                onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ''); setLitrosReporte(prev => ({ ...prev, [fila.rowKey]: v })) }}
                                 placeholder="0.00"
-                                inputProps={{ style: { MozAppearance: 'textfield' } }}
-                                sx={{ width: 72, '& input': { p: '4px 6px', fontSize: '0.75rem', textAlign: 'right' }, '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': { WebkitAppearance: 'none', margin: 0 } }}
+                                inputProps={{ inputMode: 'decimal', autoComplete: 'off' }}
+                                sx={{ width: 72, '& input': { p: '4px 6px', fontSize: '0.75rem', textAlign: 'right' } }}
                                 InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.3, fontSize: '0.65rem' }}>L</Typography> }} />
                             </TableCell>
                             <TableCell align="right">
