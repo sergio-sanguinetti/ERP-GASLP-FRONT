@@ -308,12 +308,13 @@ function VistaDashboard({ resumen, loading, fecha, onFechaChange, onVerDetalle, 
 // ======================== VISTA DETALLE ========================
 
 function VistaDetalle({
-  detalle, loading, onVolver, onCerrarCorte, onCorregirPago, onReimprimir
+  detalle, loading, onVolver, onCerrarCorte, onCorregirPago, onReimprimir, onRefreshDetalle
 }: {
   detalle: CorteDetalle | null; loading: boolean; onVolver: () => void
   onCerrarCorte: (id: string, litrosMedidor?: number, observaciones?: string) => void
   onCorregirPago: (pedidoId: string, pedidoNombre: string) => void
   onReimprimir: (extras?: { litrosReporte: Record<string, string>; servicioNum: Record<string, string> }) => void
+  onRefreshDetalle: (detalle: CorteDetalle) => void
 }) {
   const [litrosMedidor, setLitrosMedidor] = useState<string>('')
   const [obsDialog, setObsDialog] = useState(false)
@@ -712,6 +713,9 @@ function VistaDetalle({
                                   monedas: parseFloat(editDepData?.monedas || 0)
                                 })
                                 setEditDepIdx(null); setEditDepData(null)
+                                // Recargar detalle en el mismo lugar
+                                const refreshed = await ventasAPI.getCorteDetalle(detalle.id)
+                                if (refreshed) onRefreshDetalle(refreshed)
                               } catch(e: any) { alert('Error: ' + (e.message || 'No se pudo guardar')) }
                               finally { setSavingDep(false) }
                             }}>{savingDep ? <CircularProgress size={14} /> : <CheckCircle sx={{ fontSize: 15 }} />}</IconButton>
@@ -764,6 +768,8 @@ function VistaDetalle({
                                     monedas: parseFloat(dep.monedas) || 0
                                   })
                                   setDepositosExtra(prev => prev.filter((_,i) => i!==ei))
+                                  const refreshed2 = await ventasAPI.getCorteDetalle(detalle.id)
+                                  if (refreshed2) onRefreshDetalle(refreshed2)
                                 } catch(e: any) { alert('Error: ' + e.message) }
                                 finally { setSavingDep(false) }
                               }}>
@@ -1515,6 +1521,7 @@ export default function CorteCajaPage() {
           detalle={corteDetalle} loading={loadingDetalle}
           onVolver={() => setVista('dashboard')}
           onCerrarCorte={handleCerrarCorte}
+          onRefreshDetalle={d => setCorteDetalle(d)}
           onCorregirPago={(pid, pn) => setDialogCorregir({ open: true, pedidoId: pid, pedidoNombre: pn })}
           onReimprimir={extras => { if (extras) setReimprimirExtras(extras); setDialogReimprimir(true) }}
         />
