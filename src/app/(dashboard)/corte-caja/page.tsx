@@ -12,7 +12,7 @@ import {
   ArrowBack, CheckCircle, Edit, Print, Add, Visibility, Close,
   Warning, LockOpen, Refresh
 } from '@mui/icons-material'
-import { ventasAPI, sedesAPI, authAPI } from '@/lib/api'
+import { ventasAPI, sedesAPI, authAPI, usuariosAPI } from '@/lib/api'
 import type { Sede } from '@/lib/api'
 
 // ======================== TYPES ========================
@@ -877,13 +877,36 @@ function VistaHistorial({ cortes, loading, onVerDetalle }: {
 
 // ======================== DIALOGS ========================
 
-function DialogCorteManual({ open, onClose, onCrear }: { open: boolean; onClose: () => void; onCrear: (d: any) => Promise<void> }) {
+function DialogCorteManual({ open, onClose, onCrear, sedeId }: { 
+  open: boolean; onClose: () => void; onCrear: (d: any) => Promise<void>; sedeId?: string | null 
+}) {
   const [repartidorId, setRepartidorId] = useState('')
   const [tipo, setTipo] = useState('venta_dia')
   const [dia, setDia] = useState(getHoyMx())
   const [observaciones, setObservaciones] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [repartidores, setRepartidores] = useState<any[]>([])
+  const [loadingReps, setLoadingReps] = useState(false)
+  const [busqueda, setBusqueda] = useState('')
+
+  useEffect(() => {
+    if (!open) return
+    setLoadingReps(true)
+    const filtros: any = { rol: 'repartidor', estado: 'activo' }
+    if (sedeId) filtros.sede = sedeId
+    usuariosAPI.getAll(filtros)
+      .then(data => setRepartidores(data || []))
+      .catch(() => setRepartidores([]))
+      .finally(() => setLoadingReps(false))
+  }, [open, sedeId])
+
+  const repsFiltrados = repartidores.filter(r => {
+    const nombre = `${r.nombres || ''} ${r.apellidoPaterno || ''}`.toLowerCase()
+    return nombre.includes(busqueda.toLowerCase())
+  })
+
+  const repSeleccionado = repartidores.find(r => r.id === repartidorId)
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -891,7 +914,42 @@ function DialogCorteManual({ open, onClose, onCrear }: { open: boolean; onClose:
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           <Alert severity="info" sx={{ fontSize: '0.8rem' }}>Úsalo cuando el repartidor no generó corte desde la app.</Alert>
-          <TextField label="ID del repartidor" value={repartidorId} onChange={e => setRepartidorId(e.target.value)} size="small" fullWidth helperText="ID interno del repartidor en el sistema" />
+          
+          {/* Buscador de repartidor */}
+          <Box>
+            <TextField
+              label="Buscar repartidor"
+              value={busqueda}
+              onChange={e => { setBusqueda(e.target.value); setRepartidorId('') }}
+              size="small" fullWidth
+              placeholder="Escribe el nombre..."
+              InputProps={{ endAdornment: loadingReps ? <CircularProgress size={16} /> : null }}
+            />
+            {busqueda && repsFiltrados.length > 0 && !repSeleccionado && (
+              <Paper variant="outlined" sx={{ mt: 0.5, maxHeight: 200, overflow: 'auto' }}>
+                {repsFiltrados.map(r => (
+                  <Box key={r.id} sx={{ px: 2, py: 1, cursor: 'pointer', '&:hover': { bgcolor: 'grey.50' }, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                    onClick={() => { setRepartidorId(r.id); setBusqueda(`${r.nombres || ''} ${r.apellidoPaterno || ''}`.trim()) }}>
+                    <Box>
+                      <Typography variant="body2" fontWeight="medium">{r.nombres} {r.apellidoPaterno}</Typography>
+                      <Typography variant="caption" color="text.secondary">{r.tipoRepartidor === 'pipas' ? '🚛 Pipas' : '🔵 Cilindros'}</Typography>
+                    </Box>
+                    <Typography variant="caption" color="text.secondary">{r.sede}</Typography>
+                  </Box>
+                ))}
+              </Paper>
+            )}
+            {repSeleccionado && (
+              <Box sx={{ mt: 0.5, p: 1.5, bgcolor: 'success.50', borderRadius: 1, border: '1px solid', borderColor: 'success.light', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box>
+                  <Typography variant="body2" fontWeight="bold" color="success.main">✓ {repSeleccionado.nombres} {repSeleccionado.apellidoPaterno}</Typography>
+                  <Typography variant="caption" color="text.secondary">{repSeleccionado.tipoRepartidor === 'pipas' ? '🚛 Pipas' : '🔵 Cilindros'} · {repSeleccionado.sede}</Typography>
+                </Box>
+                <Button size="small" onClick={() => { setRepartidorId(''); setBusqueda('') }}>Cambiar</Button>
+              </Box>
+            )}
+          </Box>
+
           <FormControl size="small" fullWidth>
             <InputLabel>Tipo de corte</InputLabel>
             <Select value={tipo} label="Tipo de corte" onChange={e => setTipo(e.target.value)}>
@@ -906,10 +964,10 @@ function DialogCorteManual({ open, onClose, onCrear }: { open: boolean; onClose:
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancelar</Button>
-        <Button variant="contained" disabled={loading} onClick={async () => {
-          if (!repartidorId.trim()) { setError('El ID es requerido'); return }
+        <Button variant="contained" disabled={loading || !repartidorId} onClick={async () => {
+          if (!repartidorId) { setError('Selecciona un repartidor'); return }
           setLoading(true); setError('')
-          try { await onCrear({ repartidorId: repartidorId.trim(), tipo, dia, observaciones }); setRepartidorId(''); setObservaciones(''); onClose() }
+          try { await onCrear({ repartidorId, tipo, dia, observaciones }); setRepartidorId(''); setBusqueda(''); setObservaciones(''); onClose() }
           catch (e: any) { setError(e.message || 'Error') }
           finally { setLoading(false) }
         }}>
@@ -1342,7 +1400,7 @@ export default function CorteCajaPage() {
         <VistaHistorial cortes={cortes} loading={loading} onVerDetalle={id => handleVerDetalle(id, 'historial')} />
       )}
 
-      <DialogCorteManual open={dialogManual} onClose={() => setDialogManual(false)}
+      <DialogCorteManual open={dialogManual} onClose={() => setDialogManual(false)} sedeId={sedeId}
         onCrear={async d => { await ventasAPI.createCorteManual(d); showSnack('✅ Corte creado'); loadDashboard(fecha) }} />
 
       {dialogCorregir.open && corteDetalle && (
