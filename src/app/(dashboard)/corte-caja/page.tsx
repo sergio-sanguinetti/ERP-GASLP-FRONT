@@ -985,142 +985,183 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
   })
 
   const handlePrint = () => {
-    const SEP = '-'.repeat(32)
-    const SEP2 = '='.repeat(32)
-    const fmt = (n: number) => `$${n.toFixed(2)}`  // sin separadores de miles, igual al app
-    const lines: string[] = []
+    const rep = nombreRepartidor(detalle.repartidor)
+    const totalCorteVal = totalCorte
+    const resumenFP = resumen
 
-    // ── ENCABEZADO ─────────────────────────────────────────
-    lines.push('GAS PROVIDENCIA')
-    lines.push('CORTE DE CAJA')
-    lines.push(fmtFecha(detalle.dia))
-    lines.push(SEP)
-    lines.push(`Repartidor: ${nombreRepartidor(detalle.repartidor)}`)
-    lines.push(`Tipo: ${esPipas ? 'PIPAS' : 'CILINDROS'}`)
-    lines.push(`Estado: ${detalle.estado.toUpperCase()}`)
-    lines.push(`Folio: ${detalle.id.slice(-8).toUpperCase()}`)
-    lines.push(SEP)
-
-    // ── SERVICIOS ──────────────────────────────────────────
+    // Construir servicios
     const pedSorted = [...(detalle.pedidos||[])].sort((a,b) => {
       const na = parseInt((servicioNum||{})[`${a.pedidoId}_0`] || (servicioNum||{})[a.pedidoId] || '0')
       const nb = parseInt((servicioNum||{})[`${b.pedidoId}_0`] || (servicioNum||{})[b.pedidoId] || '0')
       if (na && nb) return na - nb; if (na) return -1; if (nb) return 1
       return (a.numero||0) - (b.numero||0)
     })
+
+    let serviciosHtml = ''
     let srvCount = 0
 
     if (esPipas) {
       pedSorted.forEach(p => {
-        const prods = (p.productos||[]).filter(pr => pr.cantidad > 0)
+        const prods = (p.productos||[]).filter((pr: any) => pr.cantidad > 0)
         const rows = prods.length > 0
-          ? prods.map((pr, pi) => ({
-              rowKey: `${p.pedidoId}_${pi}`,
-              clienteNombre: p.clienteNombre,
-              litros: pr.cantidad,
-              subtotal: pr.subtotal || pr.precio * pr.cantidad,
-              totalPedido: p.total,
-              formasPago: pi === 0 ? p.formasPago : [],
-              formaPagoCorte: pi === 0 ? p.formaPagoCorte : '',
-              isFirst: pi === 0,
-              descuento: pr.descuento || 0
+          ? prods.map((pr: any, pi: number) => ({
+              rowKey: `${p.pedidoId}_${pi}`, clienteNombre: p.clienteNombre,
+              litros: pr.cantidad, subtotal: pr.subtotal || pr.precio * pr.cantidad,
+              totalPedido: p.total, formasPago: pi === 0 ? p.formasPago : [],
+              formaPagoCorte: pi === 0 ? p.formaPagoCorte : '', isFirst: pi === 0, descuento: pr.descuento || 0
             }))
           : [{ rowKey: p.pedidoId, clienteNombre: p.clienteNombre, litros: p.litros, subtotal: p.total, totalPedido: p.total, formasPago: p.formasPago, formaPagoCorte: p.formaPagoCorte, isFirst: true, descuento: p.descuento || 0 }]
 
-        rows.forEach(row => {
+        rows.forEach((row: any) => {
           srvCount++
           const numStr = (servicioNum||{})[row.rowKey] || String(srvCount).padStart(3, '0')
-          // Línea 1: número + cliente (máx 28 chars)
-          lines.push(`${numStr}. ${row.clienteNombre.substring(0, 26)}`)
-          // Línea 2: total del servicio
-          if (row.isFirst) lines.push(fmt(row.totalPedido))
-          else lines.push(`${fmt(row.subtotal)}`)
-          // Línea 3: formas de pago
           const fps = row.formasPago?.length > 0
-            ? row.formasPago.map((f: any) => `${f.tipo}: ${fmt(f.monto)}`)
-            : row.formaPagoCorte ? [row.formaPagoCorte] : []
-          fps.forEach((f: string) => lines.push(f))
-          // Línea 4: litros (con reporte si se ingresó)
+            ? row.formasPago.map((f: any) => `<div class="fp-line"><span>${f.tipo.toUpperCase()}:</span><span>$${f.monto.toFixed(2)}</span></div>`).join('')
+            : row.formaPagoCorte ? `<div class="fp-line"><span>${row.formaPagoCorte.toUpperCase()}</span></div>` : ''
           const lrep = (litrosReporte||{})[row.rowKey]
-          if (lrep && parseFloat(lrep) > 0) {
-            lines.push(`${row.litros.toFixed(2)} L`)
-            lines.push(`Reporte: ${parseFloat(lrep).toFixed(2)} L`)
-          } else {
-            lines.push(`${row.litros.toFixed(2)} L`)
-          }
-          // Línea 5: descuento si aplica
-          if (row.descuento > 0) lines.push(`Descuento: -${fmt(row.descuento)}`)
+          const litrosLine = lrep && parseFloat(lrep) > 0
+            ? `<div class="row-sb"><span>${row.litros.toFixed(2)} L</span><span class="muted">Rpt: ${parseFloat(lrep).toFixed(2)} L</span></div>`
+            : `<div class="litros">${row.litros.toFixed(2)} L</div>`
+          const descLine = row.descuento > 0 ? `<div class="descuento">Descuento: -$${row.descuento.toFixed(2)}</div>` : ''
+          const totalLine = row.isFirst
+            ? `<div class="row-sb"><span class="bold">${numStr}. ${row.clienteNombre}</span><span class="bold">$${row.totalPedido.toFixed(2)}</span></div>`
+            : `<div class="row-sb indent"><span class="muted">↳ carga ${row.litros.toFixed(2)} L</span><span>$${row.subtotal.toFixed(2)}</span></div>`
+          serviciosHtml += `<div class="servicio">${totalLine}${fps}${litrosLine}${descLine}</div>`
         })
       })
     } else {
-      // CILINDROS
-      pedSorted.forEach(p => {
+      pedSorted.forEach((p: any) => {
         srvCount++
         const numStr = (servicioNum||{})[p.pedidoId] || String(srvCount).padStart(3, '0')
-        lines.push(`${numStr}. ${p.clienteNombre.substring(0, 26)}`)
-        ;(p.productos||[]).filter(pr => pr.cantidad > 0).forEach(pr => {
+        const prodsHtml = (p.productos||[]).filter((pr: any) => pr.cantidad > 0).map((pr: any) => {
           const kg = pr.kg ? `CIL ${pr.kg} KG` : pr.nombre || ''
-          lines.push(`${pr.cantidad} x ${kg}`)
-          if (pr.descuento > 0) lines.push(`Descuento: -${fmt(pr.descuento)}`)
-        })
+          const desc = pr.descuento > 0 ? ` <span class="descuento">-$${pr.descuento.toFixed(2)}</span>` : ''
+          return `<div class="prod-line">${pr.cantidad} × ${kg}${desc}</div>`
+        }).join('')
         const fps = p.formasPago?.length > 0
-          ? p.formasPago.map((f: any) => `${f.tipo}: ${fmt(f.monto)}`)
-          : p.formaPagoCorte ? [p.formaPagoCorte] : []
-        fps.forEach((f: string) => lines.push(f))
-        lines.push(fmt(p.total))
+          ? p.formasPago.map((f: any) => `<div class="fp-line"><span>${f.tipo.toUpperCase()}:</span><span>$${f.monto.toFixed(2)}</span></div>`).join('')
+          : p.formaPagoCorte ? `<div class="fp-line"><span>${p.formaPagoCorte.toUpperCase()}</span></div>` : ''
+        serviciosHtml += `<div class="servicio"><div class="row-sb"><span class="bold">${numStr}. ${p.clienteNombre}</span><span class="bold">$${p.total.toFixed(2)}</span></div>${prodsHtml}${fps}</div>`
       })
       // Resumen cilindros
       if (detalle.desgloseCilindros && detalle.desgloseCilindros.length > 0) {
-        lines.push(SEP)
-        lines.push('RESUMEN CILINDROS')
-        detalle.desgloseCilindros.forEach(d => {
-          lines.push(`${d.nombre}: ${d.unidades} cil`)
-        })
-        lines.push(`TOTAL: ${detalle.desgloseCilindros.reduce((s,d) => s + d.unidades, 0)} cilindros`)
+        const totCil = detalle.desgloseCilindros.reduce((s: number,d: any) => s + d.unidades, 0)
+        const resumenCilHtml = detalle.desgloseCilindros.map((d: any) =>
+          `<div class="row-sb"><span>${d.nombre}</span><span>${d.unidades} cil = $${d.monto.toFixed(2)}</span></div>`
+        ).join('')
+        serviciosHtml += `<div class="section-header">RESUMEN CILINDROS</div>${resumenCilHtml}<div class="row-sb bold"><span>TOTAL</span><span>${totCil} cilindros</span></div>`
       }
     }
 
-    // ── TOTALES ────────────────────────────────────────────
-    lines.push(SEP2)
-    lines.push(`TOTAL ${fmt(totalCorte)}`)
-    const fpLabels: Record<string, string> = { efectivo: 'EFECTIVO', transferencia: 'TRANSFERENCIA', tarjeta: 'TARJETA', cheque: 'CHEQUE', credito: 'CREDITO', deposito: 'DEPOSITO', otros: 'OTROS' }
-    Object.entries(resumen).filter(([,v]) => (v as number) > 0).forEach(([k,v]) => {
-      lines.push(`${fpLabels[k] || k.toUpperCase()} ${fmt(v as number)}`)
-    })
-    if (esPipas && detalle.totalLitros > 0) {
-      lines.push(SEP)
-      lines.push(`LITROS (app) ${(detalle.totalLitros||0).toFixed(2)} L`)
-    }
+    // Formas de pago totales
+    const fpLabels: Record<string, string> = { efectivo:'EFECTIVO', transferencia:'TRANSFERENCIA', tarjeta:'TARJETA', cheque:'CHEQUES', credito:'CRÉDITO', deposito:'DEPÓSITO', otros:'OTROS' }
+    const fpHtml = Object.entries(resumenFP).filter(([,v]) => (v as number) > 0)
+      .map(([k,v]) => `<div class="row-sb"><span>${fpLabels[k]||k.toUpperCase()}:</span><span>$${(v as number).toFixed(2)}</span></div>`).join('')
 
-    // ── DEPÓSITOS ──────────────────────────────────────────
+    // Depósitos
+    let depHtml = ''
     if (detalle.depositos && detalle.depositos.length > 0) {
-      lines.push(SEP)
       const totalEf = detalle.depositos.reduce((s: number, d: any) => {
         const dReal = parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000
         return s + dReal + parseFloat(d.billetesRechazados || 0) + parseFloat(d.monedas || 0)
       }, 0)
-      lines.push('EFECTIVO')
-      lines.push(`Total recibido: ${fmt(totalEf)}`)
-      lines.push(`Total depositado: ${fmt(detalle.depositos.reduce((s: number, d: any) => s + (parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000), 0))}`)
-      const folios = detalle.depositos.map((d: any) => d.folio).filter(Boolean).join(', ')
-      if (folios) lines.push(`Folios deposito: ${folios}`)
-      lines.push('DEPOSITOS')
-      detalle.depositos.forEach((d: any, i: number) => {
-        const dReal = parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000
-        lines.push(`Deposito ${i+1} ${d.folio || ''} ${fmt(dReal)}`)
-      })
       const totalDep = detalle.depositos.reduce((s: number, d: any) => s + (parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000), 0)
-      lines.push(`Total Depositos: ${fmt(totalDep)}`)
+      const folios = detalle.depositos.map((d: any) => d.folio).filter(Boolean).join(', ')
+      const depRows = detalle.depositos.map((d: any, i: number) => {
+        const dReal = parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000
+        return `<div class="row-sb"><span>Depósito ${i+1} — ${d.folio||''}</span><span>$${dReal.toFixed(2)}</span></div>`
+      }).join('')
+      depHtml = `
+        <div class="section-header">EFECTIVO</div>
+        <div class="row-sb"><span>Total recibido:</span><span>$${totalEf.toFixed(2)}</span></div>
+        <div class="row-sb"><span>Total depositado:</span><span>$${totalDep.toFixed(2)}</span></div>
+        ${folios ? `<div class="row-sb"><span>Folios depósito:</span><span>${folios}</span></div>` : ''}
+        <div class="section-header">DEPÓSITOS</div>
+        ${depRows}
+        <div class="row-sb bold"><span>Total Depósitos:</span><span>$${totalDep.toFixed(2)}</span></div>`
     }
 
-    lines.push(SEP)
-    lines.push(`Repartidor(a): ${nombreRepartidor(detalle.repartidor)}`)
-    lines.push('Representacion impresa del corte de venta')
-    lines.push(`Estado: ${detalle.estado.toUpperCase()} VALIDACION`)
-    lines.push('')
+    const litrosSection = esPipas && detalle.totalLitros > 0
+      ? `<div class="divider"></div><div class="row-sb"><span>LITROS (app):</span><span>${(detalle.totalLitros||0).toFixed(2)} L</span></div>` : ''
 
-    const html = `<!DOCTYPE html><html><head><title>Corte de Caja</title><style>@page{margin:3mm;size:80mm auto}body{font-family:'Courier New',Courier,monospace;font-size:9.5pt;line-height:1.35;width:70mm;margin:0 auto;padding:1mm;color:#000}pre{margin:0;font-family:inherit;font-size:inherit;white-space:pre-wrap;word-break:break-all}</style></head><body><pre>${lines.join('\n')}</pre></body></html>`
-    const w = window.open('', '_blank', 'width=350,height=800')
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Corte de Caja</title>
+<style>
+  @page { margin: 3mm; size: 80mm auto; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Courier New', Courier, monospace; font-size: 9pt; line-height: 1.4; width: 74mm; color: #000; padding: 2mm; }
+  .center { text-align: center; }
+  .bold { font-weight: bold; }
+  .muted { color: #555; font-size: 8pt; }
+  .divider { border-top: 1px dashed #000; margin: 3px 0; }
+  .divider-solid { border-top: 2px solid #000; margin: 3px 0; }
+  .header { text-align: center; margin-bottom: 4px; }
+  .header .empresa { font-size: 12pt; font-weight: bold; }
+  .header .sub { font-size: 7.5pt; }
+  .titulo { text-align: center; font-weight: bold; font-size: 10pt; margin: 3px 0; letter-spacing: 1px; }
+  .meta-row { display: flex; justify-content: space-between; font-size: 8.5pt; margin: 1px 0; }
+  .section-header { text-align: center; font-weight: bold; font-size: 8.5pt; background: #000; color: #fff; padding: 1px 0; margin: 4px 0 2px; letter-spacing: 1px; }
+  .servicio { margin-bottom: 5px; padding-bottom: 4px; border-bottom: 1px dotted #aaa; }
+  .row-sb { display: flex; justify-content: space-between; font-size: 8.5pt; }
+  .row-sb.indent { padding-left: 8px; }
+  .fp-line { display: flex; justify-content: space-between; font-size: 8.5pt; padding-left: 4px; }
+  .litros { font-size: 8pt; color: #333; padding-left: 4px; }
+  .descuento { font-size: 8pt; color: #c00; padding-left: 4px; }
+  .prod-line { font-size: 8pt; padding-left: 8px; }
+  .total-block { margin: 3px 0; }
+  .total-block .total-main { display: flex; justify-content: space-between; font-weight: bold; font-size: 10pt; border-top: 2px solid #000; border-bottom: 1px solid #000; padding: 2px 0; }
+  .footer { text-align: center; font-size: 7.5pt; margin-top: 4px; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="empresa">GAS PROVIDENCIA</div>
+    <div class="sub">PLANTA DOLORES HIDALGO</div>
+    <div class="sub">"EL GAS QUE RINDE LO QUE CUESTA"</div>
+  </div>
+  <div class="divider-solid"></div>
+  <div class="titulo">CORTE VENTA DÍA</div>
+  <div class="meta-row"><span>Folio:</span><span>${detalle.id.slice(-8).toUpperCase()}</span></div>
+  <div class="divider"></div>
+  <div class="meta-row"><span>Repartidor:</span><span><b>${rep}</b></span></div>
+  <div class="meta-row"><span>Fecha:</span><span>${fmtFecha(detalle.dia)}</span></div>
+  <div class="meta-row"><span>Tipo:</span><span>${esPipas ? 'PIPAS' : 'CILINDROS'}</span></div>
+  <div class="divider"></div>
+
+  <div class="section-header">RESUMEN DE VENTAS</div>
+  <div class="meta-row"><span>Servicios realizados:</span><span><b>${pedSorted.length}</b></span></div>
+  ${esPipas ? `<div class="meta-row"><span>Litros (app):</span><span><b>${(detalle.totalLitros||0).toFixed(2)} L</b></span></div>` : ''}
+
+  <div class="section-header">FORMAS DE PAGO RECIBIDAS</div>
+  ${fpHtml}
+  <div class="divider"></div>
+  <div class="row-sb bold" style="font-size:10pt"><span>Total ventas:</span><span>$${totalCorteVal.toFixed(2)}</span></div>
+
+  <div class="section-header">DETALLE POR ${esPipas ? 'SERVICIO' : 'CLIENTE'}</div>
+  ${serviciosHtml}
+
+  <div class="divider-solid"></div>
+  <div class="total-block">
+    <div class="total-main"><span>TOTAL</span><span>$${totalCorteVal.toFixed(2)}</span></div>
+    ${fpHtml}
+    ${litrosSection}
+  </div>
+
+  ${depHtml ? `<div class="divider"></div>${depHtml}` : ''}
+
+  <div class="divider"></div>
+  <div class="footer">
+    <div>Repartidor(a): ${rep}</div>
+    <div>Representación impresa del corte de venta</div>
+    <div>Estado: ${detalle.estado.toUpperCase()} VALIDACIÓN</div>
+  </div>
+</body>
+</html>`
+
+    const w = window.open('', '_blank', 'width=380,height=900')
     if (!w) return
     w.document.write(html); w.document.close()
     setTimeout(() => { w.print(); w.close() }, 600)
