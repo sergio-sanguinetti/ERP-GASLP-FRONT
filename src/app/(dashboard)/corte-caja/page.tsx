@@ -388,11 +388,33 @@ function VistaDetalle({
   })
   const filasDetalle: FilaDetalle[] = esPipas
     ? pedidosOrdenados.flatMap(p => {
-        const prods = (p.productos || []).filter(pr => pr.cantidad > 0)
-        if (prods.length === 0) return [{ rowKey: p.pedidoId, pedidoId: p.pedidoId, clienteNombre: p.clienteNombre, litrosRow: p.litros, precioRow: 0, descuentoRow: p.descuento, subtotalRow: p.total, totalPedido: p.total, formasPago: p.formasPago, formaPagoCorte: p.formaPagoCorte, isFirst: true, isLast: true, numProds: 1, prodIdx: 0 }]
-        return prods.map((pr, pi) => ({ rowKey: `${p.pedidoId}_${pi}`, pedidoId: p.pedidoId, clienteNombre: p.clienteNombre, litrosRow: pr.cantidad, precioRow: pr.precio, descuentoRow: pr.descuento, subtotalRow: pr.subtotal || (pr.precio * pr.cantidad), totalPedido: p.total, formasPago: pi === 0 ? p.formasPago : [], formaPagoCorte: pi === 0 ? p.formaPagoCorte : '', isFirst: pi === 0, isLast: pi === prods.length - 1, numProds: prods.length, prodIdx: pi }))
+        const prods = (p.productos || []).filter(pr => (pr.cantidad || 0) > 0)
+        if (prods.length === 0) return [{
+          rowKey: p.pedidoId || '', pedidoId: p.pedidoId || '', clienteNombre: p.clienteNombre || '',
+          litrosRow: p.litros || 0, precioRow: 0, descuentoRow: p.descuento || 0,
+          subtotalRow: p.total || 0, totalPedido: p.total || 0,
+          formasPago: p.formasPago || [], formaPagoCorte: p.formaPagoCorte || '',
+          isFirst: true, isLast: true, numProds: 1, prodIdx: 0
+        }]
+        return prods.map((pr, pi) => ({
+          rowKey: `${p.pedidoId || ''}_${pi}`, pedidoId: p.pedidoId || '',
+          clienteNombre: p.clienteNombre || '',
+          litrosRow: pr.cantidad || 0, precioRow: pr.precio || 0,
+          descuentoRow: pr.descuento || 0,
+          subtotalRow: pr.subtotal || ((pr.precio || 0) * (pr.cantidad || 0)),
+          totalPedido: p.total || 0,
+          formasPago: pi === 0 ? (p.formasPago || []) : [],
+          formaPagoCorte: pi === 0 ? (p.formaPagoCorte || '') : '',
+          isFirst: pi === 0, isLast: pi === prods.length - 1, numProds: prods.length, prodIdx: pi
+        }))
       })
-    : pedidosOrdenados.map(p => ({ rowKey: p.pedidoId, pedidoId: p.pedidoId, clienteNombre: p.clienteNombre, litrosRow: p.litros, precioRow: 0, descuentoRow: p.descuento, subtotalRow: p.total, totalPedido: p.total, formasPago: p.formasPago, formaPagoCorte: p.formaPagoCorte, isFirst: true, isLast: true, numProds: 1, prodIdx: 0 }))
+    : pedidosOrdenados.map(p => ({
+        rowKey: p.pedidoId || '', pedidoId: p.pedidoId || '', clienteNombre: p.clienteNombre || '',
+        litrosRow: p.litros || 0, precioRow: 0, descuentoRow: p.descuento || 0,
+        subtotalRow: p.total || 0, totalPedido: p.total || 0,
+        formasPago: p.formasPago || [], formaPagoCorte: p.formaPagoCorte || '',
+        isFirst: true, isLast: true, numProds: 1, prodIdx: 0
+      }))
 
   return (
     <Box>
@@ -1397,6 +1419,24 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
   )
 }
 
+// ======================== ERROR BOUNDARY ========================
+class CorteCajaErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean; error: string}> {
+  constructor(props: any) { super(props); this.state = { hasError: false, error: '' } }
+  static getDerivedStateFromError(error: any) { return { hasError: true, error: error?.message || 'Error desconocido' } }
+  componentDidCatch(error: any) { console.error('CorteCaja error:', error) }
+  render() {
+    if (this.state.hasError) return (
+      <Box sx={{ p: 4, textAlign: 'center' }}>
+        <Alert severity="error" sx={{ mb: 2 }}>Ocurrió un error: {this.state.error}</Alert>
+        <Button variant="contained" onClick={() => { this.setState({ hasError: false, error: '' }); window.location.reload() }}>
+          Recargar
+        </Button>
+      </Box>
+    )
+    return this.props.children
+  }
+}
+
 // ======================== MAIN PAGE ========================
 
 export default function CorteCajaPage() {
@@ -1482,6 +1522,7 @@ export default function CorteCajaPage() {
   }
 
   return (
+    <CorteCajaErrorBoundary>
     <Box sx={{ p: { xs: 2, sm: 3 } }}>
       {vista !== 'dashboard' && (
         <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
@@ -1556,5 +1597,6 @@ export default function CorteCajaPage() {
         <Alert severity={snackbar.severity} onClose={() => setSnackbar(p => ({ ...p, open: false }))}>{snackbar.message}</Alert>
       </Snackbar>
     </Box>
+    </CorteCajaErrorBoundary>
   )
 }
