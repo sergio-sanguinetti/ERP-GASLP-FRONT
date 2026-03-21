@@ -1073,17 +1073,12 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
       const billetesRow = totalBilletes > 0 ? `<div class="row-sb"><span>Bill. rechazados:</span><span>$${totalBilletes.toFixed(2)}</span></div>` : ''
       const monedasRow = totalMonedas > 0 ? `<div class="row-sb"><span>Monedas:</span><span>$${totalMonedas.toFixed(2)}</span></div>` : ''
       depHtml = `
-        <div class="section-header">EFECTIVO</div>
-        <div class="row-sb"><span>Total recibido:</span><span>$${totalEfRecibido.toFixed(2)}</span></div>
-        <div class="row-sb"><span>Total depositado:</span><span>$${totalDep.toFixed(2)}</span></div>
-        ${billetesRow}
-        ${monedasRow}
-        ${folios ? `<div class="row-sb"><span>Folios depósito:</span><span>${folios}</span></div>` : ''}
-        <div class="section-header">DEPÓSITOS</div>
+        <div class="section-header">EFECTIVO Y DEPÓSITOS</div>
         ${depRows}
-        ${billetesRow ? `<div class="row-sb"><span>Bill. rechazados:</span><span>$${totalBilletes.toFixed(2)}</span></div>` : ''}
-        ${monedasRow ? `<div class="row-sb"><span>Monedas:</span><span>$${totalMonedas.toFixed(2)}</span></div>` : ''}
-        <div class="row-sb bold"><span>Total Depósitos:</span><span>$${totalDep.toFixed(2)}</span></div>`
+        ${totalBilletes > 0 ? `<div class="row-sb"><span>Bill. rechazados:</span><span>$${totalBilletes.toFixed(2)}</span></div>` : ''}
+        ${totalMonedas > 0 ? `<div class="row-sb"><span>Monedas:</span><span>$${totalMonedas.toFixed(2)}</span></div>` : ''}
+        <div class="divider"></div>
+        <div class="row-sb bold"><span>Total efectivo recibido:</span><span>$${totalEfRecibido.toFixed(2)}</span></div>`
     }
 
     const litrosSection = esPipas && detalle.totalLitros > 0
