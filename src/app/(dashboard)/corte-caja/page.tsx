@@ -9,7 +9,7 @@ import {
   Divider, CircularProgress, Snackbar, LinearProgress
 } from '@mui/material'
 import {
-  ArrowBack, CheckCircle, Edit, Print, Add, Visibility, Close, Warning
+  ArrowBack, CheckCircle, Edit, Print, Add, Visibility, Close, Warning, LockOpen, Refresh
 } from '@mui/icons-material'
 import { ventasAPI } from '@/lib/api'
 
@@ -373,11 +373,14 @@ function VistaDetalle({
   onVolver: () => void
   onCerrarCorte: (id: string, litrosMedidor?: number, observaciones?: string) => void
   onCorregirPago: (pedidoId: string, pedidoNombre: string) => void
-  onReimprimir: () => void
+  onReimprimir: (extras?: { litrosReporte: Record<string, string>; servicioNum: Record<string, string> }) => void
 }) {
   const [litrosMedidor, setLitrosMedidor] = useState<string>('')
   const [obsDialog, setObsDialog] = useState(false)
   const [observaciones, setObservaciones] = useState('')
+  const [litrosReporte, setLitrosReporte] = useState<Record<string, string>>({})
+  const [servicioNum, setServicioNum] = useState<Record<string, string>>({})
+  const [reabriendo, setReabriendo] = useState(false)
 
   if (loading) {
     return (
@@ -405,6 +408,16 @@ function VistaDetalle({
   const litrosMedidorNum = parseFloat(litrosMedidor) || 0
   const diferencia = litrosApp - litrosMedidorNum
   const alertaMedidor = litrosMedidor !== '' && litrosMedidorNum > 0 && Math.abs(diferencia) > 20
+  // Litros capturados manualmente por servicio
+  const totalLitrosIngresados = Object.values(litrosReporte).reduce((s, v) => s + (parseFloat(v) || 0), 0)
+  const pedidosOrdenados = [...(detalle.pedidos || [])].sort((a, b) => {
+    const na = parseInt(servicioNum[a.pedidoId] || '0')
+    const nb = parseInt(servicioNum[b.pedidoId] || '0')
+    if (na && nb) return na - nb
+    if (na) return -1
+    if (nb) return 1
+    return (a.numero || 0) - (b.numero || 0)
+  })
 
   return (
     <Box>
@@ -502,42 +515,77 @@ function VistaDetalle({
               <Chip label={`${detalle.pedidos.length}`} size="small" sx={{ ml: 1 }} />
             </Box>
 
-            {detalle.pedidos.length === 0 ? (
+            {pedidosOrdenados.length === 0 ? (
               <Typography variant="body2" color="text.secondary">Sin pedidos registrados en este corte</Typography>
             ) : (
               <TableContainer>
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ bgcolor: 'grey.50' }}>
-                      <TableCell sx={{ width: 32 }}><b>#</b></TableCell>
+                      {esPipas && <TableCell sx={{ width: 60 }}><b># Srv.</b></TableCell>}
+                      {!esPipas && <TableCell sx={{ width: 32 }}><b>#</b></TableCell>}
                       <TableCell><b>Cliente</b></TableCell>
-                      {esPipas
-                        ? <TableCell align="right"><b>Litros</b></TableCell>
-                        : <TableCell><b>Productos</b></TableCell>
-                      }
+                      {esPipas ? (
+                        <>
+                          <TableCell align="right"><b>Litros app</b></TableCell>
+                          <TableCell align="right" sx={{ color: 'info.main' }}><b>L. reporte</b></TableCell>
+                          <TableCell align="right"><b>$/L</b></TableCell>
+                        </>
+                      ) : (
+                        <TableCell><b>Productos</b></TableCell>
+                      )}
                       <TableCell><b>Forma de pago</b></TableCell>
                       <TableCell align="right"><b>Total</b></TableCell>
                       <TableCell align="center" sx={{ width: 40 }}></TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {detalle.pedidos.map(p => (
+                    {pedidosOrdenados.map((p, rowIdx) => (
                       <TableRow key={p.pedidoId} hover>
-                        <TableCell>
-                          <Typography variant="caption" color="text.secondary">{p.numero}</Typography>
-                        </TableCell>
+                        {esPipas ? (
+                          <TableCell sx={{ py: 0.5 }}>
+                            <TextField
+                              size="small"
+                              type="number"
+                              value={servicioNum[p.pedidoId] || ''}
+                              onChange={e => setServicioNum(prev => ({ ...prev, [p.pedidoId]: e.target.value }))}
+                              placeholder={String(rowIdx + 1)}
+                              sx={{ width: 52, '& input': { p: '4px 6px', fontSize: '0.75rem', textAlign: 'center' } }}
+                            />
+                          </TableCell>
+                        ) : (
+                          <TableCell>
+                            <Typography variant="caption" color="text.secondary">{p.numero}</Typography>
+                          </TableCell>
+                        )}
                         <TableCell>
                           <Typography variant="body2">{p.clienteNombre}</Typography>
                         </TableCell>
                         {esPipas ? (
-                          <TableCell align="right">
-                            <Typography variant="body2">{(p.litros || 0).toFixed(1)} L</Typography>
-                            {p.descuento > 0 && (
-                              <Typography variant="caption" color="error.main" display="block">
-                                -{fmt$(p.descuento)}
+                          <>
+                            <TableCell align="right">
+                              <Typography variant="body2">{(p.litros || 0).toFixed(1)} L</Typography>
+                              {p.descuento > 0 && (
+                                <Typography variant="caption" color="error.main" display="block">-{fmt$(p.descuento)}</Typography>
+                              )}
+                            </TableCell>
+                            <TableCell align="right" sx={{ py: 0.5 }}>
+                              <TextField
+                                size="small"
+                                type="number"
+                                value={litrosReporte[p.pedidoId] || ''}
+                                onChange={e => setLitrosReporte(prev => ({ ...prev, [p.pedidoId]: e.target.value }))}
+                                placeholder="0.0"
+                                sx={{ width: 72, '& input': { p: '4px 6px', fontSize: '0.75rem', textAlign: 'right' } }}
+                                InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.3, fontSize: '0.65rem' }}>L</Typography> }}
+                              />
+                            </TableCell>
+                            <TableCell align="right">
+                              <Typography variant="caption" color="text.secondary">
+                                {p.litros > 0 ? `$${(p.total / p.litros).toFixed(2)}` : '—'}
                               </Typography>
-                            )}
-                          </TableCell>
+                            </TableCell>
+                          </>
                         ) : (
                           <TableCell>
                             {(p.productos || []).map((prod, pi) => (
@@ -574,28 +622,53 @@ function VistaDetalle({
                         </TableCell>
                       </TableRow>
                     ))}
+                    {esPipas && Object.keys(litrosReporte).some(k => litrosReporte[k]) && (
+                      <TableRow sx={{ bgcolor: totalLitrosIngresados > 0 && Math.abs(litrosApp - totalLitrosIngresados) > 20 ? '#fff3f3' : '#f3fff3' }}>
+                        <TableCell colSpan={3} align="right">
+                          <Typography variant="caption" fontWeight="bold">Total litros ingresados:</Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="caption" fontWeight="bold" color={Math.abs(litrosApp - totalLitrosIngresados) > 20 ? 'error.main' : 'success.main'}>
+                            {totalLitrosIngresados.toFixed(2)} L
+                          </Typography>
+                        </TableCell>
+                        <TableCell colSpan={4}>
+                          <Typography variant="caption" color={Math.abs(litrosApp - totalLitrosIngresados) > 20 ? 'error.main' : 'success.main'}>
+                            {Math.abs(litrosApp - totalLitrosIngresados) > 20 ? '⚠️' : '✅'} Dif: {(litrosApp - totalLitrosIngresados) > 0 ? '+' : ''}{(litrosApp - totalLitrosIngresados).toFixed(2)} L vs app
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </TableContainer>
             )}
           </Paper>
 
-          {/* Validación de litros medidor — solo pipas, columna principal */}
+          {/* Validación medidor físico — solo pipas */}
           {esPipas && (
-            <Paper sx={{ p: 2, mb: 2, border: '2px solid', borderColor: alertaMedidor ? 'error.light' : 'primary.light' }}>
+            <Paper sx={{ p: 2, mb: 2, border: '2px solid', borderColor: alertaMedidor ? 'error.light' : 'divider' }}>
               <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1.5 }}>
-                📊 Reporte del medidor físico de pipa
+                📊 Comparativo medidor físico de pipa
               </Typography>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={4}>
-                  <Box sx={{ p: 1.5, bgcolor: 'primary.50', borderRadius: 1, textAlign: 'center' }}>
+              <Grid container spacing={1.5} alignItems="center">
+                <Grid item xs={6} sm={3}>
+                  <Box sx={{ p: 1, bgcolor: 'primary.50', borderRadius: 1, textAlign: 'center' }}>
                     <Typography variant="caption" color="text.secondary" display="block">App reporta</Typography>
-                    <Typography variant="h6" fontWeight="bold" color="primary.main">{litrosApp.toFixed(2)} L</Typography>
+                    <Typography fontWeight="bold" color="primary.main">{litrosApp.toFixed(1)} L</Typography>
                   </Box>
                 </Grid>
-                <Grid item xs={12} sm={4}>
+                <Grid item xs={6} sm={3}>
+                  <Box sx={{ p: 1, bgcolor: totalLitrosIngresados > 0 ? 'info.50' : 'grey.50', borderRadius: 1, textAlign: 'center' }}>
+                    <Typography variant="caption" color="text.secondary" display="block">Ingresados</Typography>
+                    <Typography fontWeight="bold" color={totalLitrosIngresados > 0 ? 'info.main' : 'text.disabled'}>
+                      {totalLitrosIngresados > 0 ? `${totalLitrosIngresados.toFixed(1)} L` : '—'}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} sm={6}>
                   <TextField
-                    label="Medidor físico"
+                    label="Medidor físico total"
                     type="number"
                     value={litrosMedidor}
                     onChange={e => setLitrosMedidor(e.target.value)}
@@ -603,31 +676,21 @@ function VistaDetalle({
                     fullWidth
                     InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5 }}>L</Typography> }}
                     placeholder="Ej: 2903.60"
-                    helperText="Lectura del medidor de la pipa"
+                    helperText="Lectura total del odómetro de la pipa"
                   />
                 </Grid>
-                <Grid item xs={12} sm={4}>
-                  {litrosMedidor !== '' && litrosMedidorNum > 0 ? (
-                    <Box sx={{
-                      p: 1.5, borderRadius: 1,
-                      bgcolor: alertaMedidor ? '#fff3f3' : '#f3fff3',
-                      border: `1px solid ${alertaMedidor ? '#f44336' : '#4caf50'}`,
-                      textAlign: 'center'
-                    }}>
-                      <Typography variant="body2" color={alertaMedidor ? 'error.main' : 'success.main'} fontWeight="bold">
-                        {alertaMedidor ? '⚠️' : '✅'} {diferencia > 0 ? '+' : ''}{diferencia.toFixed(2)} L
-                      </Typography>
-                      <Typography variant="caption" color={alertaMedidor ? 'error.main' : 'success.main'}>
-                        {alertaMedidor ? 'Verificar — supera ±20 L' : 'Dentro del rango (±20 L)'}
-                      </Typography>
-                    </Box>
-                  ) : (
-                    <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1, textAlign: 'center' }}>
-                      <Typography variant="caption" color="text.secondary">Ingresa la lectura del medidor para comparar</Typography>
-                    </Box>
-                  )}
-                </Grid>
               </Grid>
+              {litrosMedidor !== '' && litrosMedidorNum > 0 && (
+                <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1, bgcolor: alertaMedidor ? '#fff3f3' : '#f3fff3', border: `1px solid ${alertaMedidor ? '#f44336' : '#4caf50'}` }}>
+                  <Typography variant="body2" color={alertaMedidor ? 'error.main' : 'success.main'} fontWeight="bold">
+                    {alertaMedidor ? '⚠️' : '✅'} Medidor vs App: {diferencia > 0 ? '+' : ''}{diferencia.toFixed(2)} L
+                    {totalLitrosIngresados > 0 && ` | Ingresados vs App: ${(litrosApp - totalLitrosIngresados) > 0 ? '+' : ''}${(litrosApp - totalLitrosIngresados).toFixed(2)} L`}
+                  </Typography>
+                  <Typography variant="caption" color={alertaMedidor ? 'error.main' : 'success.main'}>
+                    {alertaMedidor ? 'Supera ±20 L — verificar con repartidor' : 'Dentro del rango aceptable (±20 L)'}
+                  </Typography>
+                </Box>
+              )}
             </Paper>
           )}
 
@@ -707,13 +770,32 @@ function VistaDetalle({
           <Paper sx={{ p: 2 }}>
             <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1.5 }}>Acciones</Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <Button startIcon={<Print />} variant="outlined" fullWidth onClick={onReimprimir}>
+              <Button startIcon={<Print />} variant="outlined" fullWidth onClick={() => onReimprimir({ litrosReporte, servicioNum })}>
                 Reimprimir corte
               </Button>
               {detalle.estado === 'pendiente' && (
                 <Button startIcon={<CheckCircle />} variant="contained" color="success" fullWidth
                   onClick={() => setObsDialog(true)}>
                   Cerrar y validar corte
+                </Button>
+              )}
+              {detalle.estado === 'validado' && (
+                <Button
+                  startIcon={reabriendo ? <CircularProgress size={16} color="inherit" /> : <LockOpen />}
+                  variant="outlined" color="warning" fullWidth
+                  disabled={reabriendo}
+                  onClick={async () => {
+                    if (!window.confirm('¿Reabrir este corte? Pasará a estado Pendiente para correcciones.')) return
+                    setReabriendo(true)
+                    try {
+                      await ventasAPI.reabrirCorte(detalle.id)
+                      window.location.reload()
+                    } catch (e: any) {
+                      alert(e.message || 'Error al reabrir')
+                      setReabriendo(false)
+                    }
+                  }}>
+                  Reabrir corte
                 </Button>
               )}
             </Box>
@@ -1039,102 +1121,188 @@ function DialogCorregirPago({ open, onClose, pedidoId, pedidoNombre, corteId, on
 
 // ======================== DIALOG REIMPRIMIR ========================
 
-function DialogReimprimir({ open, onClose, detalle }: {
+function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }: {
   open: boolean
   onClose: () => void
   detalle: CorteDetalle | null
+  litrosReporte?: Record<string, string>
+  servicioNum?: Record<string, string>
 }) {
   if (!detalle) return null
-  const printRef = useRef<HTMLDivElement>(null)
+
+  const esPipas = detalle.repartidor?.tipoRepartidor === 'pipas'
+  const resumen = detalle.resumenFormasPago || {}
+  const totalCorte = detalle.totalVentas || detalle.totalAbonos || 0
+
+  // Pedidos ordenados por # de servicio si están capturados
+  const pedidosOrden = [...(detalle.pedidos || [])].sort((a, b) => {
+    const na = parseInt((servicioNum || {})[a.pedidoId] || '0')
+    const nb = parseInt((servicioNum || {})[b.pedidoId] || '0')
+    if (na && nb) return na - nb
+    if (na) return -1
+    if (nb) return 1
+    return (a.numero || 0) - (b.numero || 0)
+  })
 
   const handlePrint = () => {
-    const content = printRef.current
-    if (!content) return
-    const w = window.open('', '_blank', 'width=400,height=700')
+    // Construir ticket en texto puro para 80mm (58mm imprimible ~38 chars)
+    const PAD = 38
+    const padRight = (s: string, n: number) => s.length >= n ? s.substring(0, n) : s + ' '.repeat(n - s.length)
+    const padLeft = (s: string, n: number) => s.length >= n ? s.substring(0, n) : ' '.repeat(n - s.length) + s
+    const center = (s: string) => {
+      const pad = Math.max(0, Math.floor((PAD - s.length) / 2))
+      return ' '.repeat(pad) + s
+    }
+    const line = '-'.repeat(PAD)
+    const dline = '='.repeat(PAD)
+
+    const rows: string[] = [
+      center('GAS PROVIDENCIA'),
+      center('CORTE DE CAJA'),
+      center(fmtFecha(detalle.dia)),
+      line,
+      `Repartidor: ${nombreRepartidor(detalle.repartidor)}`,
+      `Tipo: ${esPipas ? 'PIPAS' : 'CILINDROS'}`,
+      `Estado: ${detalle.estado.toUpperCase()}`,
+      `ID: ${detalle.id.slice(-8).toUpperCase()}`,
+      line,
+    ]
+
+    pedidosOrden.forEach((p, idx) => {
+      const num = (servicioNum || {})[p.pedidoId] || String(idx + 1)
+      const clienteCorto = p.clienteNombre.substring(0, 22)
+      const totalStr = fmt$(p.total)
+      const leftPart = `${num}. ${clienteCorto}`
+      const rightPart = totalStr
+      const spaces = Math.max(1, PAD - leftPart.length - rightPart.length)
+      rows.push(leftPart + ' '.repeat(spaces) + rightPart)
+
+      // Formas de pago indentadas
+      if (p.formasPago && p.formasPago.length > 0) {
+        p.formasPago.forEach(f => {
+          rows.push(`   ${f.tipo}: ${fmt$(f.monto)}`)
+        })
+      }
+
+      // Litros del reporte físico si fueron ingresados
+      const lRep = (litrosReporte || {})[p.pedidoId]
+      if (esPipas && lRep && parseFloat(lRep) > 0) {
+        rows.push(`   App: ${(p.litros || 0).toFixed(1)}L  Reporte: ${parseFloat(lRep).toFixed(1)}L`)
+      } else if (esPipas) {
+        rows.push(`   Litros app: ${(p.litros || 0).toFixed(1)} L`)
+      }
+    })
+
+    rows.push(dline)
+    const totLine = 'TOTAL'
+    const totVal = fmt$(totalCorte)
+    rows.push(padRight(totLine, PAD - totVal.length) + totVal)
+
+    // Formas de pago totales
+    Object.entries(resumen).forEach(([k, v]) => {
+      if ((v as number) <= 0) return
+      const label = k.toUpperCase()
+      const val = fmt$(v as number)
+      rows.push(padRight(label, PAD - val.length) + val)
+    })
+
+    if (esPipas && detalle.totalLitros > 0) {
+      rows.push(line)
+      const litLabel = 'LITROS (app)'
+      const litVal = `${(detalle.totalLitros || 0).toFixed(2)} L`
+      rows.push(padRight(litLabel, PAD - litVal.length) + litVal)
+    }
+
+    rows.push('')
+    rows.push(center('Gas Providencia'))
+    rows.push(center('app.prometeogp.com'))
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<title>Corte de Caja</title>
+<style>
+  @page { margin: 2mm; size: 80mm auto; }
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 10pt;
+    line-height: 1.3;
+    width: 72mm;
+    margin: 0 auto;
+    padding: 2mm;
+    color: #000;
+  }
+  pre { margin: 0; font-family: inherit; font-size: inherit; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<pre>${rows.join('\n')}</pre>
+</body>
+</html>`
+
+    const w = window.open('', '_blank', 'width=350,height=700')
     if (!w) return
-    w.document.write(`
-      <html><head><title>Corte de Caja</title>
-      <style>
-        body { font-family: 'Courier New', monospace; font-size: 11px; margin: 16px; }
-        .center { text-align: center; }
-        .bold { font-weight: bold; }
-        .line { border-top: 1px dashed #000; margin: 6px 0; }
-        .row { display: flex; justify-content: space-between; }
-        .indent { padding-left: 16px; }
-      </style></head><body>`)
-    w.document.write(content.innerHTML)
-    w.document.write('</body></html>')
+    w.document.write(html)
     w.document.close()
-    w.print()
+    setTimeout(() => { w.print(); w.close() }, 500)
   }
 
-  const resumen = detalle.resumenFormasPago || {}
-
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        Vista previa — Corte de {nombreRepartidor(detalle.repartidor)}
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle sx={{ pb: 1 }}>
+        Vista previa — Corte
         <IconButton sx={{ position: 'absolute', right: 8, top: 8 }} onClick={onClose} size="small">
           <Close />
         </IconButton>
       </DialogTitle>
       <DialogContent>
-        <Box ref={printRef} sx={{
-          fontFamily: 'monospace', fontSize: '0.78rem', p: 2,
-          border: '1px dashed #ccc', borderRadius: 1, bgcolor: 'grey.50'
+        <Box sx={{
+          fontFamily: 'Courier New, monospace', fontSize: '0.72rem', p: 1.5,
+          border: '1px dashed #bbb', borderRadius: 1, bgcolor: '#fafafa',
+          lineHeight: 1.4, whiteSpace: 'pre-wrap', maxHeight: 420, overflow: 'auto'
         }}>
-          <Box className="center"><b>GAS PROVIDENCIA</b></Box>
-          <Box className="center">CORTE DE CAJA</Box>
-          <Box className="center">{fmtFecha(detalle.dia)}</Box>
-          <Divider sx={{ my: 1, borderStyle: 'dashed' }} />
-          <Box>Repartidor: <b>{nombreRepartidor(detalle.repartidor)}</b></Box>
-          <Box>Tipo: {detalle.repartidor?.tipoRepartidor === 'pipas' ? 'PIPAS' : 'CILINDROS'}</Box>
-          <Box>Estado: {detalle.estado.toUpperCase()}</Box>
-          <Divider sx={{ my: 1, borderStyle: 'dashed' }} />
-          {detalle.pedidos.map(p => (
-            <Box key={p.pedidoId} sx={{ mb: 0.5 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>{p.numero}. {p.clienteNombre.substring(0, 22)}</span>
-                <span><b>{fmt$(p.total)}</b></span>
-              </Box>
-              {p.formasPago.map((f, fi) => (
-                <Box key={fi} sx={{ pl: 2, color: 'text.secondary', fontSize: '0.72rem' }}>
-                  {f.tipo}: {fmt$(f.monto)}
-                </Box>
-              ))}
-            </Box>
-          ))}
-          <Divider sx={{ my: 1, borderStyle: 'dashed' }} />
-          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-            <b>TOTAL</b>
-            <b>{fmt$(detalle.totalVentas || detalle.totalAbonos)}</b>
-          </Box>
-          {Object.entries(resumen).filter(([, v]) => (v as number) > 0).map(([k, v]) => (
-            <Box key={k} sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>{k.toUpperCase()}</span>
-              <span>{fmt$(v as number)}</span>
-            </Box>
-          ))}
-          {detalle.repartidor?.tipoRepartidor === 'pipas' && detalle.totalLitros > 0 && (
-            <>
-              <Divider sx={{ my: 1, borderStyle: 'dashed' }} />
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>LITROS (app)</span>
-                <span>{(detalle.totalLitros || 0).toFixed(2)} L</span>
-              </Box>
-            </>
-          )}
+          {[
+            `GAS PROVIDENCIA`.padStart(19 + 7),
+            `CORTE DE CAJA`.padStart(18 + 6),
+            fmtFecha(detalle.dia),
+            '-'.repeat(38),
+            `Repartidor: ${nombreRepartidor(detalle.repartidor)}`,
+            `Tipo: ${esPipas ? 'PIPAS' : 'CILINDROS'}`,
+            `Estado: ${detalle.estado.toUpperCase()}`,
+            '-'.repeat(38),
+            ...pedidosOrden.map((p, idx) => {
+              const num = (servicioNum || {})[p.pedidoId] || String(idx + 1)
+              const clienteCorto = p.clienteNombre.substring(0, 20)
+              const fp = p.formasPago?.map(f => `   ${f.tipo}: ${fmt$(f.monto)}`).join('
+') || `   ${p.formaPagoCorte || '—'}`
+              const lrep = (litrosReporte || {})[p.pedidoId]
+              const litInfo = esPipas ? (lrep ? `
+   App:${(p.litros||0).toFixed(1)}L Rep:${parseFloat(lrep).toFixed(1)}L` : `
+   ${(p.litros||0).toFixed(1)} L`) : ''
+              return `${num}. ${clienteCorto}  ${fmt$(p.total)}
+${fp}${litInfo}`
+            }),
+            '='.repeat(38),
+            `TOTAL                   ${fmt$(totalCorte)}`,
+            ...Object.entries(resumen).filter(([, v]) => (v as number) > 0).map(([k, v]) =>
+              `${k.toUpperCase().padEnd(24)}${fmt$(v as number)}`
+            ),
+            esPipas && detalle.totalLitros > 0 ? `
+LITROS (app)   ${(detalle.totalLitros||0).toFixed(2)} L` : null
+          ].filter(Boolean).join('
+')}
         </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cerrar</Button>
         <Button variant="contained" startIcon={<Print />} onClick={handlePrint}>
-          Imprimir
+          Imprimir (80mm)
         </Button>
       </DialogActions>
     </Dialog>
   )
 }
+
 
 // ======================== MAIN PAGE ========================
 
@@ -1149,6 +1317,7 @@ export default function CorteCajaPage() {
   const [dialogManual, setDialogManual] = useState(false)
   const [dialogCorregir, setDialogCorregir] = useState({ open: false, pedidoId: '', pedidoNombre: '' })
   const [dialogReimprimir, setDialogReimprimir] = useState(false)
+  const [reimprimirExtras, setReimprimirExtras] = useState<{ litrosReporte: Record<string, string>; servicioNum: Record<string, string> }>({ litrosReporte: {}, servicioNum: {} })
 
   const showSnack = (message: string, severity: 'success' | 'error' = 'success') => {
     setSnackbar({ open: true, message, severity })
@@ -1263,7 +1432,7 @@ export default function CorteCajaPage() {
           onCerrarCorte={handleCerrarCorte}
           onCorregirPago={(pedidoId, pedidoNombre) =>
             setDialogCorregir({ open: true, pedidoId, pedidoNombre })}
-          onReimprimir={() => setDialogReimprimir(true)}
+          onReimprimir={(extras) => { if (extras) setReimprimirExtras(extras); setDialogReimprimir(true) }}
         />
       )}
 
@@ -1297,6 +1466,8 @@ export default function CorteCajaPage() {
         open={dialogReimprimir}
         onClose={() => setDialogReimprimir(false)}
         detalle={corteDetalle}
+        litrosReporte={reimprimirExtras.litrosReporte}
+        servicioNum={reimprimirExtras.servicioNum}
       />
 
       {/* Snackbar */}

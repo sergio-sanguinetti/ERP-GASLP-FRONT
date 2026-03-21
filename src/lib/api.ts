@@ -2207,6 +2207,15 @@ export const ventasAPI = {
       throw new Error(error.message || 'Error al crear corte manual')
     }
     return response.json()
+  },
+
+  reabrirCorte: async (id: string): Promise<any> => {
+    const response = await fetchWithAuth(`/cortes-caja/${id}/reabrir`, { method: 'PUT' })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error(error.message || 'Error al reabrir el corte')
+    }
+    return response.json()
   }
 }
 
