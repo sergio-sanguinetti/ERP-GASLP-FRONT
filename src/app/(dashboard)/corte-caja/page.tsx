@@ -321,6 +321,8 @@ function VistaDetalle({
   const [litrosReporte, setLitrosReporte] = useState<Record<string, string>>({})
   const [servicioNum, setServicioNum] = useState<Record<string, string>>({})
   const [reabriendo, setReabriendo] = useState(false)
+  const [editDepIdx, setEditDepIdx] = useState<number | null>(null)
+  const [editDepData, setEditDepData] = useState<any>(null)
 
   if (loading) {
     return (
@@ -346,14 +348,30 @@ function VistaDetalle({
   const alertaMedidor = litrosMedidor !== '' && litrosMedidorNum > 0 && Math.abs(diferencia) > 20
   const totalLitrosIngresados = (Object.values(litrosReporte) as string[]).reduce((s: number, v: string) => s + (parseFloat(v) || 0), 0 as number)
 
+  // Para pipas: expandir productos como filas independientes
+  type FilaDetalle = {
+    rowKey: string; pedidoId: string; clienteNombre: string
+    litrosRow: number; precioRow: number; descuentoRow: number; subtotalRow: number; totalPedido: number
+    formasPago: { tipo: string; monto: number }[]; formaPagoCorte?: string
+    isFirst: boolean; isLast: boolean; numProds: number; prodIdx: number
+  }
   const pedidosOrdenados = [...(detalle.pedidos || [])].sort((a, b) => {
-    const na = parseInt(servicioNum[a.pedidoId] || '0')
-    const nb = parseInt(servicioNum[b.pedidoId] || '0')
+    const keyA = esPipas ? `${a.pedidoId}_0` : a.pedidoId
+    const keyB = esPipas ? `${b.pedidoId}_0` : b.pedidoId
+    const na = parseInt(servicioNum[keyA] || servicioNum[a.pedidoId] || '0')
+    const nb = parseInt(servicioNum[keyB] || servicioNum[b.pedidoId] || '0')
     if (na && nb) return na - nb
     if (na) return -1
     if (nb) return 1
     return (a.numero || 0) - (b.numero || 0)
   })
+  const filasDetalle: FilaDetalle[] = esPipas
+    ? pedidosOrdenados.flatMap(p => {
+        const prods = (p.productos || []).filter(pr => pr.cantidad > 0)
+        if (prods.length === 0) return [{ rowKey: p.pedidoId, pedidoId: p.pedidoId, clienteNombre: p.clienteNombre, litrosRow: p.litros, precioRow: 0, descuentoRow: p.descuento, subtotalRow: p.total, totalPedido: p.total, formasPago: p.formasPago, formaPagoCorte: p.formaPagoCorte, isFirst: true, isLast: true, numProds: 1, prodIdx: 0 }]
+        return prods.map((pr, pi) => ({ rowKey: `${p.pedidoId}_${pi}`, pedidoId: p.pedidoId, clienteNombre: p.clienteNombre, litrosRow: pr.cantidad, precioRow: pr.precio, descuentoRow: pr.descuento, subtotalRow: pr.subtotal || (pr.precio * pr.cantidad), totalPedido: p.total, formasPago: pi === 0 ? p.formasPago : [], formaPagoCorte: pi === 0 ? p.formaPagoCorte : '', isFirst: pi === 0, isLast: pi === prods.length - 1, numProds: prods.length, prodIdx: pi }))
+      })
+    : pedidosOrdenados.map(p => ({ rowKey: p.pedidoId, pedidoId: p.pedidoId, clienteNombre: p.clienteNombre, litrosRow: p.litros, precioRow: 0, descuentoRow: p.descuento, subtotalRow: p.total, totalPedido: p.total, formasPago: p.formasPago, formaPagoCorte: p.formaPagoCorte, isFirst: true, isLast: true, numProds: 1, prodIdx: 0 }))
 
   return (
     <Box>
@@ -436,7 +454,11 @@ function VistaDetalle({
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <TextField label="Medidor físico total" type="number" value={litrosMedidor}
-                    onChange={e => setLitrosMedidor(e.target.value)} size="small" fullWidth
+                    onChange={e => setLitrosMedidor(e.target.value)}
+                    onWheel={e => (e.target as HTMLInputElement).blur()}
+                    size="small" fullWidth
+                    inputProps={{ style: { MozAppearance: 'textfield' } }}
+                    sx={{ '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': { WebkitAppearance: 'none', margin: 0 } }}
                     InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.5 }}>L</Typography> }}
                     placeholder="Ej: 2903.60" helperText="Lectura total del odómetro de la pipa" />
                 </Grid>
@@ -461,7 +483,7 @@ function VistaDetalle({
               <Typography variant="subtitle2" fontWeight="bold">{esPipas ? '🚛 Servicios del día' : '📦 Detalle de pedidos'}</Typography>
               <Chip label={`${detalle.pedidos.length}`} size="small" sx={{ ml: 1 }} />
             </Box>
-            {pedidosOrdenados.length === 0 ? (
+            {filasDetalle.length === 0 ? (
               <Typography variant="body2" color="text.secondary">Sin pedidos en este corte</Typography>
             ) : (
               <TableContainer>
@@ -476,6 +498,7 @@ function VistaDetalle({
                           <TableCell align="right"><b>Litros app</b></TableCell>
                           <TableCell align="right" sx={{ color: 'info.main' }}><b>L. reporte</b></TableCell>
                           <TableCell align="right"><b>$/L</b></TableCell>
+                          <TableCell align="right"><b>Desc.</b></TableCell>
                         </>
                       ) : <TableCell><b>Productos</b></TableCell>}
                       <TableCell><b>Forma de pago</b></TableCell>
@@ -484,43 +507,56 @@ function VistaDetalle({
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {pedidosOrdenados.map((p, rowIdx) => (
-                      <TableRow key={p.pedidoId} hover>
+                    {filasDetalle.map((fila, rowIdx) => (
+                      <TableRow key={fila.rowKey} hover sx={{ bgcolor: esPipas && !fila.isFirst ? 'grey.25' : undefined }}>
                         {esPipas ? (
                           <TableCell sx={{ py: 0.5 }}>
                             <TextField size="small" type="number"
-                              value={servicioNum[p.pedidoId] || ''}
-                              onChange={e => setServicioNum(prev => ({ ...prev, [p.pedidoId]: e.target.value }))}
+                              value={servicioNum[fila.rowKey] || ''}
+                              onChange={e => setServicioNum(prev => ({ ...prev, [fila.rowKey]: e.target.value }))}
+                              onWheel={e => (e.target as HTMLInputElement).blur()}
                               placeholder={String(rowIdx + 1)}
-                              sx={{ width: 52, '& input': { p: '4px 6px', fontSize: '0.75rem', textAlign: 'center' } }} />
+                              inputProps={{ style: { MozAppearance: 'textfield' } }}
+                              sx={{ width: 52, '& input': { p: '4px 6px', fontSize: '0.75rem', textAlign: 'center' }, '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': { WebkitAppearance: 'none', margin: 0 } }} />
                           </TableCell>
                         ) : (
-                          <TableCell><Typography variant="caption" color="text.secondary">{p.numero}</Typography></TableCell>
+                          <TableCell><Typography variant="caption" color="text.secondary">{rowIdx + 1}</Typography></TableCell>
                         )}
-                        <TableCell><Typography variant="body2">{p.clienteNombre}</Typography></TableCell>
+                        <TableCell>
+                          <Typography variant="body2" color={esPipas && !fila.isFirst ? 'text.secondary' : undefined}>
+                            {fila.clienteNombre}
+                            {esPipas && !fila.isFirst && <span style={{ color: '#999', fontSize: '0.7rem', marginLeft: 4 }}>↳ carga {fila.prodIdx + 1}</span>}
+                          </Typography>
+                        </TableCell>
                         {esPipas ? (
                           <>
                             <TableCell align="right">
-                              <Typography variant="body2">{(p.litros || 0).toFixed(1)} L</Typography>
-                              {p.descuento > 0 && <Typography variant="caption" color="error.main" display="block">-{fmt$(p.descuento)}</Typography>}
+                              <Typography variant="body2">{fila.litrosRow.toFixed(2)} L</Typography>
                             </TableCell>
                             <TableCell align="right" sx={{ py: 0.5 }}>
                               <TextField size="small" type="number"
-                                value={litrosReporte[p.pedidoId] || ''}
-                                onChange={e => setLitrosReporte(prev => ({ ...prev, [p.pedidoId]: e.target.value }))}
-                                placeholder="0.0"
-                                sx={{ width: 72, '& input': { p: '4px 6px', fontSize: '0.75rem', textAlign: 'right' } }}
+                                value={litrosReporte[fila.rowKey] || ''}
+                                onChange={e => setLitrosReporte(prev => ({ ...prev, [fila.rowKey]: e.target.value }))}
+                                onWheel={e => (e.target as HTMLInputElement).blur()}
+                                placeholder="0.00"
+                                inputProps={{ style: { MozAppearance: 'textfield' } }}
+                                sx={{ width: 72, '& input': { p: '4px 6px', fontSize: '0.75rem', textAlign: 'right' }, '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': { WebkitAppearance: 'none', margin: 0 } }}
                                 InputProps={{ endAdornment: <Typography variant="caption" sx={{ ml: 0.3, fontSize: '0.65rem' }}>L</Typography> }} />
                             </TableCell>
                             <TableCell align="right">
                               <Typography variant="caption" color="text.secondary">
-                                {p.litros > 0 ? `$${(p.total / p.litros).toFixed(2)}` : '—'}
+                                {fila.precioRow > 0 ? `$${fila.precioRow.toFixed(2)}` : fila.litrosRow > 0 ? `$${(fila.subtotalRow / fila.litrosRow).toFixed(2)}` : '—'}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right">
+                              <Typography variant="caption" color={fila.descuentoRow > 0 ? 'error.main' : 'text.disabled'}>
+                                {fila.descuentoRow > 0 ? `-$${fila.descuentoRow.toFixed(2)}` : '—'}
                               </Typography>
                             </TableCell>
                           </>
                         ) : (
                           <TableCell>
-                            {(p.productos || []).map((prod, pi) => (
+                            {(detalle.pedidos.find(p => p.pedidoId === fila.pedidoId)?.productos || []).map((prod, pi) => (
                               <Typography key={pi} variant="caption" display="block">
                                 {prod.cantidad} × {prod.nombre}
                                 {prod.descuento > 0 && <span style={{ color: '#f44336' }}> (-{fmt$(prod.descuento)})</span>}
@@ -529,25 +565,31 @@ function VistaDetalle({
                           </TableCell>
                         )}
                         <TableCell>
-                          {p.formasPago && p.formasPago.length > 0
-                            ? p.formasPago.map((f, fi) => (
+                          {fila.isFirst && fila.formasPago && fila.formasPago.length > 0
+                            ? fila.formasPago.map((f, fi) => (
                               <Typography key={fi} variant="caption" display="block">{f.tipo}: <b>{fmt$(f.monto)}</b></Typography>
                             ))
-                            : <Typography variant="caption" color="text.secondary">{p.formaPagoCorte || '—'}</Typography>}
+                            : fila.isFirst && <Typography variant="caption" color="text.secondary">{fila.formaPagoCorte || '—'}</Typography>}
                         </TableCell>
-                        <TableCell align="right"><Typography fontWeight="medium">{fmt$(p.total)}</Typography></TableCell>
+                        <TableCell align="right">
+                          {fila.isFirst
+                            ? <Typography fontWeight="medium">{fmt$(fila.totalPedido)}</Typography>
+                            : <Typography variant="caption" color="text.secondary">{fmt$(fila.subtotalRow)}</Typography>}
+                        </TableCell>
                         <TableCell align="center">
-                          <Tooltip title="Corregir forma de pago">
-                            <IconButton size="small" onClick={() => onCorregirPago(p.pedidoId, p.clienteNombre)}>
-                              <Edit sx={{ fontSize: 15 }} />
-                            </IconButton>
-                          </Tooltip>
+                          {fila.isFirst && (
+                            <Tooltip title="Corregir forma de pago">
+                              <IconButton size="small" onClick={() => onCorregirPago(fila.pedidoId, fila.clienteNombre)}>
+                                <Edit sx={{ fontSize: 15 }} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
                     {esPipas && Object.keys(litrosReporte).some(k => litrosReporte[k]) && (
                       <TableRow sx={{ bgcolor: totalLitrosIngresados > 0 && Math.abs(litrosApp - totalLitrosIngresados) > 20 ? '#fff3f3' : '#f3fff3' }}>
-                        <TableCell colSpan={3} align="right"><Typography variant="caption" fontWeight="bold">Total litros ingresados:</Typography></TableCell>
+                        <TableCell colSpan={4} align="right"><Typography variant="caption" fontWeight="bold">Total litros ingresados:</Typography></TableCell>
                         <TableCell align="right">
                           <Typography variant="caption" fontWeight="bold" color={Math.abs(litrosApp - totalLitrosIngresados) > 20 ? 'error.main' : 'success.main'}>
                             {totalLitrosIngresados.toFixed(2)} L
@@ -570,35 +612,85 @@ function VistaDetalle({
           {detalle.depositos && detalle.depositos.length > 0 && (
             <Paper sx={{ p: 2, mb: 2 }}>
               <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1.5 }}>🏦 Depósitos</Typography>
+              <Alert severity="info" sx={{ mb: 1.5, fontSize: '0.75rem', py: 0.5 }}>
+                Total efectivo = Depósito + Billetes rechazados + Monedas
+              </Alert>
               <Table size="small">
                 <TableHead>
-                  <TableRow>
+                  <TableRow sx={{ bgcolor: 'grey.50' }}>
                     <TableCell><b>Folio</b></TableCell>
-                    <TableCell align="right"><b>Billetes</b></TableCell>
+                    <TableCell align="right"><b>Depósito</b></TableCell>
+                    <TableCell align="right"><b>Bill. rechazados</b></TableCell>
                     <TableCell align="right"><b>Monedas</b></TableCell>
-                    <TableCell align="right"><b>Total depósito</b></TableCell>
+                    <TableCell align="right"><b>Total efectivo</b></TableCell>
+                    <TableCell sx={{ width: 36 }} />
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {detalle.depositos.map((dep: any, i: number) => {
-                    const totalDep = parseFloat(dep.total || 0) > parseFloat(dep.monto || 0) ? parseFloat(dep.total || 0) : parseFloat(dep.monto || 0)
+                    const monto = parseFloat(dep.monto || 0)
+                    const billetes = parseFloat(dep.billetesRechazados || 0)
+                    const monedas = parseFloat(dep.monedas || 0)
+                    const totalEf = parseFloat(dep.total || 0) || (monto + billetes + monedas)
+                    const isEditing = editDepIdx === i
                     return (
                       <TableRow key={i}>
-                        <TableCell>{dep.folio || '—'}</TableCell>
-                        <TableCell align="right">{parseFloat(dep.monedas || 0) > 0 ? fmt$(parseFloat(dep.monto || 0)) : '—'}</TableCell>
-                        <TableCell align="right">{parseFloat(dep.monedas || 0) > 0 ? fmt$(parseFloat(dep.monedas || 0)) : '—'}</TableCell>
-                        <TableCell align="right"><b>{fmt$(totalDep)}</b></TableCell>
+                        <TableCell>
+                          {isEditing
+                            ? <TextField size="small" value={editDepData?.folio || ''} onChange={e => setEditDepData((d: any) => ({ ...d, folio: e.target.value }))} sx={{ width: 80, '& input': { p: '3px 6px', fontSize: '0.78rem' } }} />
+                            : <Typography variant="body2">{dep.folio || '—'}</Typography>}
+                        </TableCell>
+                        <TableCell align="right">
+                          {isEditing
+                            ? <TextField size="small" type="number" value={editDepData?.monto || ''} onChange={e => setEditDepData((d: any) => ({ ...d, monto: e.target.value }))} onWheel={e => (e.target as HTMLInputElement).blur()} inputProps={{ style: { MozAppearance: 'textfield' } }} sx={{ width: 80, '& input': { p: '3px 6px', fontSize: '0.78rem', textAlign: 'right' }, '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': { WebkitAppearance: 'none' } }} />
+                            : fmt$(monto)}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2" color={billetes > 0 ? 'warning.main' : 'text.disabled'}>{billetes > 0 ? fmt$(billetes) : '—'}</Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2" color={monedas > 0 ? 'info.main' : 'text.disabled'}>{monedas > 0 ? fmt$(monedas) : '—'}</Typography>
+                        </TableCell>
+                        <TableCell align="right"><b>{fmt$(totalEf)}</b></TableCell>
+                        <TableCell align="center">
+                          {isEditing ? (
+                            <IconButton size="small" color="success" onClick={() => {
+                              // Solo actualiza visualmente por ahora
+                              setEditDepIdx(null); setEditDepData(null)
+                            }}><CheckCircle sx={{ fontSize: 15 }} /></IconButton>
+                          ) : (
+                            <IconButton size="small" onClick={() => { setEditDepIdx(i); setEditDepData({ folio: dep.folio, monto: dep.monto }) }}>
+                              <Edit sx={{ fontSize: 14 }} />
+                            </IconButton>
+                          )}
+                        </TableCell>
                       </TableRow>
                     )
                   })}
                   <TableRow sx={{ bgcolor: 'grey.50' }}>
-                    <TableCell colSpan={3}><b>Total depositado</b></TableCell>
+                    <TableCell><b>Total</b></TableCell>
+                    <TableCell align="right"><b>{fmt$(detalle.depositos.reduce((s: number, d: any) => s + parseFloat(d.monto || 0), 0))}</b></TableCell>
+                    <TableCell align="right">
+                      <Typography fontWeight="bold" color="warning.main">
+                        {detalle.depositos.reduce((s: number, d: any) => s + parseFloat(d.billetesRechazados || 0), 0) > 0
+                          ? fmt$(detalle.depositos.reduce((s: number, d: any) => s + parseFloat(d.billetesRechazados || 0), 0))
+                          : '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography fontWeight="bold" color="info.main">
+                        {detalle.depositos.reduce((s: number, d: any) => s + parseFloat(d.monedas || 0), 0) > 0
+                          ? fmt$(detalle.depositos.reduce((s: number, d: any) => s + parseFloat(d.monedas || 0), 0))
+                          : '—'}
+                      </Typography>
+                    </TableCell>
                     <TableCell align="right">
                       <b>{fmt$(detalle.depositos.reduce((s: number, d: any) => {
-                        const t = parseFloat(d.total || 0) > parseFloat(d.monto || 0) ? parseFloat(d.total || 0) : parseFloat(d.monto || 0)
-                        return s + t
+                        const m = parseFloat(d.monto || 0), b = parseFloat(d.billetesRechazados || 0), mo = parseFloat(d.monedas || 0)
+                        return s + (parseFloat(d.total || 0) || m + b + mo)
                       }, 0))}</b>
                     </TableCell>
+                    <TableCell />
                   </TableRow>
                 </TableBody>
               </Table>
@@ -888,45 +980,100 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
   })
 
   const handlePrint = () => {
-    const PAD = 38
-    const lines: string[] = [
-      'GAS PROVIDENCIA'.padStart(19 + 7),
-      'CORTE DE CAJA'.padStart(18 + 6),
-      fmtFecha(detalle.dia),
-      '-'.repeat(PAD),
-      `Repartidor: ${nombreRepartidor(detalle.repartidor)}`,
-      `Tipo: ${esPipas ? 'PIPAS' : 'CILINDROS'}`,
-      `Estado: ${detalle.estado.toUpperCase()}`,
-      `ID: ${detalle.id.slice(-8).toUpperCase()}`,
-      '-'.repeat(PAD),
-    ]
-    pedidosOrden.forEach((p, idx) => {
-      const num = (servicioNum || {})[p.pedidoId] || String(idx + 1)
-      const cli = p.clienteNombre.substring(0, 22)
-      const tot = fmt$(p.total)
-      const spaces = Math.max(1, PAD - `${num}. ${cli}`.length - tot.length)
-      lines.push(`${num}. ${cli}${' '.repeat(spaces)}${tot}`)
-      const fps = p.formasPago?.map(f => `   ${f.tipo}: ${fmt$(f.monto)}`) || [`   ${p.formaPagoCorte || '—'}`]
-      fps.forEach(l => lines.push(l))
-      if (esPipas) {
-        const lrep = (litrosReporte || {})[p.pedidoId]
-        lines.push(lrep && parseFloat(lrep) > 0 ? `   App:${(p.litros||0).toFixed(1)}L  Rep:${parseFloat(lrep).toFixed(1)}L` : `   ${(p.litros||0).toFixed(1)} L`)
-      }
+    const SEP = '-'.repeat(38)
+    const SEP2 = '='.repeat(38)
+    const lines: string[] = []
+    lines.push('GAS PROVIDENCIA')
+    lines.push('CORTE DE CAJA')
+    lines.push(fmtFecha(detalle.dia))
+    lines.push(SEP)
+    lines.push(`Repartidor: ${nombreRepartidor(detalle.repartidor)}`)
+    lines.push(`Tipo: ${esPipas ? 'PIPAS' : 'CILINDROS'}`)
+    lines.push(`Estado: ${detalle.estado.toUpperCase()}`)
+    lines.push(`Folio: ${detalle.id.slice(-8).toUpperCase()}`)
+    lines.push(SEP)
+
+    // Construir filas expandidas igual que en VistaDetalle
+    const pedSorted = [...(detalle.pedidos||[])].sort((a,b) => {
+      const na = parseInt((servicioNum||{})[`${a.pedidoId}_0`] || (servicioNum||{})[a.pedidoId] || '0')
+      const nb = parseInt((servicioNum||{})[`${b.pedidoId}_0`] || (servicioNum||{})[b.pedidoId] || '0')
+      if (na && nb) return na - nb; if (na) return -1; if (nb) return 1
+      return (a.numero||0) - (b.numero||0)
     })
-    lines.push('='.repeat(PAD))
-    const totLabel = 'TOTAL'; const totVal = fmt$(totalCorte)
-    lines.push(totLabel.padEnd(PAD - totVal.length) + totVal)
-    Object.entries(resumen).forEach(([k, v]) => {
-      if ((v as number) <= 0) return
-      const val = fmt$(v as number)
-      lines.push(k.toUpperCase().padEnd(PAD - val.length) + val)
+    let srvCount = 0
+
+    if (esPipas) {
+      pedSorted.forEach(p => {
+        const prods = (p.productos||[]).filter(pr => pr.cantidad > 0)
+        const rows = prods.length > 0 ? prods.map((pr, pi) => ({
+          rowKey: `${p.pedidoId}_${pi}`, clienteNombre: p.clienteNombre,
+          litros: pr.cantidad, subtotal: pr.subtotal || pr.precio * pr.cantidad,
+          totalPedido: p.total, formasPago: pi === 0 ? p.formasPago : [],
+          formaPagoCorte: pi === 0 ? p.formaPagoCorte : '', isFirst: pi === 0, precio: pr.precio, descuento: pr.descuento
+        })) : [{ rowKey: p.pedidoId, clienteNombre: p.clienteNombre, litros: p.litros, subtotal: p.total, totalPedido: p.total, formasPago: p.formasPago, formaPagoCorte: p.formaPagoCorte, isFirst: true, precio: 0, descuento: p.descuento }]
+        rows.forEach(row => {
+          srvCount++
+          const num = (servicioNum||{})[row.rowKey] || String(srvCount).padStart(3, '0')
+          lines.push(`${num}. ${row.clienteNombre.substring(0, 28)}`)
+          if (row.isFirst) lines.push(`$${row.totalPedido.toFixed(2)}`)
+          else lines.push(`   (carga ${row.litros.toFixed(2)} L = $${row.subtotal.toFixed(2)})`)
+          const fps = row.formasPago?.length > 0
+            ? row.formasPago.map(f => `${f.tipo}: $${f.monto.toFixed(2)}`)
+            : row.formaPagoCorte ? [row.formaPagoCorte] : []
+          fps.forEach(f => lines.push(f))
+          const lrep = (litrosReporte||{})[row.rowKey]
+          const litStr = lrep && parseFloat(lrep) > 0
+            ? `${row.litros.toFixed(2)} L (rpt: ${parseFloat(lrep).toFixed(2)} L)`
+            : `${row.litros.toFixed(2)} L`
+          lines.push(litStr)
+          if (row.descuento > 0) lines.push(`Descuento: -$${row.descuento.toFixed(2)}`)
+        })
+      })
+    } else {
+      // Cilindros
+      pedSorted.forEach((p, idx) => {
+        srvCount++
+        const num = (servicioNum||{})[p.pedidoId] || String(srvCount).padStart(3, '0')
+        lines.push(`${num}. ${p.clienteNombre.substring(0, 28)}`)
+        // Desglose por kg
+        ;(p.productos||[]).filter(pr => pr.cantidad > 0).forEach(pr => {
+          const kg = pr.kg ? `CIL ${pr.kg} KG` : pr.nombre || ''
+          lines.push(`  ${pr.cantidad} x ${kg} = $${pr.subtotal.toFixed(2)}`)
+          if (pr.descuento > 0) lines.push(`  Desc: -$${pr.descuento.toFixed(2)}`)
+        })
+        const fps = p.formasPago?.length > 0
+          ? p.formasPago.map(f => `${f.tipo}: $${f.monto.toFixed(2)}`)
+          : p.formaPagoCorte ? [p.formaPagoCorte] : []
+        fps.forEach(f => lines.push(f))
+        lines.push(`Total: $${p.total.toFixed(2)}`)
+      })
+      // Resumen cilindros
+      if (detalle.desgloseCilindros && detalle.desgloseCilindros.length > 0) {
+        lines.push(SEP)
+        lines.push('RESUMEN CILINDROS:')
+        detalle.desgloseCilindros.forEach(d => {
+          lines.push(`  ${d.nombre}: ${d.unidades} cil = $${d.monto.toFixed(2)}`)
+        })
+        const totCil = detalle.desgloseCilindros.reduce((s,d) => s + d.unidades, 0)
+        lines.push(`  TOTAL: ${totCil} cilindros`)
+      }
+    }
+
+    lines.push(SEP2)
+    // Totales por forma de pago — exacto como la app
+    const PAD = 24
+    lines.push(`TOTAL${' '.repeat(PAD - 5)}$${totalCorte.toFixed(2)}`)
+    Object.entries(resumen).filter(([,v]) => (v as number) > 0).forEach(([k,v]) => {
+      const label = k.toUpperCase()
+      lines.push(`${label}${' '.repeat(Math.max(1, PAD - label.length))}$${(v as number).toFixed(2)}`)
     })
     if (esPipas && detalle.totalLitros > 0) {
-      const lv = `${(detalle.totalLitros||0).toFixed(2)} L`
-      lines.push('LITROS (app)'.padEnd(PAD - lv.length) + lv)
+      lines.push(SEP)
+      lines.push(`LITROS (app)${' '.repeat(Math.max(1, PAD - 11))}${(detalle.totalLitros||0).toFixed(2)} L`)
     }
-    lines.push(''); lines.push('GAS PROVIDENCIA'.padStart(19 + 7))
-    const html = `<!DOCTYPE html><html><head><title>Corte</title><style>@page{margin:2mm;size:80mm auto}body{font-family:'Courier New',monospace;font-size:10pt;line-height:1.3;width:72mm;margin:0 auto;padding:2mm;color:#000}pre{margin:0;font-family:inherit;font-size:inherit;white-space:pre-wrap}</style></head><body><pre>${lines.join('\n')}</pre></body></html>`
+    lines.push('')
+    lines.push('GAS PROVIDENCIA')
+    const html = `<!DOCTYPE html><html><head><title>Corte</title><style>@page{margin:2mm;size:80mm auto}body{font-family:'Courier New',monospace;font-size:10pt;line-height:1.4;width:72mm;margin:0 auto;padding:2mm;color:#000}pre{margin:0;font-family:inherit;font-size:inherit;white-space:pre-wrap}</style></head><body><pre>${lines.join('\n')}</pre></body></html>`
     const w = window.open('', '_blank', 'width=350,height=700')
     if (!w) return
     w.document.write(html); w.document.close()
@@ -940,25 +1087,40 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
         <IconButton sx={{ position: 'absolute', right: 8, top: 8 }} onClick={onClose} size="small"><Close /></IconButton>
       </DialogTitle>
       <DialogContent>
-        <Box sx={{ fontFamily: 'Courier New, monospace', fontSize: '0.72rem', p: 1.5, border: '1px dashed #bbb', borderRadius: 1, bgcolor: '#fafafa', lineHeight: 1.4, maxHeight: 420, overflow: 'auto', whiteSpace: 'pre' }}>
+        <Box sx={{ fontFamily: 'Courier New, monospace', fontSize: '0.7rem', p: 1.5, border: '1px dashed #bbb', borderRadius: 1, bgcolor: '#fafafa', lineHeight: 1.5, maxHeight: 440, overflow: 'auto', whiteSpace: 'pre' }}>
           {(() => {
-            const NL = '\n'
-            const lines: string[] = ['GAS PROVIDENCIA', 'CORTE DE CAJA', fmtFecha(detalle.dia), '-'.repeat(38),
-              `Rep: ${nombreRepartidor(detalle.repartidor)}`, `Tipo: ${esPipas ? 'PIPAS' : 'CILINDROS'}`, '-'.repeat(38)]
-            pedidosOrden.forEach((p, idx) => {
-              const num = (servicioNum || {})[p.pedidoId] || String(idx + 1)
-              lines.push(`${num}. ${p.clienteNombre.substring(0, 20)}  ${fmt$(p.total)}`)
-              const fps = p.formasPago?.map(f => `   ${f.tipo}: ${fmt$(f.monto)}`) || [`   ${p.formaPagoCorte || '—'}`]
-              fps.forEach(l => lines.push(l))
-              if (esPipas) {
-                const lrep = (litrosReporte || {})[p.pedidoId]
-                lines.push(lrep ? `   App:${(p.litros||0).toFixed(1)}L Rep:${parseFloat(lrep).toFixed(1)}L` : `   ${(p.litros||0).toFixed(1)} L`)
+            const SEP = '-'.repeat(38); const SEP2 = '='.repeat(38)
+            const lines: string[] = ['GAS PROVIDENCIA','CORTE DE CAJA', fmtFecha(detalle.dia), SEP,
+              `Repartidor: ${nombreRepartidor(detalle.repartidor)}`,
+              `Tipo: ${esPipas ? 'PIPAS' : 'CILINDROS'}`,
+              `Estado: ${detalle.estado.toUpperCase()}`,
+              `Folio: ${detalle.id.slice(-8).toUpperCase()}`, SEP]
+            let srvC = 0
+            pedidosOrden.forEach(p => {
+              const prods = esPipas ? (p.productos||[]).filter(pr => pr.cantidad > 0) : []
+              const rows = esPipas && prods.length > 1
+                ? prods.map((pr,pi) => ({ rk: `${p.pedidoId}_${pi}`, cli: p.clienteNombre, litros: pr.cantidad, sub: pr.subtotal || pr.precio*pr.cantidad, tot: p.total, fps: pi===0?p.formasPago:[], fpc: pi===0?p.formaPagoCorte:'', first: pi===0 }))
+                : [{ rk: p.pedidoId, cli: p.clienteNombre, litros: p.litros, sub: p.total, tot: p.total, fps: p.formasPago, fpc: p.formaPagoCorte, first: true }]
+              rows.forEach(r => {
+                srvC++
+                const num = (servicioNum||{})[r.rk] || String(srvC).padStart(3,'0')
+                lines.push(`${num}. ${r.cli.substring(0,28)}`)
+                if (r.first) lines.push(`$${r.tot.toFixed(2)}`)
+                else lines.push(`   ${r.litros.toFixed(2)} L = $${r.sub.toFixed(2)}`)
+                ;(r.fps?.length > 0 ? r.fps.map((f:any) => `${f.tipo}: $${f.monto.toFixed(2)}`) : r.fpc ? [r.fpc] : []).forEach((l:string) => lines.push(l))
+                if (esPipas) {
+                  const lrep = (litrosReporte||{})[r.rk]
+                  lines.push(lrep && parseFloat(lrep)>0 ? `${r.litros.toFixed(2)} L (rpt:${parseFloat(lrep).toFixed(2)})` : `${r.litros.toFixed(2)} L`)
+                }
+              })
+              if (!esPipas) {
+                ;(p.productos||[]).filter(pr=>pr.cantidad>0).forEach(pr => lines.push(`  ${pr.cantidad}x ${pr.kg ? 'CIL '+pr.kg+' KG' : pr.nombre||''} = $${pr.subtotal.toFixed(2)}`))
               }
             })
-            lines.push('='.repeat(38), `TOTAL  ${fmt$(totalCorte)}`)
-            Object.entries(resumen).filter(([,v]) => (v as number) > 0).forEach(([k,v]) => lines.push(`${k.toUpperCase()}  ${fmt$(v as number)}`))
-            if (esPipas && detalle.totalLitros > 0) lines.push(`LITROS  ${(detalle.totalLitros||0).toFixed(2)} L`)
-            return lines.join(NL)
+            lines.push(SEP2, `TOTAL                   $${totalCorte.toFixed(2)}`)
+            Object.entries(resumen).filter(([,v])=>(v as number)>0).forEach(([k,v]) => lines.push(`${k.toUpperCase().padEnd(24)}$${(v as number).toFixed(2)}`))
+            if (esPipas && detalle.totalLitros > 0) lines.push(SEP, `LITROS (app)            ${(detalle.totalLitros||0).toFixed(2)} L`)
+            return lines.join('\n')
           })()}
         </Box>
       </DialogContent>
