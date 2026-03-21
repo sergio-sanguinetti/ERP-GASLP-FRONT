@@ -2216,6 +2216,17 @@ export const ventasAPI = {
       throw new Error(error.message || 'Error al reabrir el corte')
     }
     return response.json()
+  },
+
+  getResumenDia: async (fecha: string, sedeId?: string): Promise<any> => {
+    const params = new URLSearchParams({ fecha })
+    if (sedeId) params.append('sedeId', sedeId)
+    const response = await fetchWithAuth(`/cortes-caja/resumen-dia?${params.toString()}`)
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error(error.message || 'Error al obtener resumen del día')
+    }
+    return response.json()
   }
 }
 
