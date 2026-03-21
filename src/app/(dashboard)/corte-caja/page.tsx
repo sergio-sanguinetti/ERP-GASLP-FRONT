@@ -702,9 +702,20 @@ function VistaDetalle({
                         </TableCell>
                         <TableCell align="center">
                           {isEditing ? (
-                            <IconButton size="small" color="success" onClick={() => {
-                              setEditDepIdx(null); setEditDepData(null)
-                            }}><CheckCircle sx={{ fontSize: 15 }} /></IconButton>
+                            <IconButton size="small" color="success" disabled={savingDep} onClick={async () => {
+                              setSavingDep(true)
+                              try {
+                                await ventasAPI.actualizarDeposito(detalle.id, dep.id, {
+                                  folio: editDepData?.folio,
+                                  monto: parseFloat(editDepData?.monto || 0),
+                                  billetesRechazados: parseFloat(editDepData?.billetes || 0),
+                                  monedas: parseFloat(editDepData?.monedas || 0)
+                                })
+                                const updated = await ventasAPI.getCorteDetalle(detalle.id)
+                                if (updated) { setEditDepIdx(null); setEditDepData(null); window.location.reload() }
+                              } catch(e: any) { alert('Error: ' + (e.message || 'No se pudo guardar')) }
+                              finally { setSavingDep(false) }
+                            }}>{savingDep ? <CircularProgress size={14} /> : <CheckCircle sx={{ fontSize: 15 }} />}</IconButton>
                           ) : (
                             <IconButton size="small" onClick={() => { setEditDepIdx(i); setEditDepData({ folio: dep.folio, monto: String(depositoReal), billetes: String(billetes), monedas: String(monedas) }) }}>
                               <Edit sx={{ fontSize: 14 }} />

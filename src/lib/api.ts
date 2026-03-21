@@ -2231,6 +2231,19 @@ export const ventasAPI = {
     return response.json()
   },
 
+  actualizarDeposito: async (corteId: string, depositoId: string, data: { folio?: string; monto?: number; billetesRechazados?: number; monedas?: number }): Promise<any> => {
+    const response = await fetchWithAuth(`/cortes-caja/${corteId}/depositos/${depositoId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error(error.message || 'Error al actualizar depósito')
+    }
+    return response.json()
+  },
+
   guardarLitrosReporte: async (corteId: string, litrosReporte: Record<string, string>): Promise<any> => {
     const response = await fetchWithAuth(`/cortes-caja/${corteId}/litros-reporte`, {
       method: 'PUT',
