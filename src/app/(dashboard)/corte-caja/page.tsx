@@ -327,6 +327,17 @@ function VistaDetalle({
   const [savingDep, setSavingDep] = useState(false)
   const [savingLitros, setSavingLitros] = useState(false)
 
+  // Restaurar litrosReporte guardados en stats al cargar
+  useEffect(() => {
+    if (!detalle?.stats) return
+    try {
+      const stats = typeof detalle.stats === 'string' ? JSON.parse(detalle.stats) : detalle.stats
+      if (stats?.litrosReporte && Object.keys(litrosReporte).length === 0) {
+        setLitrosReporte(stats.litrosReporte)
+      }
+    } catch(e) {}
+  }, [detalle?.id])
+
   // Auto-guardar litros reporte con debounce de 1.5s
   useEffect(() => {
     const hasLitros = Object.values(litrosReporte).some(v => parseFloat(v) > 0)
@@ -360,16 +371,6 @@ function VistaDetalle({
   const esPipas = detalle.repartidor?.tipoRepartidor === 'pipas'
   const litrosApp = detalle.totalLitros || 0
 
-  // Restaurar litrosReporte guardados en stats al cargar
-  useEffect(() => {
-    if (!detalle?.stats) return
-    try {
-      const stats = typeof detalle.stats === 'string' ? JSON.parse(detalle.stats) : detalle.stats
-      if (stats?.litrosReporte && Object.keys(litrosReporte).length === 0) {
-        setLitrosReporte(stats.litrosReporte)
-      }
-    } catch(e) {}
-  }, [detalle?.id])
   const litrosMedidorNum = parseFloat(litrosMedidor) || 0
   const diferencia = litrosApp - litrosMedidorNum
   const alertaMedidor = litrosMedidor !== '' && litrosMedidorNum > 0 && Math.abs(diferencia) > 20
