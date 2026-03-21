@@ -711,8 +711,7 @@ function VistaDetalle({
                                   billetesRechazados: parseFloat(editDepData?.billetes || 0),
                                   monedas: parseFloat(editDepData?.monedas || 0)
                                 })
-                                const updated = await ventasAPI.getCorteDetalle(detalle.id)
-                                if (updated) { setEditDepIdx(null); setEditDepData(null); window.location.reload() }
+                                setEditDepIdx(null); setEditDepData(null)
                               } catch(e: any) { alert('Error: ' + (e.message || 'No se pudo guardar')) }
                               finally { setSavingDep(false) }
                             }}>{savingDep ? <CircularProgress size={14} /> : <CheckCircle sx={{ fontSize: 15 }} />}</IconButton>
@@ -765,10 +764,6 @@ function VistaDetalle({
                                     monedas: parseFloat(dep.monedas) || 0
                                   })
                                   setDepositosExtra(prev => prev.filter((_,i) => i!==ei))
-                                  // Recargar detalle sin recargar toda la página
-                                  const updated = await ventasAPI.getCorteDetalle(detalle.id)
-                                  if (updated) window.dispatchEvent(new CustomEvent('recargarDetalle', { detail: updated }))
-                                  else window.location.reload()
                                 } catch(e: any) { alert('Error: ' + e.message) }
                                 finally { setSavingDep(false) }
                               }}>
