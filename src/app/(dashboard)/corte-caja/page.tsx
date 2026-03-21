@@ -1090,30 +1090,30 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
 <meta charset="UTF-8">
 <title>Corte de Caja</title>
 <style>
-  @page { margin: 3mm; size: 80mm auto; }
+  @page { margin: 2mm 3mm; size: 80mm auto; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Courier New', Courier, monospace; font-size: 9pt; line-height: 1.4; width: 74mm; color: #000; padding: 2mm; }
+  body { font-family: Arial, 'Helvetica Neue', sans-serif; font-size: 8.5pt; font-weight: 500; line-height: 1.45; width: 74mm; color: #000; padding: 2mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .center { text-align: center; }
-  .bold { font-weight: bold; }
-  .muted { color: #555; font-size: 8pt; }
-  .divider { border-top: 1px dashed #000; margin: 3px 0; }
-  .divider-solid { border-top: 2px solid #000; margin: 3px 0; }
+  .bold { font-weight: 700; }
+  .muted { color: #444; font-size: 7.5pt; }
+  .divider { border-top: 1.5px dashed #000; margin: 3px 0; }
+  .divider-solid { border-top: 2.5px solid #000; margin: 3px 0; }
   .header { text-align: center; margin-bottom: 4px; }
-  .header .empresa { font-size: 12pt; font-weight: bold; }
-  .header .sub { font-size: 7.5pt; }
-  .titulo { text-align: center; font-weight: bold; font-size: 10pt; margin: 3px 0; letter-spacing: 1px; }
-  .meta-row { display: flex; justify-content: space-between; font-size: 8.5pt; margin: 1px 0; }
-  .section-header { text-align: center; font-weight: bold; font-size: 8.5pt; background: #000; color: #fff; padding: 1px 0; margin: 4px 0 2px; letter-spacing: 1px; }
-  .servicio { margin-bottom: 5px; padding-bottom: 4px; border-bottom: 1px dotted #aaa; }
-  .row-sb { display: flex; justify-content: space-between; font-size: 8.5pt; }
+  .header .empresa { font-size: 11pt; font-weight: 900; letter-spacing: 0.5px; }
+  .header .sub { font-size: 7pt; font-weight: 500; }
+  .titulo { text-align: center; font-weight: 800; font-size: 9.5pt; margin: 3px 0; letter-spacing: 2px; }
+  .meta-row { display: flex; justify-content: space-between; font-size: 8pt; margin: 1.5px 0; font-weight: 500; }
+  .section-header { text-align: center; font-weight: 800; font-size: 8pt; background: #000 !important; color: #fff !important; padding: 2px 0; margin: 5px 0 3px; letter-spacing: 1.5px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .servicio { margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1.5px dashed #000; page-break-inside: avoid; break-inside: avoid; }
+  .row-sb { display: flex; justify-content: space-between; font-size: 8.5pt; font-weight: 500; }
   .row-sb.indent { padding-left: 8px; }
-  .fp-line { display: flex; justify-content: space-between; font-size: 8.5pt; padding-left: 4px; }
-  .litros { font-size: 8pt; color: #333; padding-left: 4px; }
-  .descuento { font-size: 8pt; color: #c00; padding-left: 4px; }
-  .prod-line { font-size: 8pt; padding-left: 8px; }
-  .total-block { margin: 3px 0; }
-  .total-block .total-main { display: flex; justify-content: space-between; font-weight: bold; font-size: 10pt; border-top: 2px solid #000; border-bottom: 1px solid #000; padding: 2px 0; }
-  .footer { text-align: center; font-size: 7.5pt; margin-top: 4px; }
+  .fp-line { display: flex; justify-content: space-between; font-size: 8pt; padding-left: 4px; font-weight: 500; }
+  .litros { font-size: 8pt; padding-left: 4px; font-weight: 500; }
+  .descuento { font-size: 8pt; color: #000; padding-left: 4px; font-weight: 600; }
+  .prod-line { font-size: 8pt; padding-left: 8px; font-weight: 500; }
+  .total-block { margin: 3px 0; page-break-inside: avoid; break-inside: avoid; }
+  .total-block .total-main { display: flex; justify-content: space-between; font-weight: 800; font-size: 10pt; border-top: 2.5px solid #000; border-bottom: 1.5px solid #000; padding: 2px 0; }
+  .footer { text-align: center; font-size: 7.5pt; margin-top: 4px; font-weight: 500; }
 </style>
 </head>
 <body>
