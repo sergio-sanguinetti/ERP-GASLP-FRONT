@@ -1151,10 +1151,6 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
   <div class="divider-solid"></div>
   <div class="total-block">
     <div class="total-main"><span>TOTAL</span><span>$${totalCorteVal.toFixed(2)}</span></div>
-    ${Object.entries(resumenFP).filter(([,v]) => (v as number) > 0).map(([k,v]) => {
-      const fpLabels2: Record<string,string> = {efectivo:'EFECTIVO',transferencia:'TRANSFERENCIA',tarjeta:'TARJETA',cheque:'CHEQUES',credito:'CRÉDITO',deposito:'DEPÓSITO',otros:'OTROS'}
-      return `<div class="row-sb"><span>${fpLabels2[k]||k.toUpperCase()}:</span><span>$${(v as number).toFixed(2)}</span></div>`
-    }).join('')}
     ${litrosSection}
   </div>
 
