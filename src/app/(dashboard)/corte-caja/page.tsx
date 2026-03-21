@@ -915,38 +915,43 @@ function DialogCorteManual({ open, onClose, onCrear, sedeId }: {
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           <Alert severity="info" sx={{ fontSize: '0.8rem' }}>Úsalo cuando el repartidor no generó corte desde la app.</Alert>
           
-          {/* Buscador de repartidor */}
+          {/* Lista de repartidores de la sede */}
           <Box>
-            <TextField
-              label="Buscar repartidor"
-              value={busqueda}
-              onChange={e => { setBusqueda(e.target.value); setRepartidorId('') }}
-              size="small" fullWidth
-              placeholder="Escribe el nombre..."
-              InputProps={{ endAdornment: loadingReps ? <CircularProgress size={16} /> : null }}
-            />
-            {busqueda && repsFiltrados.length > 0 && !repSeleccionado && (
-              <Paper variant="outlined" sx={{ mt: 0.5, maxHeight: 200, overflow: 'auto' }}>
-                {repsFiltrados.map(r => (
-                  <Box key={r.id} sx={{ px: 2, py: 1, cursor: 'pointer', '&:hover': { bgcolor: 'grey.50' }, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                    onClick={() => { setRepartidorId(r.id); setBusqueda(`${r.nombres || ''} ${r.apellidoPaterno || ''}`.trim()) }}>
-                    <Box>
-                      <Typography variant="body2" fontWeight="medium">{r.nombres} {r.apellidoPaterno}</Typography>
-                      <Typography variant="caption" color="text.secondary">{r.tipoRepartidor === 'pipas' ? '🚛 Pipas' : '🔵 Cilindros'}</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+              Selecciona el repartidor
+            </Typography>
+            {loadingReps ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}><CircularProgress size={20} /></Box>
+            ) : (
+              <Paper variant="outlined" sx={{ maxHeight: 220, overflow: 'auto' }}>
+                {repartidores.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>Sin repartidores disponibles</Typography>
+                ) : repartidores.map(r => (
+                  <Box key={r.id}
+                    onClick={() => setRepartidorId(r.id)}
+                    sx={{
+                      px: 2, py: 1.2, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      bgcolor: repartidorId === r.id ? 'success.50' : undefined,
+                      borderLeft: repartidorId === r.id ? '3px solid #4caf50' : '3px solid transparent',
+                      '&:hover': { bgcolor: repartidorId === r.id ? 'success.50' : 'grey.50' },
+                      borderBottom: '0.5px solid', borderBottomColor: 'divider'
+                    }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography sx={{ fontSize: '1rem' }}>{r.tipoRepartidor === 'pipas' ? '🚛' : '🔵'}</Typography>
+                      <Box>
+                        <Typography variant="body2" fontWeight={repartidorId === r.id ? 'bold' : 'medium'}>
+                          {r.nombres} {r.apellidoPaterno}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {r.tipoRepartidor === 'pipas' ? 'Pipas' : 'Cilindros'}
+                        </Typography>
+                      </Box>
                     </Box>
-                    <Typography variant="caption" color="text.secondary">{r.sede}</Typography>
+                    {repartidorId === r.id && <Typography color="success.main" fontWeight="bold">✓</Typography>}
                   </Box>
                 ))}
               </Paper>
-            )}
-            {repSeleccionado && (
-              <Box sx={{ mt: 0.5, p: 1.5, bgcolor: 'success.50', borderRadius: 1, border: '1px solid', borderColor: 'success.light', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Box>
-                  <Typography variant="body2" fontWeight="bold" color="success.main">✓ {repSeleccionado.nombres} {repSeleccionado.apellidoPaterno}</Typography>
-                  <Typography variant="caption" color="text.secondary">{repSeleccionado.tipoRepartidor === 'pipas' ? '🚛 Pipas' : '🔵 Cilindros'} · {repSeleccionado.sede}</Typography>
-                </Box>
-                <Button size="small" onClick={() => { setRepartidorId(''); setBusqueda('') }}>Cambiar</Button>
-              </Box>
             )}
           </Box>
 
