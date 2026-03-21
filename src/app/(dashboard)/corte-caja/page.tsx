@@ -1075,8 +1075,8 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
       depHtml = `
         <div class="section-header">EFECTIVO Y DEPÓSITOS</div>
         ${depRows}
-        ${totalBilletes > 0 ? `<div class="row-sb"><span>Bill. rechazados:</span><span>$${totalBilletes.toFixed(2)}</span></div>` : ''}
-        ${totalMonedas > 0 ? `<div class="row-sb"><span>Monedas:</span><span>$${totalMonedas.toFixed(2)}</span></div>` : ''}
+        <div class="row-sb"><span>Bill. rechazados:</span><span>$${totalBilletes.toFixed(2)}</span></div>
+        <div class="row-sb"><span>Monedas:</span><span>$${totalMonedas.toFixed(2)}</span></div>
         <div class="divider"></div>
         <div class="row-sb bold"><span>Total efectivo recibido:</span><span>$${totalEfRecibido.toFixed(2)}</span></div>`
     }
