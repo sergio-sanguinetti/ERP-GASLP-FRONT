@@ -409,7 +409,7 @@ function VistaDetalle({
   const diferencia = litrosApp - litrosMedidorNum
   const alertaMedidor = litrosMedidor !== '' && litrosMedidorNum > 0 && Math.abs(diferencia) > 20
   // Litros capturados manualmente por servicio
-  const totalLitrosIngresados = Object.values(litrosReporte).reduce((s, v) => s + (parseFloat(v) || 0), 0)
+  const totalLitrosIngresados = (Object.values(litrosReporte) as string[]).reduce((s: number, v: string) => s + (parseFloat(v) || 0), 0 as number)
   const pedidosOrdenados = [...(detalle.pedidos || [])].sort((a, b) => {
     const na = parseInt(servicioNum[a.pedidoId] || '0')
     const nb = parseInt(servicioNum[b.pedidoId] || '0')
@@ -1261,36 +1261,43 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
           border: '1px dashed #bbb', borderRadius: 1, bgcolor: '#fafafa',
           lineHeight: 1.4, whiteSpace: 'pre-wrap', maxHeight: 420, overflow: 'auto'
         }}>
-          {[
-            `GAS PROVIDENCIA`.padStart(19 + 7),
-            `CORTE DE CAJA`.padStart(18 + 6),
-            fmtFecha(detalle.dia),
-            '-'.repeat(38),
-            `Repartidor: ${nombreRepartidor(detalle.repartidor)}`,
-            `Tipo: ${esPipas ? 'PIPAS' : 'CILINDROS'}`,
-            `Estado: ${detalle.estado.toUpperCase()}`,
-            '-'.repeat(38),
-            ...pedidosOrden.map((p, idx) => {
+          {(() => {
+            const NL = '\n'
+            const lines: string[] = [
+              'GAS PROVIDENCIA'.padStart(19 + 7),
+              'CORTE DE CAJA'.padStart(18 + 6),
+              fmtFecha(detalle.dia),
+              '-'.repeat(38),
+              `Repartidor: ${nombreRepartidor(detalle.repartidor)}`,
+              `Tipo: ${esPipas ? 'PIPAS' : 'CILINDROS'}`,
+              `Estado: ${detalle.estado.toUpperCase()}`,
+              '-'.repeat(38),
+            ]
+            pedidosOrden.forEach((p, idx) => {
               const num = (servicioNum || {})[p.pedidoId] || String(idx + 1)
               const clienteCorto = p.clienteNombre.substring(0, 20)
-              const fp = p.formasPago?.map(f => `   ${f.tipo}: ${fmt$(f.monto)}`).join('
-') || `   ${p.formaPagoCorte || '—'}`
-              const lrep = (litrosReporte || {})[p.pedidoId]
-              const litInfo = esPipas ? (lrep ? `
-   App:${(p.litros||0).toFixed(1)}L Rep:${parseFloat(lrep).toFixed(1)}L` : `
-   ${(p.litros||0).toFixed(1)} L`) : ''
-              return `${num}. ${clienteCorto}  ${fmt$(p.total)}
-${fp}${litInfo}`
-            }),
-            '='.repeat(38),
-            `TOTAL                   ${fmt$(totalCorte)}`,
-            ...Object.entries(resumen).filter(([, v]) => (v as number) > 0).map(([k, v]) =>
-              `${k.toUpperCase().padEnd(24)}${fmt$(v as number)}`
-            ),
-            esPipas && detalle.totalLitros > 0 ? `
-LITROS (app)   ${(detalle.totalLitros||0).toFixed(2)} L` : null
-          ].filter(Boolean).join('
-')}
+              lines.push(`${num}. ${clienteCorto}  ${fmt$(p.total)}`)
+              const fpLines = p.formasPago?.map(f => `   ${f.tipo}: ${fmt$(f.monto)}`) || [`   ${p.formaPagoCorte || '—'}`]
+              fpLines.forEach(l => lines.push(l))
+              if (esPipas) {
+                const lrep = (litrosReporte || {})[p.pedidoId]
+                if (lrep && parseFloat(lrep) > 0) {
+                  lines.push(`   App:${(p.litros||0).toFixed(1)}L  Rep:${parseFloat(lrep).toFixed(1)}L`)
+                } else {
+                  lines.push(`   ${(p.litros||0).toFixed(1)} L`)
+                }
+              }
+            })
+            lines.push('='.repeat(38))
+            lines.push(`TOTAL                   ${fmt$(totalCorte)}`)
+            Object.entries(resumen).filter(([, v]) => (v as number) > 0).forEach(([k, v]) => {
+              lines.push(`${k.toUpperCase().padEnd(24)}${fmt$(v as number)}`)
+            })
+            if (esPipas && detalle.totalLitros > 0) {
+              lines.push(`LITROS (app)   ${(detalle.totalLitros||0).toFixed(2)} L`)
+            }
+            return lines.join(NL)
+          })()}
         </Box>
       </DialogContent>
       <DialogActions>
