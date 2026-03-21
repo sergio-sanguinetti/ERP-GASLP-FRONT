@@ -628,10 +628,11 @@ function VistaDetalle({
                 </TableHead>
                 <TableBody>
                   {detalle.depositos.map((dep: any, i: number) => {
-                    const monto = parseFloat(dep.monto || 0)
+                    const depositoReal = parseFloat(dep.total || 0) || parseFloat(dep.monto || 0) * 1000
                     const billetes = parseFloat(dep.billetesRechazados || 0)
                     const monedas = parseFloat(dep.monedas || 0)
-                    const totalEf = parseFloat(dep.total || 0) || (monto + billetes + monedas)
+                    const totalEf = depositoReal + billetes + monedas
+                    const monto = depositoReal
                     const isEditing = editDepIdx === i
                     return (
                       <TableRow key={i}>
@@ -669,7 +670,10 @@ function VistaDetalle({
                   })}
                   <TableRow sx={{ bgcolor: 'grey.50' }}>
                     <TableCell><b>Total</b></TableCell>
-                    <TableCell align="right"><b>{fmt$(detalle.depositos.reduce((s: number, d: any) => s + parseFloat(d.monto || 0), 0))}</b></TableCell>
+                    <TableCell align="right"><b>{fmt$(detalle.depositos.reduce((s: number, d: any) => {
+                      const dReal = parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000
+                      return s + dReal
+                    }, 0))}</b></TableCell>
                     <TableCell align="right">
                       <Typography fontWeight="bold" color="warning.main">
                         {detalle.depositos.reduce((s: number, d: any) => s + parseFloat(d.billetesRechazados || 0), 0) > 0
@@ -686,8 +690,9 @@ function VistaDetalle({
                     </TableCell>
                     <TableCell align="right">
                       <b>{fmt$(detalle.depositos.reduce((s: number, d: any) => {
-                        const m = parseFloat(d.monto || 0), b = parseFloat(d.billetesRechazados || 0), mo = parseFloat(d.monedas || 0)
-                        return s + (parseFloat(d.total || 0) || m + b + mo)
+                        const dReal = parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000
+                        const b = parseFloat(d.billetesRechazados || 0), mo = parseFloat(d.monedas || 0)
+                        return s + dReal + b + mo
                       }, 0))}</b>
                     </TableCell>
                     <TableCell />
