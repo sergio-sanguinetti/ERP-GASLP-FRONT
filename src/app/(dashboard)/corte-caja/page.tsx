@@ -326,7 +326,7 @@ function VistaDetalle({
   const [editDepData, setEditDepData] = useState<any>(null)
   const [depositosExtra, setDepositosExtra] = useState<{folio:string;monto:string;billetes:string;monedas:string;guardado?:boolean}[]>([])
   const [savingDep, setSavingDep] = useState(false)
-  const [savingLitros, setSavingLitros] = useState(false)
+
 
   // Restaurar litrosReporte guardados en stats al cargar (solo una vez por corte)
   const restoredRef = useRef<string>('')
@@ -342,18 +342,7 @@ function VistaDetalle({
     } catch(e) {}
   }, [detalle?.id])
 
-  // Auto-guardar litros reporte con debounce de 2s
-  useEffect(() => {
-    const hasLitros = Object.values(litrosReporte).some(v => parseFloat(v) > 0)
-    if (!hasLitros || !detalle?.id) return
-    const timer = setTimeout(() => {
-      setSavingLitros(true)
-      ventasAPI.guardarLitrosReporte(detalle.id, litrosReporte)
-        .catch(() => {})
-        .finally(() => setSavingLitros(false))
-    }, 2000)
-    return () => clearTimeout(timer)
-  }, [JSON.stringify(litrosReporte), detalle?.id])
+  // Litros se guardan automáticamente al cerrar el corte (sin auto-save que causa crashes)
 
   if (loading) {
     return (
@@ -898,6 +887,10 @@ function VistaDetalle({
         <DialogActions>
           <Button onClick={() => setObsDialog(false)}>Cancelar</Button>
           <Button variant="contained" color="success" onClick={() => {
+            // Guardar litros reporte en stats antes de cerrar
+            if (esPipas && Object.values(litrosReporte).some(v => parseFloat(v) > 0)) {
+              ventasAPI.guardarLitrosReporte(detalle.id, litrosReporte).catch(() => {})
+            }
             onCerrarCorte(detalle.id, esPipas && litrosMedidorNum > 0 ? litrosMedidorNum : undefined, observaciones || undefined)
             setObsDialog(false)
           }}>✅ Confirmar cierre</Button>
