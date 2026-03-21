@@ -893,10 +893,14 @@ function DialogCorteManual({ open, onClose, onCrear, sedeId }: {
   useEffect(() => {
     if (!open) return
     setLoadingReps(true)
-    const filtros: any = { rol: 'repartidor' }
-    if (sedeId) filtros.sede = sedeId
-    usuariosAPI.getAll(filtros)
-      .then(data => setRepartidores(data || []))
+    // Traer todos los repartidores — el backend filtra por sede del usuario automáticamente
+    usuariosAPI.getAll({ rol: 'repartidor' })
+      .then(data => {
+        let reps = data || []
+        // Si hay sedeId, filtrar en frontend por si el backend no filtra
+        if (sedeId) reps = reps.filter((r: any) => !r.sede || r.sede?.includes(sedeId) || sedeId?.includes(r.sede))
+        setRepartidores(reps.length > 0 ? reps : (data || []))
+      })
       .catch(() => setRepartidores([]))
       .finally(() => setLoadingReps(false))
   }, [open, sedeId])
