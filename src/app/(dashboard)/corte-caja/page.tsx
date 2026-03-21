@@ -1043,14 +1043,7 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
           : p.formaPagoCorte ? `<div class="fp-line"><span>${p.formaPagoCorte.toUpperCase()}</span></div>` : ''
         serviciosHtml += `<div class="servicio"><div class="row-sb"><span class="bold">${numStr}. ${p.clienteNombre}</span><span class="bold">$${p.total.toFixed(2)}</span></div>${prodsHtml}${fps}</div>`
       })
-      // Resumen cilindros
-      if (detalle.desgloseCilindros && detalle.desgloseCilindros.length > 0) {
-        const totCil = detalle.desgloseCilindros.reduce((s: number,d: any) => s + d.unidades, 0)
-        const resumenCilHtml = detalle.desgloseCilindros.map((d: any) =>
-          `<div class="row-sb"><span>${d.nombre}</span><span>${d.unidades} cil = $${d.monto.toFixed(2)}</span></div>`
-        ).join('')
-        serviciosHtml += `<div class="section-header">RESUMEN CILINDROS</div>${resumenCilHtml}<div class="row-sb bold"><span>TOTAL</span><span>${totCil} cilindros</span></div>`
-      }
+      // Resumen cilindros ya aparece arriba en RESUMEN DE VENTAS
     }
 
     // Formas de pago totales
@@ -1134,6 +1127,11 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
   <div class="section-header">RESUMEN DE VENTAS</div>
   <div class="meta-row"><span>Servicios realizados:</span><span><b>${pedSorted.length}</b></span></div>
   ${esPipas ? `<div class="meta-row"><span>Litros (app):</span><span><b>${(detalle.totalLitros||0).toFixed(2)} L</b></span></div>` : ''}
+  ${!esPipas && detalle.desgloseCilindros && detalle.desgloseCilindros.length > 0 ? `
+    <div class="divider"></div>
+    ${detalle.desgloseCilindros.map((d: any) => `<div class="row-sb"><span>${d.nombre}:</span><span>${d.unidades} cil = $${d.monto.toFixed(2)}</span></div>`).join('')}
+    <div class="row-sb bold"><span>Total cilindros:</span><span>${detalle.desgloseCilindros.reduce((s: number,d: any) => s + d.unidades, 0)} cil</span></div>
+  ` : ''}
 
   <div class="section-header">FORMAS DE PAGO RECIBIDAS</div>
   ${fpHtml}
