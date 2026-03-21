@@ -985,9 +985,12 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
   })
 
   const handlePrint = () => {
-    const SEP = '-'.repeat(38)
-    const SEP2 = '='.repeat(38)
+    const SEP = '-'.repeat(32)
+    const SEP2 = '='.repeat(32)
+    const fmt = (n: number) => `$${n.toFixed(2)}`  // sin separadores de miles, igual al app
     const lines: string[] = []
+
+    // ── ENCABEZADO ─────────────────────────────────────────
     lines.push('GAS PROVIDENCIA')
     lines.push('CORTE DE CAJA')
     lines.push(fmtFecha(detalle.dia))
@@ -998,7 +1001,7 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
     lines.push(`Folio: ${detalle.id.slice(-8).toUpperCase()}`)
     lines.push(SEP)
 
-    // Construir filas expandidas igual que en VistaDetalle
+    // ── SERVICIOS ──────────────────────────────────────────
     const pedSorted = [...(detalle.pedidos||[])].sort((a,b) => {
       const na = parseInt((servicioNum||{})[`${a.pedidoId}_0`] || (servicioNum||{})[a.pedidoId] || '0')
       const nb = parseInt((servicioNum||{})[`${b.pedidoId}_0`] || (servicioNum||{})[b.pedidoId] || '0')
@@ -1010,79 +1013,117 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
     if (esPipas) {
       pedSorted.forEach(p => {
         const prods = (p.productos||[]).filter(pr => pr.cantidad > 0)
-        const rows = prods.length > 0 ? prods.map((pr, pi) => ({
-          rowKey: `${p.pedidoId}_${pi}`, clienteNombre: p.clienteNombre,
-          litros: pr.cantidad, subtotal: pr.subtotal || pr.precio * pr.cantidad,
-          totalPedido: p.total, formasPago: pi === 0 ? p.formasPago : [],
-          formaPagoCorte: pi === 0 ? p.formaPagoCorte : '', isFirst: pi === 0, precio: pr.precio, descuento: pr.descuento
-        })) : [{ rowKey: p.pedidoId, clienteNombre: p.clienteNombre, litros: p.litros, subtotal: p.total, totalPedido: p.total, formasPago: p.formasPago, formaPagoCorte: p.formaPagoCorte, isFirst: true, precio: 0, descuento: p.descuento }]
+        const rows = prods.length > 0
+          ? prods.map((pr, pi) => ({
+              rowKey: `${p.pedidoId}_${pi}`,
+              clienteNombre: p.clienteNombre,
+              litros: pr.cantidad,
+              subtotal: pr.subtotal || pr.precio * pr.cantidad,
+              totalPedido: p.total,
+              formasPago: pi === 0 ? p.formasPago : [],
+              formaPagoCorte: pi === 0 ? p.formaPagoCorte : '',
+              isFirst: pi === 0,
+              descuento: pr.descuento || 0
+            }))
+          : [{ rowKey: p.pedidoId, clienteNombre: p.clienteNombre, litros: p.litros, subtotal: p.total, totalPedido: p.total, formasPago: p.formasPago, formaPagoCorte: p.formaPagoCorte, isFirst: true, descuento: p.descuento || 0 }]
+
         rows.forEach(row => {
           srvCount++
-          const num = (servicioNum||{})[row.rowKey] || String(srvCount).padStart(3, '0')
-          lines.push(`${num}. ${row.clienteNombre.substring(0, 28)}`)
-          if (row.isFirst) lines.push(`$${row.totalPedido.toFixed(2)}`)
-          else lines.push(`   (carga ${row.litros.toFixed(2)} L = $${row.subtotal.toFixed(2)})`)
+          const numStr = (servicioNum||{})[row.rowKey] || String(srvCount).padStart(3, '0')
+          // Línea 1: número + cliente (máx 28 chars)
+          lines.push(`${numStr}. ${row.clienteNombre.substring(0, 26)}`)
+          // Línea 2: total del servicio
+          if (row.isFirst) lines.push(fmt(row.totalPedido))
+          else lines.push(`${fmt(row.subtotal)}`)
+          // Línea 3: formas de pago
           const fps = row.formasPago?.length > 0
-            ? row.formasPago.map(f => `${f.tipo}: $${f.monto.toFixed(2)}`)
+            ? row.formasPago.map((f: any) => `${f.tipo}: ${fmt(f.monto)}`)
             : row.formaPagoCorte ? [row.formaPagoCorte] : []
-          fps.forEach(f => lines.push(f))
+          fps.forEach((f: string) => lines.push(f))
+          // Línea 4: litros (con reporte si se ingresó)
           const lrep = (litrosReporte||{})[row.rowKey]
-          const litStr = lrep && parseFloat(lrep) > 0
-            ? `${row.litros.toFixed(2)} L (rpt: ${parseFloat(lrep).toFixed(2)} L)`
-            : `${row.litros.toFixed(2)} L`
-          lines.push(litStr)
-          if (row.descuento > 0) lines.push(`Descuento: -$${row.descuento.toFixed(2)}`)
+          if (lrep && parseFloat(lrep) > 0) {
+            lines.push(`${row.litros.toFixed(2)} L`)
+            lines.push(`Reporte: ${parseFloat(lrep).toFixed(2)} L`)
+          } else {
+            lines.push(`${row.litros.toFixed(2)} L`)
+          }
+          // Línea 5: descuento si aplica
+          if (row.descuento > 0) lines.push(`Descuento: -${fmt(row.descuento)}`)
         })
       })
     } else {
-      // Cilindros
-      pedSorted.forEach((p, idx) => {
+      // CILINDROS
+      pedSorted.forEach(p => {
         srvCount++
-        const num = (servicioNum||{})[p.pedidoId] || String(srvCount).padStart(3, '0')
-        lines.push(`${num}. ${p.clienteNombre.substring(0, 28)}`)
-        // Desglose por kg
+        const numStr = (servicioNum||{})[p.pedidoId] || String(srvCount).padStart(3, '0')
+        lines.push(`${numStr}. ${p.clienteNombre.substring(0, 26)}`)
         ;(p.productos||[]).filter(pr => pr.cantidad > 0).forEach(pr => {
           const kg = pr.kg ? `CIL ${pr.kg} KG` : pr.nombre || ''
-          lines.push(`  ${pr.cantidad} x ${kg} = $${pr.subtotal.toFixed(2)}`)
-          if (pr.descuento > 0) lines.push(`  Desc: -$${pr.descuento.toFixed(2)}`)
+          lines.push(`${pr.cantidad} x ${kg}`)
+          if (pr.descuento > 0) lines.push(`Descuento: -${fmt(pr.descuento)}`)
         })
         const fps = p.formasPago?.length > 0
-          ? p.formasPago.map(f => `${f.tipo}: $${f.monto.toFixed(2)}`)
+          ? p.formasPago.map((f: any) => `${f.tipo}: ${fmt(f.monto)}`)
           : p.formaPagoCorte ? [p.formaPagoCorte] : []
-        fps.forEach(f => lines.push(f))
-        lines.push(`Total: $${p.total.toFixed(2)}`)
+        fps.forEach((f: string) => lines.push(f))
+        lines.push(fmt(p.total))
       })
       // Resumen cilindros
       if (detalle.desgloseCilindros && detalle.desgloseCilindros.length > 0) {
         lines.push(SEP)
-        lines.push('RESUMEN CILINDROS:')
+        lines.push('RESUMEN CILINDROS')
         detalle.desgloseCilindros.forEach(d => {
-          lines.push(`  ${d.nombre}: ${d.unidades} cil = $${d.monto.toFixed(2)}`)
+          lines.push(`${d.nombre}: ${d.unidades} cil`)
         })
-        const totCil = detalle.desgloseCilindros.reduce((s,d) => s + d.unidades, 0)
-        lines.push(`  TOTAL: ${totCil} cilindros`)
+        lines.push(`TOTAL: ${detalle.desgloseCilindros.reduce((s,d) => s + d.unidades, 0)} cilindros`)
       }
     }
 
+    // ── TOTALES ────────────────────────────────────────────
     lines.push(SEP2)
-    // Totales por forma de pago — exacto como la app
-    const PAD = 24
-    lines.push(`TOTAL${' '.repeat(PAD - 5)}$${totalCorte.toFixed(2)}`)
+    lines.push(`TOTAL ${fmt(totalCorte)}`)
+    const fpLabels: Record<string, string> = { efectivo: 'EFECTIVO', transferencia: 'TRANSFERENCIA', tarjeta: 'TARJETA', cheque: 'CHEQUE', credito: 'CREDITO', deposito: 'DEPOSITO', otros: 'OTROS' }
     Object.entries(resumen).filter(([,v]) => (v as number) > 0).forEach(([k,v]) => {
-      const label = k.toUpperCase()
-      lines.push(`${label}${' '.repeat(Math.max(1, PAD - label.length))}$${(v as number).toFixed(2)}`)
+      lines.push(`${fpLabels[k] || k.toUpperCase()} ${fmt(v as number)}`)
     })
     if (esPipas && detalle.totalLitros > 0) {
       lines.push(SEP)
-      lines.push(`LITROS (app)${' '.repeat(Math.max(1, PAD - 11))}${(detalle.totalLitros||0).toFixed(2)} L`)
+      lines.push(`LITROS (app) ${(detalle.totalLitros||0).toFixed(2)} L`)
     }
+
+    // ── DEPÓSITOS ──────────────────────────────────────────
+    if (detalle.depositos && detalle.depositos.length > 0) {
+      lines.push(SEP)
+      const totalEf = detalle.depositos.reduce((s: number, d: any) => {
+        const dReal = parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000
+        return s + dReal + parseFloat(d.billetesRechazados || 0) + parseFloat(d.monedas || 0)
+      }, 0)
+      lines.push('EFECTIVO')
+      lines.push(`Total recibido: ${fmt(totalEf)}`)
+      lines.push(`Total depositado: ${fmt(detalle.depositos.reduce((s: number, d: any) => s + (parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000), 0))}`)
+      const folios = detalle.depositos.map((d: any) => d.folio).filter(Boolean).join(', ')
+      if (folios) lines.push(`Folios deposito: ${folios}`)
+      lines.push('DEPOSITOS')
+      detalle.depositos.forEach((d: any, i: number) => {
+        const dReal = parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000
+        lines.push(`Deposito ${i+1} ${d.folio || ''} ${fmt(dReal)}`)
+      })
+      const totalDep = detalle.depositos.reduce((s: number, d: any) => s + (parseFloat(d.total || 0) || parseFloat(d.monto || 0) * 1000), 0)
+      lines.push(`Total Depositos: ${fmt(totalDep)}`)
+    }
+
+    lines.push(SEP)
+    lines.push(`Repartidor(a): ${nombreRepartidor(detalle.repartidor)}`)
+    lines.push('Representacion impresa del corte de venta')
+    lines.push(`Estado: ${detalle.estado.toUpperCase()} VALIDACION`)
     lines.push('')
-    lines.push('GAS PROVIDENCIA')
-    const html = `<!DOCTYPE html><html><head><title>Corte</title><style>@page{margin:2mm;size:80mm auto}body{font-family:'Courier New',monospace;font-size:10pt;line-height:1.4;width:72mm;margin:0 auto;padding:2mm;color:#000}pre{margin:0;font-family:inherit;font-size:inherit;white-space:pre-wrap}</style></head><body><pre>${lines.join('\n')}</pre></body></html>`
-    const w = window.open('', '_blank', 'width=350,height=700')
+
+    const html = `<!DOCTYPE html><html><head><title>Corte de Caja</title><style>@page{margin:3mm;size:80mm auto}body{font-family:'Courier New',Courier,monospace;font-size:9.5pt;line-height:1.35;width:70mm;margin:0 auto;padding:1mm;color:#000}pre{margin:0;font-family:inherit;font-size:inherit;white-space:pre-wrap;word-break:break-all}</style></head><body><pre>${lines.join('\n')}</pre></body></html>`
+    const w = window.open('', '_blank', 'width=350,height=800')
     if (!w) return
     w.document.write(html); w.document.close()
-    setTimeout(() => { w.print(); w.close() }, 500)
+    setTimeout(() => { w.print(); w.close() }, 600)
   }
 
   return (
