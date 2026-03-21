@@ -631,9 +631,14 @@ function VistaDetalle({
                     const depositoReal = parseFloat(dep.total || 0) || parseFloat(dep.monto || 0) * 1000
                     const billetes = parseFloat(dep.billetesRechazados || 0)
                     const monedas = parseFloat(dep.monedas || 0)
-                    const totalEf = depositoReal + billetes + monedas
-                    const monto = depositoReal
                     const isEditing = editDepIdx === i
+                    // Si estamos editando, usar los valores del editor para el total en tiempo real
+                    const montoEdit = isEditing ? (parseFloat(editDepData?.monto || 0)) : depositoReal
+                    const billetesEdit = isEditing ? (parseFloat(editDepData?.billetes || 0)) : billetes
+                    const monedasEdit = isEditing ? (parseFloat(editDepData?.monedas || 0)) : monedas
+                    const totalEf = montoEdit + billetesEdit + monedasEdit
+                    const monto = depositoReal
+                    const inputSx = { width: 80, '& input': { p: '3px 6px', fontSize: '0.78rem', textAlign: 'right' as const }, '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': { WebkitAppearance: 'none' } }
                     return (
                       <TableRow key={i}>
                         <TableCell>
@@ -643,24 +648,29 @@ function VistaDetalle({
                         </TableCell>
                         <TableCell align="right">
                           {isEditing
-                            ? <TextField size="small" type="number" value={editDepData?.monto || ''} onChange={e => setEditDepData((d: any) => ({ ...d, monto: e.target.value }))} onWheel={e => (e.target as HTMLInputElement).blur()} inputProps={{ style: { MozAppearance: 'textfield' } }} sx={{ width: 80, '& input': { p: '3px 6px', fontSize: '0.78rem', textAlign: 'right' }, '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': { WebkitAppearance: 'none' } }} />
+                            ? <TextField size="small" type="number" value={editDepData?.monto || ''} onChange={e => setEditDepData((d: any) => ({ ...d, monto: e.target.value }))} onWheel={e => (e.target as HTMLInputElement).blur()} inputProps={{ style: { MozAppearance: 'textfield' } }} sx={inputSx} placeholder="0.00" />
                             : fmt$(monto)}
                         </TableCell>
                         <TableCell align="right">
-                          <Typography variant="body2" color={billetes > 0 ? 'warning.main' : 'text.disabled'}>{billetes > 0 ? fmt$(billetes) : '—'}</Typography>
+                          {isEditing
+                            ? <TextField size="small" type="number" value={editDepData?.billetes || ''} onChange={e => setEditDepData((d: any) => ({ ...d, billetes: e.target.value }))} onWheel={e => (e.target as HTMLInputElement).blur()} inputProps={{ style: { MozAppearance: 'textfield' } }} sx={inputSx} placeholder="0.00" />
+                            : <Typography variant="body2" color={billetes > 0 ? 'warning.main' : 'text.disabled'}>{billetes > 0 ? fmt$(billetes) : '—'}</Typography>}
                         </TableCell>
                         <TableCell align="right">
-                          <Typography variant="body2" color={monedas > 0 ? 'info.main' : 'text.disabled'}>{monedas > 0 ? fmt$(monedas) : '—'}</Typography>
+                          {isEditing
+                            ? <TextField size="small" type="number" value={editDepData?.monedas || ''} onChange={e => setEditDepData((d: any) => ({ ...d, monedas: e.target.value }))} onWheel={e => (e.target as HTMLInputElement).blur()} inputProps={{ style: { MozAppearance: 'textfield' } }} sx={inputSx} placeholder="0.00" />
+                            : <Typography variant="body2" color={monedas > 0 ? 'info.main' : 'text.disabled'}>{monedas > 0 ? fmt$(monedas) : '—'}</Typography>}
                         </TableCell>
-                        <TableCell align="right"><b>{fmt$(totalEf)}</b></TableCell>
+                        <TableCell align="right">
+                          <b style={{ color: isEditing ? '#1976d2' : undefined }}>{fmt$(totalEf)}</b>
+                        </TableCell>
                         <TableCell align="center">
                           {isEditing ? (
                             <IconButton size="small" color="success" onClick={() => {
-                              // Solo actualiza visualmente por ahora
                               setEditDepIdx(null); setEditDepData(null)
                             }}><CheckCircle sx={{ fontSize: 15 }} /></IconButton>
                           ) : (
-                            <IconButton size="small" onClick={() => { setEditDepIdx(i); setEditDepData({ folio: dep.folio, monto: dep.monto }) }}>
+                            <IconButton size="small" onClick={() => { setEditDepIdx(i); setEditDepData({ folio: dep.folio, monto: String(depositoReal), billetes: String(billetes), monedas: String(monedas) }) }}>
                               <Edit sx={{ fontSize: 14 }} />
                             </IconButton>
                           )}
