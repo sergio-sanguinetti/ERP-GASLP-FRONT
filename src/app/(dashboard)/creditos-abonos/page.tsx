@@ -775,6 +775,7 @@ export default function CreditosAbonosPage() {
       descripcion: string
       fecha: string
       cliente?: string
+      clienteObj?: any
       monto?: number
       diasVencimiento?: number
     }> = []
@@ -790,6 +791,7 @@ export default function CreditosAbonosPage() {
           descripcion: `Excede en $${((cliente.saldoActual ?? 0) - cliente.limiteCredito).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`,
           fecha: new Date().toISOString().split('T')[0],
           cliente: cliente.nombre,
+          clienteObj: cliente,
           monto: (cliente.saldoActual ?? 0) - cliente.limiteCredito
         })
       }
@@ -810,6 +812,7 @@ export default function CreditosAbonosPage() {
           descripcion: `$${montoVencido.toLocaleString('es-MX', { maximumFractionDigits: 0 })} sin pagar`,
           fecha: new Date().toISOString().split('T')[0],
           cliente: cliente.nombre,
+          clienteObj: cliente,
           monto: montoVencido,
           diasVencimiento: Math.floor(maxDias)
         })
@@ -1602,7 +1605,8 @@ export default function CreditosAbonosPage() {
                   ) : (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 200, overflowY: 'auto' }}>
                       {alertasCredito.filter(a => a.tipo === 'critica').map((alerta) => (
-                        <Alert key={alerta.id} severity='error' sx={{ py: 0.5 }}>
+                        <Alert key={alerta.id} severity='error' sx={{ py: 0.5, cursor: alerta.clienteObj ? 'pointer' : 'default', '&:hover': alerta.clienteObj ? { bgcolor: '#fce4ec' } : {} }}
+                          onClick={() => { if (alerta.clienteObj) { setVistaActual('clientes'); setTimeout(() => setClienteSeleccionado(alerta.clienteObj), 100) } }}>
                           <Typography variant='caption' fontWeight='bold'>{alerta.titulo}</Typography>
                           {alerta.cliente && <Typography variant='caption' display='block'>{alerta.cliente}</Typography>}
                           {alerta.monto && <Typography variant='caption' display='block'>${alerta.monto.toLocaleString()}</Typography>}
