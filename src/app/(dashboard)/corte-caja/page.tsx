@@ -10,7 +10,7 @@ import {
 } from '@mui/material'
 import {
   ArrowBack, CheckCircle, Edit, Print, Add, Visibility, Close,
-  Warning, LockOpen, Refresh
+  Warning, LockOpen, Refresh, Delete
 } from '@mui/icons-material'
 import { ventasAPI, sedesAPI, authAPI, usuariosAPI } from '@/lib/api'
 import type { Sede } from '@/lib/api'
@@ -78,12 +78,13 @@ const FP_ORDER: { key: keyof ResumenFP; label: string; color: string }[] = [
   { key: 'credito',       label: 'Crédito',        color: '#A32D2D' },
 ]
 
-function VistaDashboard({ resumen, loading, fecha, onFechaChange, onVerDetalle, onCrearManual, onCerrarRapido, sedes, sedeId, sedeSeleccionada, esSuperAdmin, onSedeChange }: {
+function VistaDashboard({ resumen, loading, fecha, onFechaChange, onVerDetalle, onCrearManual, onCerrarRapido, onEliminar, sedes, sedeId, sedeSeleccionada, esSuperAdmin, onSedeChange }: {
   resumen: ResumenDia | null; loading: boolean; fecha: string
   onFechaChange: (f: string) => void
   onVerDetalle: (id: string) => void
   onCrearManual: () => void
   onCerrarRapido: (id: string) => void
+  onEliminar: (id: string, nombre: string) => void
   sedes: Sede[]
   sedeId: string | null
   sedeSeleccionada: string | null
@@ -216,6 +217,7 @@ function VistaDashboard({ resumen, loading, fecha, onFechaChange, onVerDetalle, 
                         {r.estado === 'pendiente' && (
                           <Tooltip title="Cerrar corte"><IconButton size="small" color="success" onClick={() => onCerrarRapido(r.id)}><CheckCircle sx={{ fontSize: 15 }} /></IconButton></Tooltip>
                         )}
+                        <Tooltip title="Eliminar corte"><IconButton size="small" color="error" onClick={() => onEliminar(r.id, r.nombre)}><Delete sx={{ fontSize: 15 }} /></IconButton></Tooltip>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -280,6 +282,7 @@ function VistaDashboard({ resumen, loading, fecha, onFechaChange, onVerDetalle, 
                         {r.estado === 'pendiente' && (
                           <Tooltip title="Cerrar corte"><IconButton size="small" color="success" onClick={() => onCerrarRapido(r.id)}><CheckCircle sx={{ fontSize: 15 }} /></IconButton></Tooltip>
                         )}
+                        <Tooltip title="Eliminar corte"><IconButton size="small" color="error" onClick={() => onEliminar(r.id, r.nombre)}><Delete sx={{ fontSize: 15 }} /></IconButton></Tooltip>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1449,6 +1452,7 @@ export default function CorteCajaPage() {
   const [dialogReimprimir, setDialogReimprimir] = useState(false)
   const [reimprimirExtras, setReimprimirExtras] = useState<{ litrosReporte: Record<string, string>; servicioNum: Record<string, string> }>({ litrosReporte: {}, servicioNum: {} })
   const [cerrarRapidoId, setCerrarRapidoId] = useState<string | null>(null)
+  const [eliminarCorte, setEliminarCorte] = useState<{ id: string; nombre: string } | null>(null)
   const [sedes, setSedes] = useState<Sede[]>([])
   const [sedeId, setSedeId] = useState<string | null>(null)
   const [sedeSeleccionada, setSedeSeleccionada] = useState<string | null>(null)
@@ -1535,6 +1539,7 @@ export default function CorteCajaPage() {
             onVerDetalle={id => handleVerDetalle(id, 'dashboard')}
             onCrearManual={() => setDialogManual(true)}
             onCerrarRapido={id => setCerrarRapidoId(id)}
+            onEliminar={(id, nombre) => setEliminarCorte({ id, nombre })}
             sedes={sedes} sedeId={sedeId} sedeSeleccionada={sedeSeleccionada}
             esSuperAdmin={esSuperAdmin}
             onSedeChange={id => { setSedeSeleccionada(id); setSedeId(id) }}
@@ -1586,6 +1591,23 @@ export default function CorteCajaPage() {
             try { await ventasAPI.cerrarCorte(cerrarRapidoId, {}); setCerrarRapidoId(null); loadDashboard(fecha) }
             catch (e: any) { showSnack(e.message || 'Error', 'error'); setCerrarRapidoId(null) }
           }}>✅ Confirmar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog eliminar corte */}
+      <Dialog open={!!eliminarCorte} onClose={() => setEliminarCorte(null)} maxWidth="xs">
+        <DialogTitle>🗑️ Eliminar corte</DialogTitle>
+        <DialogContent>
+          <Typography>¿Seguro que quieres eliminar el corte de <strong>{eliminarCorte?.nombre}</strong>?</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>Se eliminarán los detalles y depósitos asociados. El operador podrá generar uno nuevo desde la app.</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEliminarCorte(null)}>Cancelar</Button>
+          <Button variant="contained" color="error" onClick={async () => {
+            if (!eliminarCorte) return
+            try { await ventasAPI.eliminarCorte(eliminarCorte.id); setEliminarCorte(null); showSnack('✅ Corte eliminado'); loadDashboard(fecha) }
+            catch (e: any) { showSnack(e.message || 'Error al eliminar', 'error'); setEliminarCorte(null) }
+          }}>🗑️ Eliminar</Button>
         </DialogActions>
       </Dialog>
 

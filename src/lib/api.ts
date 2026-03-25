@@ -2218,6 +2218,15 @@ export const ventasAPI = {
     return response.json()
   },
 
+  eliminarCorte: async (id: string): Promise<any> => {
+    const response = await fetchWithAuth(`/cortes-caja/${id}`, { method: 'DELETE' })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error(error.message || 'Error al eliminar el corte')
+    }
+    return response.json()
+  },
+
   agregarDeposito: async (corteId: string, data: { folio?: string; monto: number; billetesRechazados?: number; monedas?: number }): Promise<any> => {
     const response = await fetchWithAuth(`/cortes-caja/${corteId}/depositos`, {
       method: 'POST',
