@@ -793,9 +793,10 @@ export default function CreditosAbonosPage() {
           monto: (cliente.saldoActual ?? 0) - cliente.limiteCredito
         })
       }
-      // Alerta: notas vencidas más de 30 días (calculado desde fechaVencimiento)
+      // Alerta: notas vencidas más de 30 días (calculado desde fechaVencimiento) — solo notas con saldo pendiente
       const notasVencidas30 = (cliente.notasPendientes ?? []).filter(n => {
         if (!n.fechaVencimiento) return false
+        if ((n.saldoPendiente ?? n.importe ?? 0) <= 0) return false // nota ya pagada
         const dias = (ahora.getTime() - new Date(n.fechaVencimiento).getTime()) / 86400000
         return dias > 30
       })
@@ -1307,9 +1308,9 @@ export default function CreditosAbonosPage() {
         // Estado dinámico: calcular desde notas del cliente
         let estadoDinamico = 'buen-pagador'
         const notas = cliente.notasPendientes ?? []
-        const tieneVencida = notas.some(n => n.fechaVencimiento && new Date(n.fechaVencimiento) < ahora && n.estado !== 'pagada')
+        const tieneVencida = notas.some(n => n.fechaVencimiento && new Date(n.fechaVencimiento) < ahora && (n.saldoPendiente ?? n.importe ?? 0) > 0)
         const tienePorVencer = notas.some(n => {
-          if (!n.fechaVencimiento || n.estado === 'pagada') return false
+          if (!n.fechaVencimiento || (n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
           const dias = (new Date(n.fechaVencimiento).getTime() - ahora.getTime()) / 86400000
           return dias >= 0 && dias <= 5
         })
@@ -1553,8 +1554,22 @@ export default function CreditosAbonosPage() {
                     return (
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                         {grupos.map(g => {
-                          const cantidad = clientesCon.filter(c => c.estado === g.key).length
-                          const monto = clientesCon.filter(c => c.estado === g.key).reduce((s, c) => s + (c.saldoActual ?? 0), 0)
+                          const ahoraD = new Date()
+                          const getEstadoDinamico = (c: any) => {
+                            const notas = c.notasPendientes ?? []
+                            const tieneVencida = notas.some((n: any) => n.fechaVencimiento && new Date(n.fechaVencimiento) < ahoraD && (n.saldoPendiente ?? n.importe ?? 0) > 0)
+                            const tienePorVencer = notas.some((n: any) => {
+                              if (!n.fechaVencimiento || (n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
+                              const dias = (new Date(n.fechaVencimiento).getTime() - ahoraD.getTime()) / 86400000
+                              return dias >= 0 && dias <= 5
+                            })
+                            if ((c.saldoActual ?? 0) > c.limiteCredito && c.limiteCredito > 0) return 'critico'
+                            if (tieneVencida) return 'vencido'
+                            if (tienePorVencer) return 'por_vencer'
+                            return 'buen-pagador'
+                          }
+                          const cantidad = clientesCon.filter(c => getEstadoDinamico(c) === g.key).length
+                          const monto = clientesCon.filter(c => getEstadoDinamico(c) === g.key).reduce((s, c) => s + (c.saldoActual ?? 0), 0)
                           const pct = clientesCon.length > 0 ? (cantidad / clientesCon.length) * 100 : 0
                           return (
                             <Box key={g.key}>
@@ -1624,8 +1639,18 @@ export default function CreditosAbonosPage() {
                       .slice(0, 10)
                       .map((c, idx) => {
                         const pct = c.limiteCredito > 0 ? Math.min(((c.saldoActual ?? 0) / c.limiteCredito) * 100, 100) : 0
-                        const estadoColor = c.estado === 'buen-pagador' ? 'success' : c.estado === 'critico' ? 'error' : c.estado === 'bloqueado' ? 'default' : c.estado === 'vencido' ? 'error' : 'warning'
-                        const estadoLabel = c.estado === 'buen-pagador' ? 'Al corriente' : c.estado === 'vencido' ? 'Vencido' : c.estado === 'por_vencer' ? 'Por vencer' : c.estado === 'critico' ? 'Crítico' : 'Bloqueado'
+                        // Estado dinámico basado en saldoPendiente real de las notas
+                        const ahoraTD = new Date()
+                        const notasTD = (c as any).notasPendientes ?? []
+                        const tieneVencidaTD = notasTD.some((n: any) => n.fechaVencimiento && new Date(n.fechaVencimiento) < ahoraTD && (n.saldoPendiente ?? n.importe ?? 0) > 0)
+                        const tienePorVencerTD = notasTD.some((n: any) => {
+                          if (!n.fechaVencimiento || (n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
+                          const dias = (new Date(n.fechaVencimiento).getTime() - ahoraTD.getTime()) / 86400000
+                          return dias >= 0 && dias <= 5
+                        })
+                        const estadoDin = (c.saldoActual ?? 0) > c.limiteCredito && c.limiteCredito > 0 ? 'critico' : tieneVencidaTD ? 'vencido' : tienePorVencerTD ? 'por_vencer' : 'buen-pagador'
+                        const estadoColor = estadoDin === 'buen-pagador' ? 'success' : estadoDin === 'critico' ? 'error' : estadoDin === 'vencido' ? 'error' : 'warning'
+                        const estadoLabel = estadoDin === 'buen-pagador' ? 'Al corriente' : estadoDin === 'vencido' ? 'Vencido' : estadoDin === 'por_vencer' ? 'Por vencer' : estadoDin === 'critico' ? 'Crítico' : 'Bloqueado'
                         return (
                           <TableRow key={c.id} hover
                             sx={{ cursor: 'pointer' }}
@@ -1634,7 +1659,7 @@ export default function CreditosAbonosPage() {
                             <TableCell><Typography variant='caption' fontWeight='bold'>{c.nombre}</Typography></TableCell>
                             <TableCell><Typography variant='caption' color='text.secondary'>{c.ruta}</Typography></TableCell>
                             <TableCell align='right'>
-                              <Typography variant='caption' fontWeight='bold' color={c.estado === 'critico' ? 'error.main' : 'text.primary'}>
+                              <Typography variant='caption' fontWeight='bold' color={estadoDin === 'critico' ? 'error.main' : 'text.primary'}>
                                 ${(c.saldoActual ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                               </Typography>
                             </TableCell>
@@ -1820,23 +1845,22 @@ export default function CreditosAbonosPage() {
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          <Chip
-                            label={
-                              cliente.estado === 'buen-pagador' ? 'Al corriente' :
-                              cliente.estado === 'vencido' ? 'Vencido' :
-                              cliente.estado === 'por_vencer' ? 'Por vencer' :
-                              cliente.estado === 'critico' ? 'Crítico' :
-                              cliente.estado === 'bloqueado' ? 'Bloqueado' :
-                              cliente.estado
-                            }
-                            color={
-                              cliente.estado === 'buen-pagador' ? 'success' :
-                              cliente.estado === 'vencido' ? 'error' :
-                              cliente.estado === 'por_vencer' ? 'warning' :
-                              cliente.estado === 'critico' ? 'error' : 'default'
-                            }
-                            size='small' sx={{ fontWeight: 'bold', fontSize: 10 }}
-                          />
+                          {(() => {
+                            const ahoraC = new Date()
+                            const notasC = (cliente as any).notasPendientes ?? []
+                            const tieneVencidaC = notasC.some((n: any) => n.fechaVencimiento && new Date(n.fechaVencimiento) < ahoraC && (n.saldoPendiente ?? n.importe ?? 0) > 0)
+                            const tienePorVencerC = notasC.some((n: any) => {
+                              if (!n.fechaVencimiento || (n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
+                              const dias = (new Date(n.fechaVencimiento).getTime() - ahoraC.getTime()) / 86400000
+                              return dias >= 0 && dias <= 5
+                            })
+                            const estC = (cliente.saldoActual ?? 0) > cliente.limiteCredito && cliente.limiteCredito > 0 ? 'critico' : tieneVencidaC ? 'vencido' : tienePorVencerC ? 'por_vencer' : 'buen-pagador'
+                            return <Chip
+                              label={estC === 'buen-pagador' ? 'Al corriente' : estC === 'vencido' ? 'Vencido' : estC === 'por_vencer' ? 'Por vencer' : estC === 'critico' ? 'Crítico' : 'Bloqueado'}
+                              color={(estC === 'buen-pagador' ? 'success' : estC === 'vencido' ? 'error' : estC === 'por_vencer' ? 'warning' : estC === 'critico' ? 'error' : 'default') as any}
+                              size='small' sx={{ fontWeight: 'bold', fontSize: 10 }}
+                            />
+                          })()}
                         </TableCell>
                         <TableCell>
                           <Chip
@@ -2029,6 +2053,8 @@ export default function CreditosAbonosPage() {
                                 const ahora = new Date()
                                 const fv = nota.fechaVencimiento ? new Date(nota.fechaVencimiento) : null
                                 const dias = fv ? Math.floor((fv.getTime() - ahora.getTime()) / 86400000) : null
+                                const saldoNota2 = (nota.saldoPendiente ?? nota.importe ?? 0)
+                                if (saldoNota2 <= 0) return <Typography variant='caption' fontWeight='bold' sx={{ color: 'success.main' }}>Pagada</Typography>
                                 const color = dias === null ? 'text.secondary' : dias < 0 ? 'error.main' : dias <= 5 ? 'warning.main' : 'success.main'
                                 return (
                                   <Typography variant='caption' fontWeight='bold' sx={{ color }}>
@@ -2042,14 +2068,16 @@ export default function CreditosAbonosPage() {
                                 const ahora = new Date()
                                 const fv = nota.fechaVencimiento ? new Date(nota.fechaVencimiento) : null
                                 const dias = fv ? Math.floor((fv.getTime() - ahora.getTime()) / 86400000) : null
-                                const estadoReal = nota.estado === 'pagada' ? 'pagada'
+                                const saldoNota = (nota.saldoPendiente ?? nota.importe ?? 0)
+                                const estadoReal = saldoNota <= 0 ? 'pagada'
+                                  : nota.estado === 'pagada' ? 'pagada'
                                   : dias === null ? nota.estado
                                   : dias < 0 ? 'vencida' : dias <= 5 ? 'por_vencer' : 'vigente'
                                 const colorChip = estadoReal === 'pagada' ? 'success' : estadoReal === 'vencida' ? 'error' : estadoReal === 'por_vencer' ? 'warning' : 'info'
                                 // Si la nota tiene un pago en revisión, mostrar ese estado
                                 const pagoEnRevision = pagosPendientesAutorizacion.find(p => p.nota === nota.numeroNota && (p.pagoCompleto?.estado === 'en_revision' || p.pagoCompleto?.estado === 'pendiente'))
-                                const labelChip = nota.estado === 'pagada' ? 'Pagada' : pagoEnRevision ? 'En Revisión' : estadoReal === 'vencida' ? 'Vencida' : estadoReal === 'por_vencer' ? 'Por vencer' : 'Vigente'
-                                const colorChipFinal = nota.estado === 'pagada' ? 'success' : pagoEnRevision ? 'info' : estadoReal === 'vencida' ? 'error' : estadoReal === 'por_vencer' ? 'warning' : 'success'
+                                const labelChip = estadoReal === 'pagada' ? 'Pagada' : pagoEnRevision ? 'En Revisión' : estadoReal === 'vencida' ? 'Vencida' : estadoReal === 'por_vencer' ? 'Por vencer' : 'Vigente'
+                                const colorChipFinal = estadoReal === 'pagada' ? 'success' : pagoEnRevision ? 'info' : estadoReal === 'vencida' ? 'error' : estadoReal === 'por_vencer' ? 'warning' : 'success'
                                 return <Chip label={labelChip} color={colorChipFinal as any} size='small' sx={{ fontWeight: 'bold', fontSize: 10, height: 20 }} />
                               })()}
                           </TableCell>
