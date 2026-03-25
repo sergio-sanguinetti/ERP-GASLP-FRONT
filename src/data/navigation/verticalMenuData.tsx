@@ -9,7 +9,7 @@ const verticalMenuData = (role?: string): VerticalMenuDataType[] => {
   const seeCaja = role !== 'oficina'
 
   // Roles que ven configuración
-  const seeConfigAdmin = ['superAdministrador', 'administrador'].includes(role || '')
+  const seeConfigAdmin = ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(role || '')
   const seeConfigTotal = role === 'superAdministrador'
 
   const menu: VerticalMenuDataType[] = [
@@ -39,7 +39,7 @@ const verticalMenuData = (role?: string): VerticalMenuDataType[] => {
     configChildren.push({ label: 'Rutas', href: '/configuracion/rutas', icon: 'tabler-route' })
     configChildren.push({ label: 'Zonas', href: '/zonas', icon: 'tabler-map-pin' })
     configChildren.push({ label: 'Tickets', href: '/configuracion/tickets', icon: 'tabler-receipt' })
-    configChildren.push({ label: 'Fusionar Clientes', href: '/configuracion/fusionar-clientes', icon: 'tabler-git-merge' })
+    configChildren.push({ label: 'Agrupar Clientes', href: '/configuracion/fusionar-clientes', icon: 'tabler-git-merge' })
 
     menu.push({
       label: 'Configuración',
