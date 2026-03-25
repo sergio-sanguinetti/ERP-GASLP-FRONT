@@ -120,8 +120,6 @@ export default function AgruparClientesPage() {
     if (c.id === principalSeleccionado?.id) return
     if (hijosSeleccionados.find(h => h.id === c.id)) return
     setHijosSeleccionados(prev => [...prev, c])
-    setResultadosHijo([])
-    setBusquedaHijo('')
   }
 
   const guardarGrupo = async () => {
