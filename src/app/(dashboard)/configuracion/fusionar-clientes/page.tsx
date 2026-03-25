@@ -23,7 +23,7 @@ const fetchAuth = async (path: string, options: RequestInit = {}) => {
 }
 
 interface ClienteSimple {
-  id: string; nombre: string; nombreGrupo?: string; telefono?: string
+  id: string; nombre: string; apellidoPaterno?: string; apellidoMaterno?: string; nombreGrupo?: string; telefono?: string
   calle?: string; colonia?: string; municipio?: string
   ruta?: string; saldoActual: number; limiteCredito: number
   clientePrincipalId?: string
@@ -87,7 +87,8 @@ export default function AgruparClientesPage() {
       if (!res.ok) return
       const data = await res.json()
       const clientes = (Array.isArray(data) ? data : (data.clientes || data.data || [])).map((c: any) => ({
-        id: c.id, nombre: c.nombre, telefono: c.telefono, calle: c.calle, colonia: c.colonia,
+        id: c.id, nombre: c.nombre, apellidoPaterno: c.apellidoPaterno || '', apellidoMaterno: c.apellidoMaterno || '',
+        telefono: c.telefono, calle: c.calle, colonia: c.colonia,
         municipio: c.municipio, ruta: c.ruta?.nombre || c.ruta || null,
         saldoActual: parseFloat(c.saldoActual) || 0, limiteCredito: parseFloat(c.limiteCredito) || 0,
         clientePrincipalId: c.clientePrincipalId, nombreGrupo: c.nombreGrupo
@@ -175,7 +176,8 @@ export default function AgruparClientesPage() {
     return <Box sx={{ p: 4 }}><Alert severity='error'>No tienes permiso para acceder a esta sección.</Alert></Box>
   }
 
-  const dir = (c: ClienteSimple) => [c.calle, c.colonia, c.municipio].filter(x => x && x !== 'Por definir').join(', ') || 'Sin dirección'
+  const dir = (c: ClienteSimple) => [c.calle, c.colonia, c.municipio].filter(x => x && x !== 'Por definir' && x !== 'Por definir S/N').join(', ') || 'Sin dirección'
+  const fullName = (c: ClienteSimple) => [c.nombre, c.apellidoPaterno, c.apellidoMaterno].filter(Boolean).join(' ').trim()
   const fmt$ = (n: number) => '$' + n.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 
   return (
@@ -301,7 +303,7 @@ export default function AgruparClientesPage() {
                                 <Box key={c.id} sx={{ px: 1.5, py: 0.8, cursor: 'pointer', '&:hover': { bgcolor: '#e8f5e9' }, borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                                   onClick={() => agregarHijoAGrupoExistente(g.principalId, c.id)}>
                                   <Box>
-                                    <Typography variant='body2' fontSize={12}>{c.nombre}</Typography>
+                                    <Typography variant='body2' fontSize={12}>{fullName(c)}</Typography>
                                     <Typography variant='caption' color='text.secondary'>{c.ruta || 'Sin ruta'} {c.saldoActual > 0 ? `· ${fmt$(c.saldoActual)}` : ''}</Typography>
                                   </Box>
                                   <AddIcon fontSize='small' color='success' />
@@ -346,7 +348,7 @@ export default function AgruparClientesPage() {
                           onClick={() => seleccionarPrincipal(c)}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                             <Box sx={{ flex: 1 }}>
-                              <Typography variant='body2' fontWeight='bold'>{c.nombre}</Typography>
+                              <Typography variant='body2' fontWeight='bold'>{fullName(c)}</Typography>
                               <Typography variant='caption' color='text.secondary'>{dir(c)}</Typography>
                               {c.telefono && <Typography variant='caption' color='text.secondary' display='block'>📞 {c.telefono}</Typography>}
                             </Box>
@@ -365,7 +367,7 @@ export default function AgruparClientesPage() {
               ) : (
                 <Box sx={{ bgcolor: '#f1f8e9', borderRadius: 1, p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Box>
-                    <Typography variant='body2' fontWeight='bold'>{principalSeleccionado.nombre}</Typography>
+                    <Typography variant='body2' fontWeight='bold'>{fullName(principalSeleccionado)}</Typography>
                     <Typography variant='caption' color='text.secondary'>{dir(principalSeleccionado)} · {principalSeleccionado.ruta || 'Sin ruta'}</Typography>
                   </Box>
                   <Button size='small' onClick={() => { setPrincipalSeleccionado(null); setHijosSeleccionados([]); setBusqueda('') }}>Cambiar</Button>
@@ -402,7 +404,7 @@ export default function AgruparClientesPage() {
                           {resultadosHijo.filter(c => c.id !== principalSeleccionado.id && !hijosSeleccionados.find(h => h.id === c.id)).map(c => (
                             <TableRow key={c.id} hover sx={{ cursor: 'pointer' }} onClick={() => agregarHijo(c)}>
                               <TableCell sx={{ py: 0.5 }}>
-                                <Typography variant='body2' fontSize={11} fontWeight='bold'>{c.nombre}</Typography>
+                                <Typography variant='body2' fontSize={11} fontWeight='bold'>{fullName(c)}</Typography>
                                 {c.telefono && <Typography variant='caption' color='text.secondary'>📞 {c.telefono}</Typography>}
                               </TableCell>
                               <TableCell sx={{ py: 0.5, maxWidth: 200 }}>
@@ -429,7 +431,7 @@ export default function AgruparClientesPage() {
                     {hijosSeleccionados.map(h => (
                       <Box key={h.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#fff8e1', borderRadius: 1, px: 1.5, py: 0.8, mb: 0.5 }}>
                         <Box>
-                          <Typography variant='body2' fontSize={12}>{h.nombre}</Typography>
+                          <Typography variant='body2' fontSize={12}>{fullName(h)}</Typography>
                           <Typography variant='caption' color='text.secondary'>{h.ruta || 'Sin ruta'} {h.saldoActual > 0 ? `· Saldo: ${fmt$(h.saldoActual)}` : ''}</Typography>
                         </Box>
                         <IconButton size='small' onClick={() => setHijosSeleccionados(prev => prev.filter(x => x.id !== h.id))}><CloseIcon sx={{ fontSize: 14 }} /></IconButton>
