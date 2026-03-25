@@ -83,7 +83,7 @@ export default function AgruparClientesPage() {
     if (tipo === 'principal') setLoadingBusqueda(true)
     else if (tipo === 'hijo') setLoadingHijo(true)
     try {
-      const res = await fetchAuth(`/clientes?nombre=${encodeURIComponent(q)}&pageSize=20&page=1`)
+      const res = await fetchAuth(`/clientes?nombre=${encodeURIComponent(q)}&pageSize=50&page=1`)
       if (!res.ok) return
       const data = await res.json()
       const clientes = (Array.isArray(data) ? data : (data.clientes || data.data || [])).map((c: any) => ({
@@ -108,6 +108,12 @@ export default function AgruparClientesPage() {
     setLimiteGrupo(String(c.limiteCredito || 10000))
     setResultados([])
     setHijosSeleccionados([])
+    // Auto-buscar posibles duplicados usando la primera palabra del nombre
+    const primeraPalabra = c.nombre.split(' ')[0]
+    if (primeraPalabra.length >= 2) {
+      setBusquedaHijo(primeraPalabra)
+      buscarClientes(primeraPalabra, 'hijo')
+    }
   }
 
   const agregarHijo = (c: ClienteSimple) => {
@@ -336,16 +342,22 @@ export default function AgruparClientesPage() {
                   />
                   {loadingBusqueda && <LinearProgress sx={{ mt: 1 }} />}
                   {resultados.length > 0 && (
-                    <Paper variant='outlined' sx={{ maxHeight: 250, overflow: 'auto', mt: 1 }}>
+                    <Paper variant='outlined' sx={{ maxHeight: 350, overflow: 'auto', mt: 1 }}>
                       {resultados.map(c => (
                         <Box key={c.id} sx={{ p: 1.5, cursor: 'pointer', '&:hover': { bgcolor: '#e8f5e9' }, borderBottom: '1px solid #f0f0f0' }}
                           onClick={() => seleccionarPrincipal(c)}>
-                          <Typography variant='body2' fontWeight='bold'>{c.nombre}</Typography>
-                          <Typography variant='caption' color='text.secondary'>{dir(c)}</Typography>
-                          <Box sx={{ display: 'flex', gap: 0.5, mt: 0.3 }}>
-                            <Chip label={c.ruta || 'Sin ruta'} size='small' sx={{ fontSize: 10, height: 18 }} />
-                            {c.saldoActual > 0 && <Chip label={fmt$(c.saldoActual)} size='small' color='warning' sx={{ fontSize: 10, height: 18 }} />}
-                            {c.clientePrincipalId && <Chip label='Ya agrupado' size='small' color='info' sx={{ fontSize: 10, height: 18 }} />}
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <Box sx={{ flex: 1 }}>
+                              <Typography variant='body2' fontWeight='bold'>{c.nombre}</Typography>
+                              <Typography variant='caption' color='text.secondary'>{dir(c)}</Typography>
+                              {c.telefono && <Typography variant='caption' color='text.secondary' display='block'>📞 {c.telefono}</Typography>}
+                            </Box>
+                            <Box sx={{ textAlign: 'right', minWidth: 120 }}>
+                              <Chip label={c.ruta || 'Sin ruta'} size='small' sx={{ fontSize: 9, height: 18, mb: 0.3 }} />
+                              {c.saldoActual > 0 && <Typography variant='caption' color='warning.dark' display='block'>{fmt$(c.saldoActual)}</Typography>}
+                              {c.limiteCredito > 0 && <Typography variant='caption' color='text.secondary' display='block'>Lím: {fmt$(c.limiteCredito)}</Typography>}
+                              {c.clientePrincipalId && <Chip label='Ya agrupado' size='small' color='info' sx={{ fontSize: 9, height: 16, mt: 0.3 }} />}
+                            </Box>
                           </Box>
                         </Box>
                       ))}
@@ -376,17 +388,39 @@ export default function AgruparClientesPage() {
                 />
                 {loadingHijo && <LinearProgress sx={{ mt: 1 }} />}
                 {resultadosHijo.length > 0 && (
-                  <Paper variant='outlined' sx={{ maxHeight: 200, overflow: 'auto', mt: 1 }}>
-                    {resultadosHijo.filter(c => c.id !== principalSeleccionado.id && !hijosSeleccionados.find(h => h.id === c.id)).map(c => (
-                      <Box key={c.id} sx={{ p: 1.5, cursor: 'pointer', '&:hover': { bgcolor: '#fff3e0' }, borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                        onClick={() => agregarHijo(c)}>
-                        <Box>
-                          <Typography variant='body2' fontWeight='bold'>{c.nombre}</Typography>
-                          <Typography variant='caption' color='text.secondary'>{dir(c)} · {c.ruta || 'Sin ruta'}</Typography>
-                        </Box>
-                        <AddIcon color='warning' />
-                      </Box>
-                    ))}
+                  <Paper variant='outlined' sx={{ mt: 1 }}>
+                    <TableContainer sx={{ maxHeight: 350 }}>
+                      <Table size='small' stickyHeader>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 'bold', fontSize: 10, py: 0.5 }}>Nombre en sistema</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', fontSize: 10, py: 0.5 }}>Dirección</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', fontSize: 10, py: 0.5 }}>Ruta</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', fontSize: 10, py: 0.5 }}>Saldo</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', fontSize: 10, py: 0.5 }}></TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {resultadosHijo.filter(c => c.id !== principalSeleccionado.id && !hijosSeleccionados.find(h => h.id === c.id)).map(c => (
+                            <TableRow key={c.id} hover sx={{ cursor: 'pointer' }} onClick={() => agregarHijo(c)}>
+                              <TableCell sx={{ py: 0.5 }}>
+                                <Typography variant='body2' fontSize={11} fontWeight='bold'>{c.nombre}</Typography>
+                                {c.telefono && <Typography variant='caption' color='text.secondary'>📞 {c.telefono}</Typography>}
+                              </TableCell>
+                              <TableCell sx={{ py: 0.5, maxWidth: 200 }}>
+                                <Typography variant='caption' color='text.secondary' sx={{ fontSize: 10 }}>{dir(c)}</Typography>
+                              </TableCell>
+                              <TableCell sx={{ py: 0.5 }}><Chip label={c.ruta || 'Sin ruta'} size='small' sx={{ fontSize: 9, height: 18 }} /></TableCell>
+                              <TableCell sx={{ py: 0.5, fontSize: 11 }}>{c.saldoActual > 0 ? fmt$(c.saldoActual) : '—'}</TableCell>
+                              <TableCell sx={{ py: 0.5 }}><AddIcon fontSize='small' color='warning' /></TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                    <Typography variant='caption' color='text.secondary' sx={{ p: 0.5, display: 'block', textAlign: 'center', bgcolor: '#fafafa' }}>
+                      Click en una fila para agregarla · {resultadosHijo.filter(c => c.id !== principalSeleccionado.id && !hijosSeleccionados.find(h => h.id === c.id)).length} resultados
+                    </Typography>
                   </Paper>
                 )}
                 {hijosSeleccionados.length > 0 && (
