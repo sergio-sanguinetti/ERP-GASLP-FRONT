@@ -795,18 +795,23 @@ export default function CreditosAbonosPage() {
           monto: (cliente.saldoActual ?? 0) - cliente.limiteCredito
         })
       }
-      // Alerta: notas vencidas más de 30 días (calculado desde fechaVencimiento) — solo notas con saldo pendiente
-      const notasVencidas30 = (cliente.notasPendientes ?? []).filter(n => {
-        if (!n.fechaVencimiento) return false
-        if ((n.saldoPendiente ?? n.importe ?? 0) <= 0) return false // nota ya pagada
-        const dias = (ahora.getTime() - new Date(n.fechaVencimiento).getTime()) / 86400000
-        return dias > 30
+      // Alerta: notas vencidas (más de 15 días desde fecha de venta) — solo notas con saldo pendiente
+      const notasVencidas = (cliente.notasPendientes ?? []).filter(n => {
+        if (!n.fechaVenta) return false
+        if ((n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
+        const venc = new Date(n.fechaVenta)
+        venc.setDate(venc.getDate() + 15)
+        return ahora > venc
       })
-      if (notasVencidas30.length > 0) {
-        const maxDias = Math.max(...notasVencidas30.map(n => (ahora.getTime() - new Date(n.fechaVencimiento!).getTime()) / 86400000))
-        const montoVencido = notasVencidas30.reduce((s, n) => s + (n.saldoPendiente ?? 0), 0)
+      if (notasVencidas.length > 0) {
+        const maxDias = Math.max(...notasVencidas.map(n => {
+          const venc = new Date(n.fechaVenta)
+          venc.setDate(venc.getDate() + 15)
+          return (ahora.getTime() - venc.getTime()) / 86400000
+        }))
+        const montoVencido = notasVencidas.reduce((s, n) => s + (n.saldoPendiente ?? 0), 0)
         alertas.push({
-          id: `alerta-${cliente.id}-vencida30`,
+          id: `alerta-${cliente.id}-vencida`,
           tipo: 'critica',
           titulo: `Deuda vencida +${Math.floor(maxDias)} días`,
           descripcion: `$${montoVencido.toLocaleString('es-MX', { maximumFractionDigits: 0 })} sin pagar`,
@@ -817,6 +822,19 @@ export default function CreditosAbonosPage() {
           diasVencimiento: Math.floor(maxDias)
         })
       }
+      // Alerta: crédito mayor a $30,000
+      if ((cliente.saldoActual ?? 0) > 30000) {
+        alertas.push({
+          id: `alerta-${cliente.id}-monto30k`,
+          tipo: 'critica',
+          titulo: `Crédito mayor a $30,000`,
+          descripcion: `Saldo: $${(cliente.saldoActual ?? 0).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`,
+          fecha: new Date().toISOString().split('T')[0],
+          cliente: cliente.nombre,
+          clienteObj: cliente,
+          monto: cliente.saldoActual ?? 0
+        })
+      }
     })
 
     // Ordenar por monto descendente
@@ -824,6 +842,14 @@ export default function CreditosAbonosPage() {
   }, [clientesDashboard])
 
   // Función helper para formatear fechas de manera consistente
+  // Helper: vencimiento = fechaVenta + 15 días (regla estándar)
+  const getVencimientoNota = (nota: any): Date | null => {
+    if (!nota.fechaVenta) return null
+    const fv = new Date(nota.fechaVenta)
+    fv.setDate(fv.getDate() + 15)
+    return fv
+  }
+
   const formatearFecha = (fecha: string) => {
     try {
       const date = new Date(fecha)
@@ -1014,7 +1040,7 @@ export default function CreditosAbonosPage() {
               <div class="label">Saldo Pendiente</div>
             </div>
             <div class="resumen-card">
-              <div class="monto">${notasFiltradas.filter((n: NotaCredito) => { const d = n.fechaVencimiento ? Math.floor((new Date(n.fechaVencimiento).getTime()-ahora.getTime())/86400000) : 0; return d < 0 && n.estado !== 'pagada' }).length}</div>
+              <div class="monto">${notasFiltradas.filter((n: NotaCredito) => { const venc = n.fechaVenta ? new Date(new Date(n.fechaVenta).getTime() + 15*86400000) : null; return venc && ahora > venc && (n.saldoPendiente ?? n.importe ?? 0) > 0 }).length}</div>
               <div class="label">Notas Vencidas</div>
             </div>
             <div class="resumen-card">
@@ -1026,12 +1052,13 @@ export default function CreditosAbonosPage() {
             <thead><tr><th>Folio</th><th>Fecha</th><th>Vencimiento</th><th>Importe</th><th>Saldo Pendiente</th><th>Estado</th></tr></thead>
             <tbody>
               ${notasFiltradas.map((n: NotaCredito) => {
-                const fv = n.fechaVencimiento ? new Date(n.fechaVencimiento) : null
+                const fv = n.fechaVenta ? new Date(new Date(n.fechaVenta).getTime() + 15*86400000) : null
                 const dias = fv ? Math.floor((fv.getTime()-ahora.getTime())/86400000) : null
-                const estadoReal = n.estado === 'pagada' ? 'pagada' : dias === null ? 'vigente' : dias < 0 ? 'vencida' : dias <= 5 ? 'por_vencer' : 'vigente'
-                const estadoLabel = estadoReal === 'pagada' ? 'Pagada' : estadoReal === 'vencida' ? `Vencida ${Math.abs(dias!)}d` : estadoReal === 'por_vencer' ? `Vence en ${dias}d` : 'Vigente'
                 const saldo = (n.saldoPendiente ?? n.importe ?? 0)
-                return `<tr><td><strong>${n.numeroNota||''}</strong></td><td>${formatearFecha(n.fechaVenta)}</td><td>${formatearFecha(n.fechaVencimiento)}</td><td>$${(n.importe??0).toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td>$${saldo.toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td class="estado-${estadoReal}">${estadoLabel}</td></tr>`
+                const estadoReal = saldo <= 0 ? 'pagada' : dias === null ? 'vigente' : dias < 0 ? 'vencida' : dias <= 5 ? 'por_vencer' : 'vigente'
+                const estadoLabel = estadoReal === 'pagada' ? 'Pagada' : estadoReal === 'vencida' ? `Vencida ${Math.abs(dias!)}d` : estadoReal === 'por_vencer' ? `Vence en ${dias}d` : 'Vigente'
+                const fechaVenc = fv ? fv.toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
+                return `<tr><td><strong>${n.numeroNota||''}</strong></td><td>${formatearFecha(n.fechaVenta)}</td><td>${fechaVenc}</td><td>$${(n.importe??0).toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td>$${saldo.toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td class="estado-${estadoReal}">${estadoLabel}</td></tr>`
               }).join('')}
               <tr class="total-row"><td colspan="4">TOTAL PENDIENTE</td><td>$${totalPendiente.toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td></td></tr>
             </tbody>
@@ -1311,10 +1338,15 @@ export default function CreditosAbonosPage() {
         // Estado dinámico: calcular desde notas del cliente
         let estadoDinamico = 'buen-pagador'
         const notas = cliente.notasPendientes ?? []
-        const tieneVencida = notas.some(n => n.fechaVencimiento && new Date(n.fechaVencimiento) < ahora && (n.saldoPendiente ?? n.importe ?? 0) > 0)
+        const tieneVencida = notas.some(n => {
+          if (!n.fechaVenta || (n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
+          const venc = new Date(n.fechaVenta); venc.setDate(venc.getDate() + 15)
+          return ahora > venc
+        })
         const tienePorVencer = notas.some(n => {
-          if (!n.fechaVencimiento || (n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
-          const dias = (new Date(n.fechaVencimiento).getTime() - ahora.getTime()) / 86400000
+          if (!n.fechaVenta || (n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
+          const venc = new Date(n.fechaVenta); venc.setDate(venc.getDate() + 15)
+          const dias = (venc.getTime() - ahora.getTime()) / 86400000
           return dias >= 0 && dias <= 5
         })
         if ((cliente.saldoActual ?? 0) > cliente.limiteCredito) estadoDinamico = 'critico'
@@ -1560,10 +1592,15 @@ export default function CreditosAbonosPage() {
                           const ahoraD = new Date()
                           const getEstadoDinamico = (c: any) => {
                             const notas = c.notasPendientes ?? []
-                            const tieneVencida = notas.some((n: any) => n.fechaVencimiento && new Date(n.fechaVencimiento) < ahoraD && (n.saldoPendiente ?? n.importe ?? 0) > 0)
+                            const tieneVencida = notas.some((n: any) => {
+                              if (!n.fechaVenta || (n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
+                              const venc = new Date(n.fechaVenta); venc.setDate(venc.getDate() + 15)
+                              return ahoraD > venc
+                            })
                             const tienePorVencer = notas.some((n: any) => {
-                              if (!n.fechaVencimiento || (n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
-                              const dias = (new Date(n.fechaVencimiento).getTime() - ahoraD.getTime()) / 86400000
+                              if (!n.fechaVenta || (n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
+                              const venc = new Date(n.fechaVenta); venc.setDate(venc.getDate() + 15)
+                              const dias = (venc.getTime() - ahoraD.getTime()) / 86400000
                               return dias >= 0 && dias <= 5
                             })
                             if ((c.saldoActual ?? 0) > c.limiteCredito && c.limiteCredito > 0) return 'critico'
@@ -1646,10 +1683,15 @@ export default function CreditosAbonosPage() {
                         // Estado dinámico basado en saldoPendiente real de las notas
                         const ahoraTD = new Date()
                         const notasTD = (c as any).notasPendientes ?? []
-                        const tieneVencidaTD = notasTD.some((n: any) => n.fechaVencimiento && new Date(n.fechaVencimiento) < ahoraTD && (n.saldoPendiente ?? n.importe ?? 0) > 0)
+                        const tieneVencidaTD = notasTD.some((n: any) => {
+                          if (!n.fechaVenta || (n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
+                          const venc = new Date(n.fechaVenta); venc.setDate(venc.getDate() + 15)
+                          return ahoraTD > venc
+                        })
                         const tienePorVencerTD = notasTD.some((n: any) => {
-                          if (!n.fechaVencimiento || (n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
-                          const dias = (new Date(n.fechaVencimiento).getTime() - ahoraTD.getTime()) / 86400000
+                          if (!n.fechaVenta || (n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
+                          const venc = new Date(n.fechaVenta); venc.setDate(venc.getDate() + 15)
+                          const dias = (venc.getTime() - ahoraTD.getTime()) / 86400000
                           return dias >= 0 && dias <= 5
                         })
                         const estadoDin = (c.saldoActual ?? 0) > c.limiteCredito && c.limiteCredito > 0 ? 'critico' : tieneVencidaTD ? 'vencido' : tienePorVencerTD ? 'por_vencer' : 'buen-pagador'
@@ -1852,10 +1894,15 @@ export default function CreditosAbonosPage() {
                           {(() => {
                             const ahoraC = new Date()
                             const notasC = (cliente as any).notasPendientes ?? []
-                            const tieneVencidaC = notasC.some((n: any) => n.fechaVencimiento && new Date(n.fechaVencimiento) < ahoraC && (n.saldoPendiente ?? n.importe ?? 0) > 0)
+                            const tieneVencidaC = notasC.some((n: any) => {
+                              if (!n.fechaVenta || (n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
+                              const venc = new Date(n.fechaVenta); venc.setDate(venc.getDate() + 15)
+                              return ahoraC > venc
+                            })
                             const tienePorVencerC = notasC.some((n: any) => {
-                              if (!n.fechaVencimiento || (n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
-                              const dias = (new Date(n.fechaVencimiento).getTime() - ahoraC.getTime()) / 86400000
+                              if (!n.fechaVenta || (n.saldoPendiente ?? n.importe ?? 0) <= 0) return false
+                              const venc = new Date(n.fechaVenta); venc.setDate(venc.getDate() + 15)
+                              const dias = (venc.getTime() - ahoraC.getTime()) / 86400000
                               return dias >= 0 && dias <= 5
                             })
                             const estC = (cliente.saldoActual ?? 0) > cliente.limiteCredito && cliente.limiteCredito > 0 ? 'critico' : tieneVencidaC ? 'vencido' : tienePorVencerC ? 'por_vencer' : 'buen-pagador'
@@ -2040,7 +2087,7 @@ export default function CreditosAbonosPage() {
                               {formatearFecha(nota.fechaVenta)}
                             </TableCell>
                             <TableCell>
-                              {formatearFecha(nota.fechaVencimiento)}
+                              {nota.fechaVenta ? formatearFecha(new Date(new Date(nota.fechaVenta).getTime() + 15 * 86400000).toISOString()) : '—'}
                             </TableCell>
                             <TableCell align='right'>
                               <Typography variant='caption' color='text.secondary' sx={{ textDecoration: nota.estado === 'pagada' ? 'none' : 'none' }}>
@@ -2055,7 +2102,7 @@ export default function CreditosAbonosPage() {
                             <TableCell align='center'>
                               {(() => {
                                 const ahora = new Date()
-                                const fv = nota.fechaVencimiento ? new Date(nota.fechaVencimiento) : null
+                                const fv = nota.fechaVenta ? new Date(new Date(nota.fechaVenta).getTime() + 15 * 86400000) : null
                                 const dias = fv ? Math.floor((fv.getTime() - ahora.getTime()) / 86400000) : null
                                 const saldoNota2 = (nota.saldoPendiente ?? nota.importe ?? 0)
                                 if (saldoNota2 <= 0) return <Typography variant='caption' fontWeight='bold' sx={{ color: 'success.main' }}>Pagada</Typography>
@@ -2070,7 +2117,7 @@ export default function CreditosAbonosPage() {
                           <TableCell align='center'>
                               {(() => {
                                 const ahora = new Date()
-                                const fv = nota.fechaVencimiento ? new Date(nota.fechaVencimiento) : null
+                                const fv = nota.fechaVenta ? new Date(new Date(nota.fechaVenta).getTime() + 15 * 86400000) : null
                                 const dias = fv ? Math.floor((fv.getTime() - ahora.getTime()) / 86400000) : null
                                 const saldoNota = (nota.saldoPendiente ?? nota.importe ?? 0)
                                 const estadoReal = saldoNota <= 0 ? 'pagada'
@@ -2496,7 +2543,7 @@ export default function CreditosAbonosPage() {
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Box>
                           <Typography variant='body1' fontWeight='bold'>{notaSeleccionada.numeroNota}</Typography>
-                          <Typography variant='caption' color='text.secondary'>Vence: {notaSeleccionada.fechaVencimiento ? new Date(notaSeleccionada.fechaVencimiento).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', dateStyle: 'medium' }) : '—'}</Typography>
+                          <Typography variant='caption' color='text.secondary'>Vence: {notaSeleccionada.fechaVenta ? new Date(new Date(notaSeleccionada.fechaVenta).getTime() + 15 * 86400000).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', dateStyle: 'medium' }) : '—'}</Typography>
                         </Box>
                         <Box sx={{ textAlign: 'right' }}>
                           <Typography variant='h6' fontWeight='bold' color='primary.main'>${(notaSeleccionada.saldoPendiente ?? notaSeleccionada.importe ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</Typography>
