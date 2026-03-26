@@ -419,6 +419,25 @@ function VistaDetalle({
         isFirst: true, isLast: true, numProds: 1, prodIdx: 0
       }))
 
+  // Auto-llenar L. reporte con Litros app como espejo (solo campos vacíos)
+  const autoFilledRef = useRef<string>('')
+  useEffect(() => {
+    if (!detalle?.id || autoFilledRef.current === detalle.id) return
+    if (!esPipas || filasDetalle.length === 0) return
+    autoFilledRef.current = detalle.id
+    setLitrosReporte(prev => {
+      const updated = { ...prev }
+      let changed = false
+      for (const fila of filasDetalle) {
+        if (!updated[fila.rowKey] && fila.litrosRow > 0) {
+          updated[fila.rowKey] = fila.litrosRow.toFixed(2)
+          changed = true
+        }
+      }
+      return changed ? updated : prev
+    })
+  }, [detalle?.id, esPipas, filasDetalle])
+
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 3 }}>
