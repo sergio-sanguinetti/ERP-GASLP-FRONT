@@ -25,11 +25,19 @@ import {
 } from '@mui/icons-material'
 import * as XLSX from 'xlsx'
 
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+const fetchAuth = async (path: string) => {
+  const token = typeof window !== 'undefined' ? (localStorage.getItem('token') || sessionStorage.getItem('token') || '') : ''
+  return fetch(API + path, { headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' } })
+}
+
 interface Filtros {
   fechaDesde: string
   fechaHasta: string
   sedeId: string
   repartidorId: string
+  clienteId: string
+  clienteNombre: string
 }
 
 interface ReporteCard {
@@ -134,9 +142,9 @@ function genKilosCilindros(data: any[], filtros: Filtros) {
 
 function genCreditosAbiertos(data: any[], filtros: Filtros) {
   const wb = XLSX.utils.book_new()
-  const headers = ['Nota', 'Cliente', 'Dirección', 'Ruta', 'Fecha Venta', 'Vencimiento', 'Importe', 'Saldo Pendiente', 'Días Vencida', 'Estado']
+  const headers = ['Nota', 'Grupo', 'Cliente', 'Dirección', 'Ruta', 'Fecha Venta', 'Vencimiento', 'Importe', 'Saldo Pendiente', 'Días Vencida', 'Estado']
   const rows = data.map((d: any) => [
-    d.nota, d.cliente, d.direccion, d.ruta, d.fechaVenta, d.vencimiento,
+    d.nota, d.grupo || '', d.cliente, d.direccion, d.ruta, d.fechaVenta, d.vencimiento,
     d.importe, d.saldoPendiente, d.diasVencida, d.estado
   ])
   const totImporte = data.reduce((s: number, d: any) => s + (d.importe || 0), 0)
@@ -201,10 +209,12 @@ function genFormasPago(data: any, filtros: Filtros) {
 
 function genRendimientoOperador(data: any[], filtros: Filtros) {
   const wb = XLSX.utils.book_new()
-  const headers = ['Operador', 'Tipo', 'Rutas', '# Pedidos', 'Total Ventas', 'Litros (Pipas)', 'Promedio/Pedido']
+  const headers = ['Operador', 'Tipo', 'Rutas', '# Pedidos', 'Total Ventas', 'Litros (Pipas)', 'Cil 10kg', 'Cil 20kg', 'Cil 30kg', 'Total Cilindros', 'Promedio/Pedido']
   const rows = data.map((d: any) => [
     d.operador, d.tipo, d.rutas, d.numPedidos,
-    d.totalVentas, d.totalLitros, d.promedioPorPedido
+    d.totalVentas, d.totalLitros,
+    d.cil10 || 0, d.cil20 || 0, d.cil30 || 0, d.totalCilindros || 0,
+    d.promedioPorPedido
   ])
   const ws = XLSX.utils.aoa_to_sheet([[], [], [], headers, ...rows])
   addTitleRow(ws, 'RENDIMIENTO POR OPERADOR', filtros, headers.length)
@@ -217,13 +227,17 @@ function genRendimientoOperador(data: any[], filtros: Filtros) {
 
 export default function ReportesPage() {
   const [filtros, setFiltros] = useState<Filtros>({
-    fechaDesde: new Date().toISOString().slice(0, 8) + '01', // primer día del mes
-    fechaHasta: new Date().toISOString().slice(0, 10), // hoy
+    fechaDesde: new Date().toISOString().slice(0, 8) + '01',
+    fechaHasta: new Date().toISOString().slice(0, 10),
     sedeId: '',
-    repartidorId: ''
+    repartidorId: '',
+    clienteId: '',
+    clienteNombre: ''
   })
   const [sedes, setSedes] = useState<Sede[]>([])
   const [operadores, setOperadores] = useState<any[]>([])
+  const [clientesBusqueda, setClientesBusqueda] = useState<any[]>([])
+  const debounceCliente = React.useRef<NodeJS.Timeout | null>(null)
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -236,6 +250,22 @@ export default function ReportesPage() {
       setOperadores(reps)
     }).catch(() => {})
   }, [])
+
+  const buscarClienteAPI = async (q: string) => {
+    if (q.length < 2) { setClientesBusqueda([]); return }
+    try {
+      const res = await fetchAuth(`/clientes?nombre=${encodeURIComponent(q)}&pageSize=15&page=1&incluirAgrupados=true`)
+      if (!res.ok) return
+      const data = await res.json()
+      const clientes = (Array.isArray(data) ? data : (data.clientes || data.data || []))
+      setClientesBusqueda(clientes.map((c: any) => ({
+        id: c.id,
+        nombre: `${c.nombre || ''} ${c.apellidoPaterno || ''} ${c.apellidoMaterno || ''}`.trim(),
+        grupo: c.nombreGrupo || '',
+        ruta: c.ruta?.nombre || ''
+      })))
+    } catch { setClientesBusqueda([]) }
+  }
 
   const reportes: ReporteCard[] = [
     {
@@ -313,6 +343,7 @@ export default function ReportesPage() {
       if (filtros.fechaHasta) params.fechaHasta = filtros.fechaHasta
       if (filtros.sedeId) params.sedeId = filtros.sedeId
       if (filtros.repartidorId) params.repartidorId = filtros.repartidorId
+      if (filtros.clienteId) params.clienteId = filtros.clienteId
 
       const data = await reporte.fetcher(params)
       const items = Array.isArray(data) ? data : (data.detalle || [])
@@ -383,6 +414,36 @@ export default function ReportesPage() {
                   ))}
                 </Select>
               </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Box sx={{ position: 'relative' }}>
+                <TextField fullWidth size='small' label='Buscar Cliente (incluye agrupados)'
+                  value={filtros.clienteNombre}
+                  onChange={e => {
+                    const val = e.target.value
+                    setFiltros(p => ({ ...p, clienteNombre: val, clienteId: '' }))
+                    if (debounceCliente.current) clearTimeout(debounceCliente.current)
+                    debounceCliente.current = setTimeout(() => buscarClienteAPI(val), 400)
+                  }}
+                  InputProps={{
+                    endAdornment: filtros.clienteId ? (
+                      <Button size='small' onClick={() => { setFiltros(p => ({ ...p, clienteId: '', clienteNombre: '' })); setClientesBusqueda([]) }}>✕</Button>
+                    ) : undefined
+                  }}
+                />
+                {clientesBusqueda.length > 0 && !filtros.clienteId && (
+                  <Box sx={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, bgcolor: 'white', border: '1px solid #ddd', borderRadius: 1, maxHeight: 200, overflow: 'auto', boxShadow: 3 }}>
+                    {clientesBusqueda.map((c: any) => (
+                      <Box key={c.id} sx={{ p: 1, cursor: 'pointer', '&:hover': { bgcolor: '#f5f5f5' }, borderBottom: '1px solid #eee' }}
+                        onClick={() => { setFiltros(p => ({ ...p, clienteId: c.id, clienteNombre: c.nombre + (c.grupo ? ` (${c.grupo})` : '') })); setClientesBusqueda([]) }}>
+                        <Typography variant='body2' fontWeight='bold' sx={{ fontSize: 12 }}>{c.nombre}</Typography>
+                        {c.grupo && <Typography variant='caption' color='success.main'>Grupo: {c.grupo}</Typography>}
+                        {c.ruta && <Typography variant='caption' color='text.secondary' sx={{ ml: 1 }}>{c.ruta}</Typography>}
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+              </Box>
             </Grid>
           </Grid>
         </CardContent>
