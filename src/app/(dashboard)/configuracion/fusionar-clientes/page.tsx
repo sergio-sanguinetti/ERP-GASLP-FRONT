@@ -85,7 +85,7 @@ export default function AgruparClientesPage() {
     if (tipo === 'principal') setLoadingBusqueda(true)
     else if (tipo === 'hijo') setLoadingHijo(true)
     try {
-      const res = await fetchAuth(`/clientes?nombre=${encodeURIComponent(q)}&pageSize=50&page=1`)
+      const res = await fetchAuth(`/clientes?nombre=${encodeURIComponent(q)}&pageSize=50&page=1&incluirAgrupados=true`)
       if (!res.ok) return
       const data = await res.json()
       const clientes = (Array.isArray(data) ? data : (data.clientes || data.data || [])).map((c: any) => ({
