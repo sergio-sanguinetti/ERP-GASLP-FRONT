@@ -376,8 +376,8 @@ export default function CreditosAbonosPage() {
       if (!hijos || hijos.length === 0) return principal
 
       const todasNotas = [
-        ...(principal.notasPendientes || []),
-        ...hijos.flatMap((h: any) => (h.notasPendientes || []))
+        ...(principal.notasPendientes || []).map((n: any) => ({ ...n, _origenNombre: principal.nombre })),
+        ...hijos.flatMap((h: any) => (h.notasPendientes || []).map((n: any) => ({ ...n, _origenNombre: h.nombre })))
       ]
       const saldoTotal = hijos.reduce((s: number, h: any) => s + (h.saldoActual ?? 0), principal.saldoActual ?? 0)
 
@@ -399,7 +399,7 @@ export default function CreditosAbonosPage() {
     hijosMap.forEach((hijos, principalId) => {
       if (clienteById.has(principalId)) return // ya fue procesado arriba
       // Crear entrada virtual con los datos del primer hijo
-      const todasNotas = hijos.flatMap((h: any) => (h.notasPendientes || []))
+      const todasNotas = hijos.flatMap((h: any) => (h.notasPendientes || []).map((n: any) => ({ ...n, _origenNombre: h.nombre })))
       const saldoTotal = hijos.reduce((s: number, h: any) => s + (h.saldoActual ?? 0), 0)
       const primer = hijos[0]
       resultado.push({
@@ -2131,6 +2131,7 @@ export default function CreditosAbonosPage() {
                       <TableHead>
                         <TableRow sx={{ bgcolor: 'background.default' }}>
                           <TableCell sx={{ fontWeight: 'bold', fontSize: 12 }}>Nota</TableCell>
+                          {(clienteSeleccionado as any)._esGrupo && <TableCell sx={{ fontWeight: 'bold', fontSize: 12 }}>Domicilio</TableCell>}
                           <TableCell sx={{ fontWeight: 'bold', fontSize: 12 }}>Fecha venta</TableCell>
                           <TableCell sx={{ fontWeight: 'bold', fontSize: 12 }}>Vencimiento</TableCell>
                           <TableCell align='right' sx={{ fontWeight: 'bold', fontSize: 12 }}>Importe</TableCell>
@@ -2148,6 +2149,13 @@ export default function CreditosAbonosPage() {
                                 {nota.numeroNota}
                               </Typography>
                             </TableCell>
+                            {(clienteSeleccionado as any)._esGrupo && (
+                              <TableCell>
+                                <Typography variant='caption' color='text.secondary' sx={{ fontSize: 10 }}>
+                                  {(nota as any)._origenNombre || '—'}
+                                </Typography>
+                              </TableCell>
+                            )}
                             <TableCell>
                               {formatearFecha(nota.fechaVenta)}
                             </TableCell>
