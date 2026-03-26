@@ -57,7 +57,6 @@ export default function AgruparClientesPage() {
   const [editLimite, setEditLimite] = useState('')
 
   // Agregar a grupo existente
-  const [busquedaAgregar, setBusquedaAgregar] = useState<Record<string, string>>({})
   const [resultadosAgregar, setResultadosAgregar] = useState<ClienteSimple[]>([])
   const [agregandoA, setAgregandoA] = useState<string | null>(null)
   const [busquedaAgregar, setBusquedaAgregar] = useState('')
