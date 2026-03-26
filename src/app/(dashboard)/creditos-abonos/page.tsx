@@ -408,6 +408,7 @@ export default function CreditosAbonosPage() {
         nombre: primer.nombreGrupo || primer.nombre,
         saldoActual: saldoTotal,
         creditoDisponible: (primer.limiteCredito || 0) - saldoTotal,
+        limiteCredito: primer.limiteCredito || 0,
         notasPendientes: todasNotas,
         clientePrincipalId: null, // marcarlo como "principal virtual"
         _esGrupo: true,
@@ -1114,7 +1115,7 @@ export default function CreditosAbonosPage() {
             </div>
           </div>
           <table>
-            <thead><tr><th>Folio</th><th>Fecha</th><th>Vencimiento</th><th>Importe</th><th>Saldo Pendiente</th><th>Estado</th></tr></thead>
+            <thead><tr><th>Folio</th>${(clienteSeleccionado as any)._esGrupo ? '<th>Domicilio</th>' : ''}<th>Fecha</th><th>Vencimiento</th><th>Importe</th><th>Saldo Pendiente</th><th>Estado</th></tr></thead>
             <tbody>
               ${notasFiltradas.map((n: NotaCredito) => {
                 const fv = n.fechaVenta ? new Date(new Date(n.fechaVenta).getTime() + 15*86400000) : null
@@ -1123,9 +1124,10 @@ export default function CreditosAbonosPage() {
                 const estadoReal = saldo <= 0 ? 'pagada' : dias === null ? 'vigente' : dias < 0 ? 'vencida' : dias <= 5 ? 'por_vencer' : 'vigente'
                 const estadoLabel = estadoReal === 'pagada' ? 'Pagada' : estadoReal === 'vencida' ? `Vencida ${Math.abs(dias!)}d` : estadoReal === 'por_vencer' ? `Vence en ${dias}d` : 'Vigente'
                 const fechaVenc = fv ? fv.toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
-                return `<tr><td><strong>${n.numeroNota||''}</strong></td><td>${formatearFecha(n.fechaVenta)}</td><td>${fechaVenc}</td><td>$${(n.importe??0).toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td>$${saldo.toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td class="estado-${estadoReal}">${estadoLabel}</td></tr>`
+                const domCol = (clienteSeleccionado as any)._esGrupo ? `<td style="font-size:10px;color:#666">${(n as any)._origenNombre || '—'}</td>` : ''
+                return `<tr><td><strong>${n.numeroNota||''}</strong></td>${domCol}<td>${formatearFecha(n.fechaVenta)}</td><td>${fechaVenc}</td><td>$${(n.importe??0).toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td>$${saldo.toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td class="estado-${estadoReal}">${estadoLabel}</td></tr>`
               }).join('')}
-              <tr class="total-row"><td colspan="4">TOTAL PENDIENTE</td><td>$${totalPendiente.toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td></td></tr>
+              <tr class="total-row"><td colspan="${(clienteSeleccionado as any)._esGrupo ? 5 : 4}">TOTAL PENDIENTE</td><td>$${totalPendiente.toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td></td></tr>
             </tbody>
           </table>
           <div style="margin-top:24px;border-top:2px solid #8B5E3C;padding-top:12px;text-align:center">
