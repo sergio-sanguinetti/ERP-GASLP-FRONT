@@ -60,6 +60,8 @@ export default function AgruparClientesPage() {
   const [busquedaAgregar, setBusquedaAgregar] = useState<Record<string, string>>({})
   const [resultadosAgregar, setResultadosAgregar] = useState<ClienteSimple[]>([])
   const [agregandoA, setAgregandoA] = useState<string | null>(null)
+  const [busquedaAgregar, setBusquedaAgregar] = useState('')
+  const debounceAgregar = React.useRef<NodeJS.Timeout | null>(null)
 
   const [saving, setSaving] = useState(false)
   const [snack, setSnack] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' })
@@ -167,7 +169,9 @@ export default function AgruparClientesPage() {
       const res = await fetchAuth('/clientes/agrupar', { method: 'POST', body: JSON.stringify({ principalId, hijoId }) })
       if (!res.ok) { const d = await res.json(); throw new Error(d.message) }
       showSnack('Cliente agregado al grupo')
-      cargarGrupos(); setResultadosAgregar([]); setAgregandoA(null)
+      // Quitar el agregado de los resultados pero NO cerrar el panel de búsqueda
+      setResultadosAgregar(prev => prev.filter(c => c.id !== hijoId))
+      cargarGrupos()
     } catch (e: any) { showSnack(e.message, 'error') }
   }
 
@@ -289,10 +293,18 @@ export default function AgruparClientesPage() {
                       {agregandoA === g.principalId ? (
                         <Box sx={{ mt: 1.5 }}>
                           <TextField fullWidth size='small' placeholder='Buscar cliente para agregar al grupo...' autoFocus
-                            onChange={e => { if (e.target.value.length >= 2) buscarClientes(e.target.value, 'agregar') }}
+                            value={busquedaAgregar}
+                            onChange={e => {
+                              const val = e.target.value
+                              setBusquedaAgregar(val)
+                              if (debounceAgregar.current) clearTimeout(debounceAgregar.current)
+                              if (val.length >= 2) {
+                                debounceAgregar.current = setTimeout(() => buscarClientes(val, 'agregar'), 400)
+                              } else { setResultadosAgregar([]) }
+                            }}
                             InputProps={{
                               startAdornment: <InputAdornment position='start'><SearchIcon fontSize='small' /></InputAdornment>,
-                              endAdornment: <InputAdornment position='end'><IconButton size='small' onClick={() => { setAgregandoA(null); setResultadosAgregar([]) }}><CloseIcon fontSize='small' /></IconButton></InputAdornment>
+                              endAdornment: <InputAdornment position='end'><IconButton size='small' onClick={() => { setAgregandoA(null); setResultadosAgregar([]); setBusquedaAgregar('') }}><CloseIcon fontSize='small' /></IconButton></InputAdornment>
                             }}
                           />
                           {resultadosAgregar.length > 0 && (
