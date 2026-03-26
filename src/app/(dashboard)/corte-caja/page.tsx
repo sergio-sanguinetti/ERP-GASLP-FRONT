@@ -360,6 +360,39 @@ function VistaDetalle({
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
   }, [litrosReporte, detalle?.id, esPipas])
 
+  // Auto-llenar L. reporte con Litros app como espejo (solo campos vacíos, una vez por corte)
+  const autoFilledRef = useRef<string>('')
+  useEffect(() => {
+    if (!detalle?.id || autoFilledRef.current === detalle.id) return
+    if (!esPipas) return
+    const pedidos = detalle.pedidos || []
+    if (pedidos.length === 0) return
+    autoFilledRef.current = detalle.id
+    setLitrosReporte(prev => {
+      const updated = { ...prev }
+      let changed = false
+      for (const p of pedidos) {
+        const prods = Array.isArray(p.productos) ? p.productos : []
+        if (prods.length <= 1) {
+          const key = p.pedidoId || ''
+          if (!updated[key] && (p.litros || 0) > 0) {
+            updated[key] = Number(p.litros).toFixed(2)
+            changed = true
+          }
+        } else {
+          prods.forEach((pr: any, pi: number) => {
+            const key = `${p.pedidoId || ''}_${pi}`
+            if (!updated[key] && (pr.cantidad || 0) > 0) {
+              updated[key] = Number(pr.cantidad).toFixed(2)
+              changed = true
+            }
+          })
+        }
+      }
+      return changed ? updated : prev
+    })
+  }, [detalle?.id, esPipas])
+
   if (loading) {
     return (
       <Box sx={{ p: 4 }}>
@@ -430,40 +463,6 @@ function VistaDetalle({
         formasPago: p.formasPago || [], formaPagoCorte: p.formaPagoCorte || '',
         isFirst: true, isLast: true, numProds: 1, prodIdx: 0
       }))
-
-  // Auto-llenar L. reporte con Litros app como espejo (solo campos vacíos, una vez por corte)
-  const autoFilledRef = useRef<string>('')
-  useEffect(() => {
-    if (!detalle?.id || autoFilledRef.current === detalle.id) return
-    if (!esPipas) return
-    // Calcular filas inline para no depender de filasDetalle (evita re-renders)
-    const pedidos = detalle.pedidos || []
-    if (pedidos.length === 0) return
-    autoFilledRef.current = detalle.id
-    setLitrosReporte(prev => {
-      const updated = { ...prev }
-      let changed = false
-      for (const p of pedidos) {
-        const prods = Array.isArray(p.productos) ? p.productos : []
-        if (prods.length <= 1) {
-          const key = p.pedidoId || ''
-          if (!updated[key] && (p.litros || 0) > 0) {
-            updated[key] = Number(p.litros).toFixed(2)
-            changed = true
-          }
-        } else {
-          prods.forEach((pr: any, pi: number) => {
-            const key = `${p.pedidoId || ''}_${pi}`
-            if (!updated[key] && (pr.cantidad || 0) > 0) {
-              updated[key] = Number(pr.cantidad).toFixed(2)
-              changed = true
-            }
-          })
-        }
-      }
-      return changed ? updated : prev
-    })
-  }, [detalle?.id, esPipas])
 
   return (
     <Box>
