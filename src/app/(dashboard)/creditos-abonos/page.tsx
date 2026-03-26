@@ -733,7 +733,7 @@ export default function CreditosAbonosPage() {
       ])
 
       setResumenCredito(resumen)
-      setClientesCredito([...clientesResp.clientes].sort((a,b) => (b.saldoActual ?? 0) - (a.saldoActual ?? 0)))
+      setClientesCredito(consolidarGrupos([...clientesResp.clientes]).sort((a: any,b: any) => (b.saldoActual ?? 0) - (a.saldoActual ?? 0)))
       setTotalClientes(clientesResp.total)
       
       // Convertir pagos pendientes al formato esperado

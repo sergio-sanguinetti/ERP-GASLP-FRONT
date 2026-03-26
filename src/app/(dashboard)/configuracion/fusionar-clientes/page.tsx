@@ -296,19 +296,23 @@ export default function AgruparClientesPage() {
                             }}
                           />
                           {resultadosAgregar.length > 0 && (
-                            <Paper variant='outlined' sx={{ maxHeight: 180, overflow: 'auto', mt: 0.5 }}>
-                              {resultadosAgregar
-                                .filter(c => c.id !== g.principalId && !g.hijos.find(h => h.id === c.id))
-                                .map(c => (
-                                <Box key={c.id} sx={{ px: 1.5, py: 0.8, cursor: 'pointer', '&:hover': { bgcolor: '#e8f5e9' }, borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                                  onClick={() => agregarHijoAGrupoExistente(g.principalId, c.id)}>
-                                  <Box>
-                                    <Typography variant='body2' fontSize={12}>{fullName(c)}</Typography>
-                                    <Typography variant='caption' color='text.secondary'>{c.ruta || 'Sin ruta'} {c.saldoActual > 0 ? `· ${fmt$(c.saldoActual)}` : ''}</Typography>
-                                  </Box>
-                                  <AddIcon fontSize='small' color='success' />
-                                </Box>
-                              ))}
+                            <Paper variant='outlined' sx={{ mt: 0.5 }}>
+                              <TableContainer sx={{ maxHeight: 200 }}>
+                                <Table size='small'>
+                                  <TableBody>
+                                    {resultadosAgregar
+                                      .filter(c => c.id !== g.principalId && !g.hijos.find(h => h.id === c.id))
+                                      .map(c => (
+                                      <TableRow key={c.id} hover sx={{ cursor: 'pointer' }} onClick={() => agregarHijoAGrupoExistente(g.principalId, c.id)}>
+                                        <TableCell sx={{ py: 0.5, fontSize: 11, fontWeight: 'bold' }}>{fullName(c)}</TableCell>
+                                        <TableCell sx={{ py: 0.5, fontSize: 10, color: 'text.secondary', maxWidth: 200 }}>{dir(c)}</TableCell>
+                                        <TableCell sx={{ py: 0.5 }}><Chip label={c.ruta || 'Sin ruta'} size='small' sx={{ fontSize: 9, height: 18 }} /></TableCell>
+                                        <TableCell sx={{ py: 0.5 }}><AddIcon fontSize='small' color='success' /></TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </TableContainer>
                             </Paper>
                           )}
                         </Box>
