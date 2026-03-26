@@ -345,7 +345,18 @@ function VistaDetalle({
     } catch(e) {}
   }, [detalle?.id])
 
-  // Litros se guardan automáticamente al cerrar el corte (sin auto-save que causa crashes)
+  // Litros se auto-guardan cuando cambian (debounce 2 segundos)
+  const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
+  useEffect(() => {
+    if (!detalle?.id || !esPipas) return
+    const hasValues = Object.values(litrosReporte).some(v => parseFloat(v as string) > 0)
+    if (!hasValues) return
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => {
+      ventasAPI.guardarLitrosReporte(detalle.id, litrosReporte).catch(() => {})
+    }, 2000)
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
+  }, [litrosReporte, detalle?.id, esPipas])
 
   if (loading) {
     return (
@@ -419,24 +430,39 @@ function VistaDetalle({
         isFirst: true, isLast: true, numProds: 1, prodIdx: 0
       }))
 
-  // Auto-llenar L. reporte con Litros app como espejo (solo campos vacíos)
+  // Auto-llenar L. reporte con Litros app como espejo (solo campos vacíos, una vez por corte)
   const autoFilledRef = useRef<string>('')
   useEffect(() => {
     if (!detalle?.id || autoFilledRef.current === detalle.id) return
-    if (!esPipas || filasDetalle.length === 0) return
+    if (!esPipas) return
+    // Calcular filas inline para no depender de filasDetalle (evita re-renders)
+    const pedidos = detalle.pedidos || []
+    if (pedidos.length === 0) return
     autoFilledRef.current = detalle.id
     setLitrosReporte(prev => {
       const updated = { ...prev }
       let changed = false
-      for (const fila of filasDetalle) {
-        if (!updated[fila.rowKey] && fila.litrosRow > 0) {
-          updated[fila.rowKey] = fila.litrosRow.toFixed(2)
-          changed = true
+      for (const p of pedidos) {
+        const prods = Array.isArray(p.productos) ? p.productos : []
+        if (prods.length <= 1) {
+          const key = p.pedidoId || ''
+          if (!updated[key] && (p.litros || 0) > 0) {
+            updated[key] = Number(p.litros).toFixed(2)
+            changed = true
+          }
+        } else {
+          prods.forEach((pr: any, pi: number) => {
+            const key = `${p.pedidoId || ''}_${pi}`
+            if (!updated[key] && (pr.cantidad || 0) > 0) {
+              updated[key] = Number(pr.cantidad).toFixed(2)
+              changed = true
+            }
+          })
         }
       }
       return changed ? updated : prev
     })
-  }, [detalle?.id, esPipas, filasDetalle])
+  }, [detalle?.id, esPipas])
 
   return (
     <Box>
