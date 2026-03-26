@@ -344,7 +344,9 @@ function VistaDetalle({
     try {
       const stats = typeof detalle?.stats === 'string' ? JSON.parse(detalle.stats) : detalle?.stats
       if (stats?.litrosReporte && Object.keys(stats.litrosReporte).length > 0) {
-        restored = stats.litrosReporte
+        // Solo restaurar si hay valores significativos (no todos en 0)
+        const hasRealValues = Object.values(stats.litrosReporte).some((v: any) => parseFloat(v) > 0)
+        if (hasRealValues) restored = stats.litrosReporte
       }
     } catch {}
     // Si no hay guardados, auto-llenar desde litros app
