@@ -17,10 +17,10 @@ import {
   Download as DownloadIcon,
   People as PeopleIcon,
   LocalGasStation as GasIcon,
-  Scale as ScaleIcon,
+  Settings as ScaleIcon,
   CreditCard as CreditIcon,
   AccountBalance as DeudaIcon,
-  Payment as PaymentIcon,
+  AttachMoney as PaymentIcon,
   Person as PersonIcon
 } from '@mui/icons-material'
 import * as XLSX from 'xlsx'
