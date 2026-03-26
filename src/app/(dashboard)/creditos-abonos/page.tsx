@@ -353,6 +353,71 @@ export default function CreditosAbonosPage() {
     }
   }
 
+  // Consolidar clientes agrupados: los hijos se fusionan bajo el principal
+  const consolidarGrupos = (clientes: any[]) => {
+    const hijosMap = new Map<string, any[]>()   // principalId -> array de hijos
+    const independientes: any[] = []
+    const clienteById = new Map<string, any>()
+
+    // Indexar y separar
+    clientes.forEach(c => {
+      clienteById.set(c.id, c)
+      if (c.clientePrincipalId) {
+        if (!hijosMap.has(c.clientePrincipalId)) hijosMap.set(c.clientePrincipalId, [])
+        hijosMap.get(c.clientePrincipalId)!.push(c)
+      } else {
+        independientes.push(c)
+      }
+    })
+
+    // Consolidar independientes que son principales de grupo
+    const resultado = independientes.map(principal => {
+      const hijos = hijosMap.get(principal.id)
+      if (!hijos || hijos.length === 0) return principal
+
+      const todasNotas = [
+        ...(principal.notasPendientes || []),
+        ...hijos.flatMap((h: any) => (h.notasPendientes || []))
+      ]
+      const saldoTotal = hijos.reduce((s: number, h: any) => s + (h.saldoActual ?? 0), principal.saldoActual ?? 0)
+
+      // Marcar estos hijos como ya procesados
+      hijos.forEach(h => hijosMap.delete(h.id))
+
+      return {
+        ...principal,
+        nombre: principal.nombreGrupo || principal.nombre,
+        saldoActual: saldoTotal,
+        creditoDisponible: principal.limiteCredito - saldoTotal,
+        notasPendientes: todasNotas,
+        _esGrupo: true,
+        _miembros: 1 + hijos.length
+      }
+    })
+
+    // Hijos huérfanos (su principal no está en la lista porque tiene saldo=0)
+    hijosMap.forEach((hijos, principalId) => {
+      if (clienteById.has(principalId)) return // ya fue procesado arriba
+      // Crear entrada virtual con los datos del primer hijo
+      const todasNotas = hijos.flatMap((h: any) => (h.notasPendientes || []))
+      const saldoTotal = hijos.reduce((s: number, h: any) => s + (h.saldoActual ?? 0), 0)
+      const primer = hijos[0]
+      resultado.push({
+        ...primer,
+        id: principalId, // usar el ID del principal real
+        nombre: primer.nombreGrupo || primer.nombre,
+        saldoActual: saldoTotal,
+        creditoDisponible: (primer.limiteCredito || 0) - saldoTotal,
+        notasPendientes: todasNotas,
+        clientePrincipalId: null, // marcarlo como "principal virtual"
+        _esGrupo: true,
+        _miembros: hijos.length
+      })
+    })
+
+    return resultado
+  }
+
   const cargarClientesDashboard = async () => {
     if (loadingDashboard) return
     try {
@@ -379,7 +444,7 @@ export default function CreditosAbonosPage() {
         if (clientes.length < PAGE_SIZE || todos.length >= data.total) break
         page++
       }
-      setClientesDashboard(todos)
+      setClientesDashboard(consolidarGrupos(todos))
     } catch (e) { console.error('Error dashboard clientes', e) }
     finally { setLoadingDashboard(false) }
   }
