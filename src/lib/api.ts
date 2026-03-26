@@ -3524,3 +3524,23 @@ export const clientesAnalisisAPI = {
     return response.json()
   }
 }
+
+// ===== REPORTES EXPORT =====
+export const reporteExportAPI = {
+  _fetch: async (endpoint: string, params: Record<string, string | undefined>) => {
+    const qp = new URLSearchParams()
+    Object.entries(params).forEach(([k, v]) => { if (v) qp.append(k, v) })
+    const qs = qp.toString()
+    const url = `/reportes-export/${endpoint}${qs ? `?${qs}` : ''}`
+    const res = await fetchWithAuth(url)
+    if (!res.ok) throw new Error('Error al obtener reporte')
+    return res.json()
+  },
+  ventasPorCliente: (p: any) => reporteExportAPI._fetch('ventas-cliente', p),
+  litrosPipa: (p: any) => reporteExportAPI._fetch('litros-pipa', p),
+  kilosCilindros: (p: any) => reporteExportAPI._fetch('kilos-cilindros', p),
+  creditosAbiertos: (p: any) => reporteExportAPI._fetch('creditos-abiertos', p),
+  deudaGlobal: (p: any) => reporteExportAPI._fetch('deuda-global', p),
+  formasPago: (p: any) => reporteExportAPI._fetch('formas-pago', p),
+  rendimientoOperador: (p: any) => reporteExportAPI._fetch('rendimiento-operador', p),
+}
