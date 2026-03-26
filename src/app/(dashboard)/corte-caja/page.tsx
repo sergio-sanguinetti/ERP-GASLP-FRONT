@@ -345,6 +345,8 @@ function VistaDetalle({
     } catch(e) {}
   }, [detalle?.id])
 
+  const esPipas = detalle?.repartidor?.tipoRepartidor === 'pipas'
+
   // Litros se auto-guardan cuando cambian (debounce 2 segundos)
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
   useEffect(() => {
@@ -375,7 +377,6 @@ function VistaDetalle({
     )
   }
 
-  const esPipas = detalle.repartidor?.tipoRepartidor === 'pipas'
   const litrosApp = detalle.totalLitros || 0
 
   const litrosMedidorNum = parseFloat(litrosMedidor) || 0
