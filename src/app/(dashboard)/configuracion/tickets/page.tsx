@@ -519,6 +519,8 @@ export default function ConfiguracionTicketsPage() {
                     label="Email"
                     value={config.email}
                     onChange={(e) => manejarCambio('email', e.target.value)}
+                    disabled
+                    helperText="No se muestra en el ticket"
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -534,6 +536,8 @@ export default function ConfiguracionTicketsPage() {
                     label="Sitio Web"
                     value={config.sitioWeb}
                     onChange={(e) => manejarCambio('sitioWeb', e.target.value)}
+                    disabled
+                    helperText="No se muestra en el ticket"
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -726,6 +730,8 @@ export default function ConfiguracionTicketsPage() {
                         label="WhatsApp"
                         value={config.redesSociales.whatsapp}
                         onChange={(e) => manejarCambioRedes('whatsapp', e.target.value)}
+                        disabled
+                        helperText="No se muestra en el ticket"
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
@@ -741,6 +747,8 @@ export default function ConfiguracionTicketsPage() {
                         label="Twitter"
                         value={config.redesSociales.twitter}
                         onChange={(e) => manejarCambioRedes('twitter', e.target.value)}
+                        disabled
+                        helperText="No se muestra en el ticket"
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
@@ -788,108 +796,101 @@ export default function ConfiguracionTicketsPage() {
                 Vista Previa del Ticket
               </Typography>
               
-              <Paper sx={{ p: 3, border: '1px solid', borderColor: 'divider' }}>
-                {/* Encabezado */}
-                <Box sx={{ textAlign: config.diseño.alineacion, mb: 2 }}>
+              <Paper sx={{ p: 2, border: '1px solid', borderColor: 'divider', fontFamily: 'Arial, sans-serif', maxWidth: 300, mx: 'auto', fontSize: 11, color: '#000' }}>
+                {/* Header */}
+                <Box sx={{ textAlign: 'center', mb: 0.5 }}>
                   {config.mostrarLogo && config.logo && (
-                    <Box sx={{ mb: 1 }}>
-                      <img 
-                        src={config.logo} 
-                        alt="Logo" 
-                        style={{ 
-                          maxWidth: config.tamañoLogo === 'pequeño' ? '80px' : config.tamañoLogo === 'mediano' ? '120px' : '160px',
-                          maxHeight: '80px'
-                        }} 
-                      />
-                    </Box>
+                    <img src={config.logo} alt="Logo" style={{ width: 80, height: 'auto', display: 'block', margin: '0 auto 4px' }} />
                   )}
-                  <Typography variant="h6" fontWeight="bold" color={config.diseño.colorPrincipal}>
-                    {config.nombreEmpresa}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {config.razonSocial}
-                  </Typography>
-                </Box>
-
-                <Divider sx={{ my: 2 }} />
-
-                {/* Mensaje de Encabezado */}
-                {config.textos.encabezado && (
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    {config.textos.encabezado}
-                  </Typography>
-                )}
-
-                {/* Información de la Empresa */}
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" display="block" color="text.secondary">
-                    📍 {config.direccion}
-                  </Typography>
-                  <Typography variant="caption" display="block" color="text.secondary">
-                    📞 {config.telefono}
-                  </Typography>
-                  <Typography variant="caption" display="block" color="text.secondary">
-                    ✉️ {config.email}
-                  </Typography>
-                  <Typography variant="caption" display="block" color="text.secondary">
-                    🌐 {config.sitioWeb}
-                  </Typography>
-                </Box>
-
-                <Divider sx={{ my: 2 }} />
-
-                {/* Redes Sociales */}
-                {config.mostrarRedesSociales && (
-                  <Box sx={{ textAlign: 'center', mb: 2 }}>
-                    <Typography variant="caption" color="text.secondary" gutterBottom>
-                      Síguenos en:
+                  {config.direccion && (
+                    <Typography sx={{ fontSize: 9, fontWeight: 600 }}>📍 {config.direccion}</Typography>
+                  )}
+                  <Typography sx={{ fontSize: 10, fontStyle: 'italic', fontWeight: 700 }}>{config.razonSocial}</Typography>
+                  <Typography sx={{ fontSize: 10, fontWeight: 700 }}>Tel: {config.telefono}</Typography>
+                  <Typography sx={{ fontSize: 10, fontWeight: 700 }}>RFC: {config.rfc}</Typography>
+                  {config.mostrarRedesSociales && (config.redesSociales.facebook || config.redesSociales.instagram) && (
+                    <Typography sx={{ fontSize: 8, fontWeight: 700, mt: 0.3 }}>
+                      {config.redesSociales.facebook ? `📘 FB: /${config.redesSociales.facebook}` : ''}
+                      {config.redesSociales.facebook && config.redesSociales.instagram ? ' | ' : ''}
+                      {config.redesSociales.instagram ? `📷 IG: @${config.redesSociales.instagram}` : ''}
                     </Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mt: 1 }}>
-                      {config.redesSociales.facebook && (
-                        <Tooltip title="Facebook">
-                          <Chip size="small" icon={<FacebookIcon />} label="Facebook" />
-                        </Tooltip>
-                      )}
-                      {config.redesSociales.instagram && (
-                        <Tooltip title="Instagram">
-                          <Chip size="small" icon={<InstagramIcon />} label="Instagram" />
-                        </Tooltip>
-                      )}
-                      {config.redesSociales.whatsapp && (
-                        <Tooltip title="WhatsApp">
-                          <Chip size="small" icon={<WhatsAppIcon />} label="WhatsApp" />
-                        </Tooltip>
-                      )}
-                    </Box>
-                  </Box>
-                )}
+                  )}
+                  {config.textos.encabezado && (
+                    <Typography sx={{ fontSize: 8, fontStyle: 'italic', mt: 0.3 }}>{config.textos.encabezado}</Typography>
+                  )}
+                </Box>
 
-                <Divider sx={{ my: 2 }} />
+                {/* Separador doble */}
+                <Box sx={{ borderTop: '3px solid #000', my: 0.5 }} />
+                <Typography sx={{ textAlign: 'center', fontSize: 14, fontWeight: 700, my: 0.3 }}>TICKET DE VENTA</Typography>
+                <Typography sx={{ textAlign: 'center', fontSize: 11, fontWeight: 700 }}>Folio: PED-20260326-0001</Typography>
+                <Box sx={{ borderTop: '1px dashed #000', my: 0.3 }} />
 
-                {/* Pie de Página */}
-                {config.textos.piePagina && (
-                  <Typography variant="caption" color="text.secondary" align="center" display="block">
-                    {config.textos.piePagina}
+                {/* Info */}
+                <Box sx={{ fontSize: 11, fontWeight: 700, '& td': { py: 0.2 } }}>
+                  <table style={{ width: '100%' }}>
+                    <tbody>
+                      <tr><td>Fecha:</td><td style={{ textAlign: 'right' }}>26/03/2026, 10:30 a.m.</td></tr>
+                      <tr><td>Cliente:</td><td style={{ textAlign: 'right' }}>Cliente Ejemplo</td></tr>
+                      <tr><td>Dir:</td><td style={{ textAlign: 'right' }}>Calle 5, Centro</td></tr>
+                    </tbody>
+                  </table>
+                </Box>
+
+                <Box sx={{ borderTop: '3px solid #000', my: 0.5 }} />
+                <Typography sx={{ textAlign: 'center', fontWeight: 700, fontSize: 11, borderBottom: '1px solid #000', pb: 0.3 }}>PRODUCTOS</Typography>
+
+                <Box sx={{ fontSize: 11, fontWeight: 700, my: 0.5 }}>
+                  <table style={{ width: '100%' }}>
+                    <tbody>
+                      <tr><td colSpan={2}><b>150.00L</b> Carga</td><td style={{ textAlign: 'right' }}>$1,567.50</td></tr>
+                      <tr><td colSpan={3} style={{ fontSize: 9, color: '#333' }}>&nbsp;&nbsp;<i>Precio: $10.45/L</i></td></tr>
+                    </tbody>
+                  </table>
+                </Box>
+
+                <Box sx={{ borderTop: '1px dashed #000', my: 0.3 }} />
+                <Box sx={{ fontSize: 14, fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
+                  <span>TOTAL A PAGAR:</span><span>$1,567.50</span>
+                </Box>
+                <Box sx={{ borderTop: '1px dashed #000', my: 0.3 }} />
+
+                <Typography sx={{ textAlign: 'center', fontWeight: 700, fontSize: 11, borderTop: '2px solid #000', borderBottom: '1px solid #000', py: 0.3 }}>FORMA DE PAGO</Typography>
+                <Box sx={{ fontSize: 11, fontWeight: 700 }}>
+                  <table style={{ width: '100%' }}><tbody><tr><td>EFECTIVO:</td><td style={{ textAlign: 'right' }}>$1,567.50</td></tr></tbody></table>
+                </Box>
+
+                <Box sx={{ borderTop: '3px solid #000', my: 0.5 }} />
+                <Box sx={{ fontSize: 11, fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Operador:</span><span>JUAN REPARTIDOR</span>
+                </Box>
+
+                {/* Footer */}
+                <Box sx={{ textAlign: 'center', mt: 1, fontSize: 9, fontWeight: 600 }}>
+                  <Typography sx={{ fontStyle: 'italic', fontSize: 9 }}>Gracias por su compra!</Typography>
+                  {config.textos.piePagina && <Typography sx={{ fontSize: 7, mt: 0.3 }}>{config.textos.piePagina}</Typography>}
+                  {config.textos.mostrarMensaje && config.textos.mensajeEspecial && (
+                    <Box sx={{ mt: 0.5, border: '1px solid #000', p: 0.5, fontSize: 8, fontWeight: 700 }}>{config.textos.mensajeEspecial}</Box>
+                  )}
+                </Box>
+
+                {config.mostrarRedesSociales && (
+                  <Typography sx={{ textAlign: 'center', fontSize: 7, fontWeight: 700, mt: 0.5 }}>
+                    {config.redesSociales.facebook ? `FB: /${config.redesSociales.facebook}` : ''}
+                    {config.redesSociales.facebook && config.redesSociales.instagram ? ' | ' : ''}
+                    {config.redesSociales.instagram ? `IG: @${config.redesSociales.instagram}` : ''}
                   </Typography>
                 )}
 
-                {/* Mensaje Especial */}
-                {config.textos.mostrarMensaje && config.textos.mensajeEspecial && (
-                  <Alert severity="info" sx={{ mt: 2 }}>
-                    {config.textos.mensajeEspecial}
-                  </Alert>
-                )}
+                <Box sx={{ textAlign: 'center', mt: 0.5 }}>
+                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=${encodeURIComponent(config.urlQR || 'https://fugas-providencia.netlify.app/')}`} style={{ width: 60 }} />
+                  <Typography sx={{ fontSize: 7, fontWeight: 700 }}>Atencion a fugas y pedidos</Typography>
+                </Box>
               </Paper>
 
-              {/* Información adicional */}
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  RFC: {config.rfc}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  Última modificación: {config.fechaModificacion}
-                </Typography>
-              </Box>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                Última modificación: {config.fechaModificacion}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>

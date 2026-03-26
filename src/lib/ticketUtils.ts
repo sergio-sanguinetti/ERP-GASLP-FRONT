@@ -266,7 +266,7 @@ export function generarHtmlTicketVenta(pedido: any, config: ConfiguracionTicket)
     </div>
 
     <div class="qr">
-      <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent('https://fugas-providencia.netlify.app/')}" 
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(config.urlQR || 'https://fugas-providencia.netlify.app/')}" 
         style="width:80px;"
         onerror="this.style.display='none';"
       />
