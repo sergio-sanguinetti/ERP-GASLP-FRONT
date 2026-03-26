@@ -445,7 +445,7 @@ export default function CreditosAbonosPage() {
         if (clientes.length < PAGE_SIZE || todos.length >= data.total) break
         page++
       }
-      setClientesDashboard(consolidarGrupos(todos))
+      setClientesDashboard(todos)
     } catch (e) { console.error('Error dashboard clientes', e) }
     finally { setLoadingDashboard(false) }
   }
@@ -734,7 +734,7 @@ export default function CreditosAbonosPage() {
       ])
 
       setResumenCredito(resumen)
-      setClientesCredito(consolidarGrupos([...clientesResp.clientes]).sort((a: any,b: any) => (b.saldoActual ?? 0) - (a.saldoActual ?? 0)))
+      setClientesCredito([...clientesResp.clientes].sort((a: any,b: any) => (b.saldoActual ?? 0) - (a.saldoActual ?? 0)))
       setTotalClientes(clientesResp.total)
       
       // Convertir pagos pendientes al formato esperado
