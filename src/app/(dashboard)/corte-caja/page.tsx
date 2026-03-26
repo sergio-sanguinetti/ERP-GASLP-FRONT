@@ -331,66 +331,39 @@ function VistaDetalle({
   const [savingDep, setSavingDep] = useState(false)
 
 
-  // Restaurar litrosReporte guardados en stats al cargar (solo una vez por corte)
-  const restoredRef = useRef<string>('')
-  useEffect(() => {
-    if (!detalle?.id || restoredRef.current === detalle.id) return
-    restoredRef.current = detalle.id
-    if (!detalle?.stats) return
-    try {
-      const stats = typeof detalle.stats === 'string' ? JSON.parse(detalle.stats) : detalle.stats
-      if (stats?.litrosReporte && Object.keys(stats.litrosReporte).length > 0) {
-        setLitrosReporte(stats.litrosReporte)
-      }
-    } catch(e) {}
-  }, [detalle?.id])
-
   const esPipas = detalle?.repartidor?.tipoRepartidor === 'pipas'
 
-  // Litros se auto-guardan cuando cambian (debounce 2 segundos)
-  const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
-  useEffect(() => {
-    if (!detalle?.id || !esPipas) return
-    const hasValues = Object.values(litrosReporte).some(v => parseFloat(v as string) > 0)
-    if (!hasValues) return
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(() => {
-      ventasAPI.guardarLitrosReporte(detalle.id, litrosReporte).catch(() => {})
-    }, 2000)
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
-  }, [litrosReporte, detalle?.id, esPipas])
-
-  // Auto-llenar L. reporte con Litros app como espejo (solo campos vacíos, una vez por corte)
+  // Auto-llenar L. reporte con Litros app como espejo + restaurar guardados (una vez por corte)
   const autoFilledRef = useRef<string>('')
   useEffect(() => {
     if (!detalle?.id || autoFilledRef.current === detalle.id) return
-    if (!esPipas) return
-    const pedidos = detalle.pedidos || []
-    if (pedidos.length === 0) return
     autoFilledRef.current = detalle.id
-    setLitrosReporte(prev => {
-      const updated = { ...prev }
-      let changed = false
+    if (!esPipas) return
+    // Primero intentar restaurar desde stats guardados
+    let restored: Record<string, string> = {}
+    try {
+      const stats = typeof detalle?.stats === 'string' ? JSON.parse(detalle.stats) : detalle?.stats
+      if (stats?.litrosReporte && Object.keys(stats.litrosReporte).length > 0) {
+        restored = stats.litrosReporte
+      }
+    } catch {}
+    // Si no hay guardados, auto-llenar desde litros app
+    if (Object.keys(restored).length === 0) {
+      const pedidos = detalle?.pedidos || []
       for (const p of pedidos) {
         const prods = Array.isArray(p.productos) ? p.productos : []
         if (prods.length <= 1) {
           const key = p.pedidoId || ''
-          if (!updated[key] && (p.litros || 0) > 0) {
-            updated[key] = Number(p.litros).toFixed(2)
-            changed = true
-          }
+          if ((p.litros || 0) > 0) restored[key] = Number(p.litros).toFixed(2)
         } else {
           prods.forEach((pr: any, pi: number) => {
             const key = `${p.pedidoId || ''}_${pi}`
-            if (!updated[key] && (pr.cantidad || 0) > 0) {
-              updated[key] = Number(pr.cantidad).toFixed(2)
-              changed = true
-            }
+            if ((pr.cantidad || 0) > 0) restored[key] = Number(pr.cantidad).toFixed(2)
           })
         }
       }
-      return changed ? updated : prev
-    })
+    }
+    if (Object.keys(restored).length > 0) setLitrosReporte(restored)
   }, [detalle?.id, esPipas])
 
   if (loading) {
