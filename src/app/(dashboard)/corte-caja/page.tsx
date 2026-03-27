@@ -620,7 +620,7 @@ function VistaDetalle({
                           <TableCell>
                             {(detalle.pedidos.find(p => p.pedidoId === fila.pedidoId)?.productos || []).map((prod, pi) => (
                               <Typography key={pi} variant="caption" display="block">
-                                {prod.cantidad} × {prod.nombre}
+                                {Math.round(prod.cantidad)} × {prod.nombre}
                                 {prod.descuento > 0 && <span style={{ color: '#f44336' }}> (-{fmt$(prod.descuento)})</span>}
                               </Typography>
                             ))}
@@ -1256,9 +1256,9 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
         srvCount++
         const numStr = (servicioNum||{})[p.pedidoId] || String(srvCount).padStart(3, '0')
         const prodsHtml = (p.productos||[]).filter((pr: any) => pr.cantidad > 0).map((pr: any) => {
-          const kg = pr.kg ? `CIL ${pr.kg} KG` : pr.nombre || ''
+          const prodName = pr.nombre || (pr.kg ? `CIL ${pr.kg} KG` : '')
           const desc = pr.descuento > 0 ? ` <span class="descuento">-$${pr.descuento.toFixed(2)}</span>` : ''
-          return `<div class="prod-line">${pr.cantidad} × ${kg}${desc}</div>`
+          return `<div class="prod-line">${Math.round(pr.cantidad)} × ${prodName}${desc}</div>`
         }).join('')
         const fps = p.formasPago?.length > 0
           ? p.formasPago.map((f: any) => `<div class="fp-line"><span>${f.tipo.toUpperCase()}:</span><span>$${f.monto.toFixed(2)}</span></div>`).join('')
@@ -1420,7 +1420,7 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
                 }
               })
               if (!esPipas) {
-                ;(p.productos||[]).filter(pr=>pr.cantidad>0).forEach(pr => lines.push(`  ${pr.cantidad}x ${pr.kg ? 'CIL '+pr.kg+' KG' : pr.nombre||''} = $${pr.subtotal.toFixed(2)}`))
+                ;(p.productos||[]).filter(pr=>pr.cantidad>0).forEach(pr => lines.push(`  ${Math.round(pr.cantidad)}x ${pr.nombre || (pr.kg ? 'CIL '+pr.kg+' KG' : '')} = $${pr.subtotal.toFixed(2)}`))
               }
             })
             lines.push(SEP2, `TOTAL                   $${totalCorte.toFixed(2)}`)
