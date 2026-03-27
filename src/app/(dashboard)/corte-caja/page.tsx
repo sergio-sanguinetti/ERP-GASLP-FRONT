@@ -1375,7 +1375,7 @@ function DialogReimprimir({ open, onClose, detalle, litrosReporte, servicioNum }
   <div class="footer">
     <div>Repartidor(a): ${rep}</div>
     <div>Representación impresa del corte de venta</div>
-    <div>Estado: ${detalle.estado.toUpperCase()} VALIDACIÓN</div>
+    <div>Estado: ${detalle.estado.toUpperCase()}</div>
   </div>
 </body>
 </html>`

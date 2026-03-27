@@ -493,14 +493,6 @@ export default function VentasPage() {
         setSedeSeleccionada(sedeUsuarioId || null)
       }
 
-      // Debug: verificar qué sede tiene el usuario
-      console.log('Usuario sede (raw):', user.sede)
-      console.log('Sede encontrada (ID):', sedeUsuarioId)
-      console.log(
-        'Sedes disponibles:',
-        sedesData.map(s => ({ id: s.id, nombre: s.nombre }))
-      )
-
       // Cargar datos del dashboard
       await loadDashboardData()
     } catch (err: any) {
@@ -538,14 +530,7 @@ export default function VentasPage() {
   const loadProductos = async () => {
     try {
       // El catálogo NO se filtra por sede (según requerimiento)
-      const data = await productosAPI.getAll({ activo: true })
-      console.log('Productos cargados:', data.length)
-      console.log('Productos con categorías:', data.map(p => ({
-        id: p.id,
-        nombre: p.nombre,
-        categoriaId: p.categoriaId,
-        categoria: p.categoria ? { id: p.categoria.id, nombre: p.categoria.nombre, codigo: p.categoria.codigo } : null
-      })))
+      const data = await productosAPI.getAll({ activo: true })))
       setProductos(data)
     } catch (err: any) {
       console.error('Error loading productos:', err)
@@ -634,30 +619,22 @@ export default function VentasPage() {
   const loadRutas = async () => {
     try {
       // Obtener todas las rutas activas primero (sin filtro de activa para ver todas)
-      let todasLasRutas = await rutasAPI.getAll({ activa: 'true' })
-      console.log('Todas las rutas activas:', todasLasRutas.length)
-      console.log('Rutas con sede:', todasLasRutas.map(r => ({ nombre: r.nombre, sedeId: r.sedeId, sede: r.sede?.nombre, activa: r.activa })))
+      let todasLasRutas = await rutasAPI.getAll({ activa: 'true' })))
       
       // Si no hay rutas con el filtro activa, intentar sin filtro
       if (todasLasRutas.length === 0) {
-        console.log('No se encontraron rutas con filtro activa=true, intentando sin filtro...')
-        todasLasRutas = await rutasAPI.getAll({})
-        console.log('Todas las rutas (sin filtro):', todasLasRutas.length)
+        todasLasRutas = await rutasAPI.getAll({}):', todasLasRutas.length)
         // Filtrar solo las activas en el frontend
-        todasLasRutas = todasLasRutas.filter(r => r.activa === true)
-        console.log('Rutas activas (filtradas en frontend):', todasLasRutas.length)
-        console.log('Detalles de rutas:', todasLasRutas.map(r => ({ nombre: r.nombre, activa: r.activa, sedeId: r.sedeId })))
+        todasLasRutas = todasLasRutas.filter(r => r.activa === true):', todasLasRutas.length)))
       }
       
       let rutasFiltradas = todasLasRutas
       
       // Si hay una sede seleccionada, filtrar por esa sede
       if (sedeId) {
-        console.log(`Filtrando por sedeId: ${sedeId}`)
         const rutasConSede = rutasFiltradas.filter(ruta => {
           const coincide = ruta.sedeId === sedeId || ruta.sede?.id === sedeId
           if (!coincide) {
-            console.log(`Ruta ${ruta.nombre} no coincide - sedeId: ${ruta.sedeId}, sede?.id: ${ruta.sede?.id}`)
           }
           return coincide
         })
@@ -665,13 +642,9 @@ export default function VentasPage() {
         // Si hay rutas con sede asignada, usarlas
         // Si no hay rutas con sede, mostrar todas (las rutas pueden no tener sede asignada aún)
         if (rutasConSede.length > 0) {
-          rutasFiltradas = rutasConSede
-          console.log(`✅ Rutas filtradas por sede ${sedeId}: ${rutasFiltradas.length} rutas`)
-          console.log('Rutas encontradas:', rutasFiltradas.map(r => r.nombre))
+          rutasFiltradas = rutasConSede)
         } else {
-          console.warn(`⚠️ No se encontraron rutas con sedeId ${sedeId}. Mostrando todas las rutas activas.`)
-          console.log('Rutas disponibles:', rutasFiltradas.map(r => ({ nombre: r.nombre, sedeId: r.sedeId })))
-          console.log('Sugerencia: Verifica que las rutas tengan la sede correcta asignada')
+          console.warn(`⚠️ No se encontraron rutas con sedeId ${sedeId}. Mostrando todas las rutas activas.`)))
           // Mantener todas las rutas si no hay ninguna con esa sede
         }
       }
@@ -682,16 +655,13 @@ export default function VentasPage() {
           ruta.repartidores?.some((rep: any) => rep.id === usuario.id)
         )
         if (rutasDelUsuario.length > 0) {
-          rutasFiltradas = rutasDelUsuario
-          console.log(`Rutas asignadas al repartidor: ${rutasFiltradas.length}`, rutasFiltradas.map(r => r.nombre))
+          rutasFiltradas = rutasDelUsuario)
         } else {
           rutasFiltradas = []
-          console.log('El repartidor no tiene rutas asignadas')
         }
       }
       
-      setRutas(rutasFiltradas)
-      console.log(`Rutas finales: ${rutasFiltradas.length}`, rutasFiltradas.map(r => ({ nombre: r.nombre, sedeId: r.sedeId, sede: r.sede?.nombre })))
+      setRutas(rutasFiltradas)))
     } catch (err: any) {
       console.error('Error loading rutas:', err)
       setRutas([])
@@ -706,12 +676,6 @@ export default function VentasPage() {
         rol: 'repartidor',
         estado: 'activo'
       })
-
-      console.log('Repartidores cargados:', data.length, 'repartidores')
-      console.log(
-        'Repartidores:',
-        data.map(r => ({ id: r.id, nombre: `${r.nombres} ${r.apellidoPaterno}`, sede: r.sede }))
-      )
       setRepartidores(data)
     } catch (err: any) {
       console.error('Error loading repartidores:', err)
@@ -722,7 +686,6 @@ export default function VentasPage() {
   const loadPedidos = async (overrideFiltros?: Partial<FiltrosPedidos>) => {
     try {
       const f = overrideFiltros ?? filtrosPedidos
-      console.log('Cargando pedidos con sedeId:', sedeId)
 
       const filtros: any = {
         sedeId: sedeId || undefined
@@ -734,16 +697,8 @@ export default function VentasPage() {
       if (f.repartidorId) filtros.repartidorId = f.repartidorId
       if (f.tipoServicio) filtros.tipoServicio = f.tipoServicio
 
-      console.log('Filtros enviados:', filtros)
-
       const data = await pedidosAPI.getAll(filtros)
       setPaginaPedidos(0)
-
-      console.log('Pedidos recibidos:', data.length, 'pedidos')
-      console.log(
-        'Pedidos:',
-        data.map(p => ({ id: p.id, numeroPedido: p.numeroPedido, sedeId: p.sedeId }))
-      )
 
       setPedidos(data)
     } catch (err: any) {
@@ -808,7 +763,6 @@ export default function VentasPage() {
     } else if (tipo === 'descuentos') {
       // Cargar repartidores si no están cargados
       if (repartidores.length === 0) {
-        console.log('Cargando repartidores para diálogo de descuentos...')
         await loadRepartidores()
       }
       
@@ -836,25 +790,19 @@ export default function VentasPage() {
       }
     } else if (tipo === 'pedido') {
       // Cargar productos, clientes, repartidores y categorías cuando se abre el diálogo de pedido
-      console.log('Abriendo diálogo de pedido, cargando datos...')
       if (categoriasProducto.length === 0) {
-        console.log('Cargando categorías...')
         await loadCategoriasProducto()
       }
       if (productos.length === 0) {
-        console.log('Cargando productos...')
         await loadProductos()
       }
       if (clientes.length === 0) {
-        console.log('Cargando clientes...')
         await loadClientes()
       }
       if (repartidores.length === 0) {
-        console.log('Cargando repartidores...')
         await loadRepartidores()
       }
       if (rutas.length === 0) {
-        console.log('Cargando rutas...')
         await loadRutas()
       }
       // Resetear cliente buscado y modo edición
@@ -874,8 +822,6 @@ export default function VentasPage() {
       if (primeraRutaId) {
         loadClientesPorRuta(primeraRutaId)
       }
-      console.log('Categorías disponibles:', categoriasProducto.length)
-      console.log('Productos disponibles:', productos.length)
     }
     setDialogoAbierto(true)
   }
@@ -1612,8 +1558,7 @@ export default function VentasPage() {
 
   const loadCategoriasProducto = async () => {
     try {
-      const data = await categoriasProductoAPI.getAll()
-      console.log('Categorías cargadas:', data.length, data.map(c => ({ id: c.id, nombre: c.nombre, codigo: c.codigo })))
+      const data = await categoriasProductoAPI.getAll()))
       setCategoriasProducto(data)
     } catch (err: any) {
       console.error('Error loading categorias:', err)
