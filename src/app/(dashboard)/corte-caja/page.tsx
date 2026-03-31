@@ -109,6 +109,17 @@ function VistaDashboard({ resumen, loading, fecha, onFechaChange, onVerDetalle, 
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+          {esSuperAdmin && sedes.length > 1 && (
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <InputLabel>Sede</InputLabel>
+              <Select value={sedeSeleccionada || ''} label="Sede" onChange={e => onSedeChange(e.target.value)}>
+                {sedes.map((s: any) => <MenuItem key={s.id} value={s.id}>{s.nombre?.trim()}</MenuItem>)}
+              </Select>
+            </FormControl>
+          )}
+          {!esSuperAdmin && sedeSeleccionada && (
+            <Chip label={sedes.find((s: any) => s.id === sedeSeleccionada)?.nombre?.trim() || 'Sede'} size="small" variant="outlined" />
+          )}
           <TextField type="date" size="small" value={fecha} onChange={e => onFechaChange(e.target.value)}
             InputLabelProps={{ shrink: true }} sx={{ width: 160 }} />
           <Button variant="outlined" size="small" onClick={() => onFechaChange(getHoyMx())}>Hoy</Button>
@@ -152,7 +163,7 @@ function VistaDashboard({ resumen, loading, fecha, onFechaChange, onVerDetalle, 
                 <Box sx={{ height: '100%', width: `${pct}%`, bgcolor: pct >= 100 ? '#1D9E75' : '#BA7517', borderRadius: 4, transition: 'width 0.4s' }} />
               </Box>
               <Typography variant="caption" color="text.secondary">
-                {(resumen?.pipas.length || 0) + (resumen?.cilindros.length || 0)} / {(resumen?.pipas.length || 0) + (resumen?.cilindros.length || 0)} repartidores
+                {(resumen?.pipas.length || 0) + (resumen?.cilindros.length || 0)} repartidores con corte
               </Typography>
             </Box>
           </Grid>
@@ -1490,7 +1501,7 @@ export default function CorteCajaPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [sedeId])
 
   const loadHistorial = useCallback(async () => {
     try {
