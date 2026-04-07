@@ -537,7 +537,7 @@ export default function VentasPage() {
   const loadProductos = async () => {
     try {
       // El catálogo NO se filtra por sede (según requerimiento)
-      const data = await productosAPI.getAll({ activo: true })))
+      const data = await productosAPI.getAll({ activo: true })
       setProductos(data)
     } catch (err: any) {
       console.error('Error loading productos:', err)
@@ -626,7 +626,7 @@ export default function VentasPage() {
   const loadRutas = async () => {
     try {
       // Obtener todas las rutas activas primero (sin filtro de activa para ver todas)
-      let todasLasRutas = await rutasAPI.getAll({ activa: 'true' })))
+      let todasLasRutas = await rutasAPI.getAll({ activa: 'true' })
       
       // Si no hay rutas con el filtro activa, intentar sin filtro
       if (todasLasRutas.length === 0) {
@@ -1588,7 +1588,7 @@ export default function VentasPage() {
 
   const loadCategoriasProducto = async () => {
     try {
-      const data = await categoriasProductoAPI.getAll()))
+      const data = await categoriasProductoAPI.getAll()
       setCategoriasProducto(data)
     } catch (err: any) {
       console.error('Error loading categorias:', err)
