@@ -3715,7 +3715,7 @@ export default function VentasPage() {
                       { label: 'Frecuencia', value: analisisCliente.kpis?.frecuenciaDias ? `c/${analisisCliente.kpis.frecuenciaDias}d` : '—', color: 'text.primary' },
                       { label: 'Litros totales', value: analisisCliente.kpis?.litrosTotales > 0 ? `${analisisCliente.kpis.litrosTotales.toLocaleString()} L` : '—', color: 'info.main' },
                     ].map(kpi => (
-                      <Grid item xs={6} sm={4} md={2.4} key={kpi.label}>
+                      <Grid item xs={6} sm={4} md={2} key={kpi.label}>
                         <Card sx={{ textAlign: 'center', height: '100%' }}>
                           <CardContent sx={{ py: 1.5, pb: '12px !important' }}>
                             <Typography variant='caption' color='text.secondary' display='block'>{kpi.label}</Typography>
