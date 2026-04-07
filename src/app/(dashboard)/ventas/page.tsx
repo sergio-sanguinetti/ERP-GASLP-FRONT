@@ -738,7 +738,7 @@ export default function VentasPage() {
   }
 
   const buscarClientePorNombre = async (nombre: string) => {
-    if (nombre.length < 2) { setResultadosBusqueda([]); return }
+    if (nombre.length < 1) { setResultadosBusqueda([]); return }
     setLoadingBusquedaCliente(true)
     try {
       const data = await clientesAPI.getAll({ nombre })
@@ -3585,8 +3585,8 @@ export default function VentasPage() {
           {modoAnalisis === 'por-cliente' && (
             <Box>
               {/* Buscador */}
-              <Card sx={{ mb: 3 }}>
-                <CardContent sx={{ pb: '12px !important' }}>
+              <Card sx={{ mb: 3, overflow: 'visible' }}>
+                <CardContent sx={{ pb: '12px !important', overflow: 'visible' }}>
                   <Typography variant='subtitle2' fontWeight='bold' sx={{ mb: 1.5 }}>
                     Buscar cliente
                   </Typography>
