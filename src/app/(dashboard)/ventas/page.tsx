@@ -3861,6 +3861,8 @@ export default function VentasPage() {
               )}
             </Box>
           )}
+        </Box>
+      )}
 
 
       {/* Modal Crear/Editar Producto */}
