@@ -178,9 +178,11 @@ export default function VentasPage() {
   const [busquedaPorCliente, setBusquedaPorCliente] = useState('')
   const [resultadosBusqueda, setResultadosBusqueda] = useState<Cliente[]>([])
   const [loadingBusquedaCliente, setLoadingBusquedaCliente] = useState(false)
-  const [clienteDetalle, setClienteDetalle] = useState<Cliente | null>(null)
-  const [historialClienteDetalle, setHistorialClienteDetalle] = useState<any | null>(null)
+  const [clienteDetalle, setClienteDetalle] = useState<any | null>(null)
+  const [analisisCliente, setAnalisisCliente] = useState<any | null>(null)
   const [loadingClienteDetalle, setLoadingClienteDetalle] = useState(false)
+  const [filtroAnalisisDesde, setFiltroAnalisisDesde] = useState('')
+  const [filtroAnalisisHasta, setFiltroAnalisisHasta] = useState('')
   const [rutas, setRutas] = useState<Ruta[]>([])
   const [mostrarCrearCliente, setMostrarCrearCliente] = useState(false)
   const [formularioClienteRapido, setFormularioClienteRapido] = useState({
@@ -747,17 +749,27 @@ export default function VentasPage() {
     finally { setLoadingBusquedaCliente(false) }
   }
 
-  const seleccionarClienteDetalle = async (cliente: Cliente) => {
+  const cargarAnalisisCliente = async (clienteId: string, desde?: string, hasta?: string) => {
+    setLoadingClienteDetalle(true)
+    setAnalisisCliente(null)
+    try {
+      const params = new URLSearchParams()
+      if (desde) params.append('fechaDesde', desde)
+      if (hasta) params.append('fechaHasta', hasta)
+      const qs = params.toString()
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.prometeogp.com/api'}/clientes/${clienteId}/analisis${qs ? `?${qs}` : ''}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      })
+      if (res.ok) setAnalisisCliente(await res.json())
+    } catch(e) { console.error('Error cargando análisis:', e) }
+    finally { setLoadingClienteDetalle(false) }
+  }
+
+  const seleccionarClienteDetalle = async (cliente: any) => {
     setClienteDetalle(cliente)
     setResultadosBusqueda([])
     setBusquedaPorCliente(`${cliente.nombre} ${cliente.apellidoPaterno || ''}`.trim())
-    setLoadingClienteDetalle(true)
-    setHistorialClienteDetalle(null)
-    try {
-      const data = await clientesAnalisisAPI.getHistorial(cliente.id)
-      setHistorialClienteDetalle(data)
-    } catch(e) { console.error('Error cargando detalle:', e) }
-    finally { setLoadingClienteDetalle(false) }
+    await cargarAnalisisCliente(cliente.id, filtroAnalisisDesde, filtroAnalisisHasta)
   }
 
   const abrirDialogo = async (tipo: 'precios' | 'descuentos' | 'pedido' | 'producto' | 'categoria', item?: any) => {
@@ -3584,246 +3596,271 @@ export default function VentasPage() {
           {/* ===== MODO POR CLIENTE ===== */}
           {modoAnalisis === 'por-cliente' && (
             <Box>
-              {/* Buscador */}
+              {/* Buscador + Filtros */}
               <Card sx={{ mb: 3, overflow: 'visible' }}>
                 <CardContent sx={{ pb: '12px !important', overflow: 'visible' }}>
-                  <Typography variant='subtitle2' fontWeight='bold' sx={{ mb: 1.5 }}>
-                    Buscar cliente
-                  </Typography>
-                  <Box sx={{ position: 'relative', maxWidth: 500 }}>
-                    <TextField
-                      fullWidth
-                      size='small'
-                      placeholder='Escribe el nombre del cliente...'
-                      value={busquedaPorCliente}
-                      onChange={e => {
-                        setBusquedaPorCliente(e.target.value)
-                        buscarClientePorNombre(e.target.value)
-                      }}
-                      InputProps={{
-                        startAdornment: loadingBusquedaCliente
-                          ? <CircularProgress size={16} sx={{ mr: 1 }} />
-                          : <SearchIcon sx={{ mr: 1, color: 'text.disabled', fontSize: 20 }} />
-                      }}
-                    />
-                    {/* Resultados dropdown */}
-                    {resultadosBusqueda.length > 0 && (
-                      <Box sx={{
-                        position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000,
-                        bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider',
-                        borderRadius: 1, boxShadow: 3, maxHeight: 300, overflowY: 'auto', mt: 0.5
-                      }}>
-                        {resultadosBusqueda.map(c => (
-                          <Box key={c.id}
-                            onClick={() => seleccionarClienteDetalle(c)}
-                            sx={{
-                              px: 2, py: 1.2, cursor: 'pointer',
-                              '&:hover': { bgcolor: 'action.hover' },
-                              borderBottom: '1px solid', borderColor: 'divider'
-                            }}
-                          >
-                            <Typography variant='body2' fontWeight='bold'>
-                              {c.nombre} {c.apellidoPaterno || ''} {c.apellidoMaterno || ''}
-                            </Typography>
-                            <Typography variant='caption' color='text.secondary'>
-                              {c.ruta?.nombre || 'Sin ruta'} · {c.telefono || 'Sin teléfono'}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Box>
+                  <Grid container spacing={2} alignItems='flex-end'>
+                    <Grid item xs={12} md={4} sx={{ position: 'relative' }}>
+                      <Typography variant='caption' color='text.secondary' display='block' sx={{ mb: 0.5 }}>Buscar cliente</Typography>
+                      <TextField fullWidth size='small' placeholder='Nombre del cliente...'
+                        value={busquedaPorCliente}
+                        onChange={e => { setBusquedaPorCliente(e.target.value); buscarClientePorNombre(e.target.value) }}
+                        InputProps={{ startAdornment: loadingBusquedaCliente ? <CircularProgress size={16} sx={{ mr: 1 }} /> : <SearchIcon sx={{ mr: 1, color: 'text.disabled', fontSize: 20 }} /> }}
+                      />
+                      {resultadosBusqueda.length > 0 && (
+                        <Box sx={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1, boxShadow: 3, maxHeight: 280, overflowY: 'auto', mt: 0.5 }}>
+                          {resultadosBusqueda.map(c => (
+                            <Box key={c.id} onClick={() => seleccionarClienteDetalle(c)}
+                              sx={{ px: 2, py: 1.2, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' }, borderBottom: '1px solid', borderColor: 'divider' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant='body2' fontWeight='bold'>
+                                  {c.nombre} {(c as any).apellidoPaterno || ''} {(c as any).apellidoMaterno || ''}
+                                </Typography>
+                                {(c as any).nombreGrupo && <Chip label={(c as any).nombreGrupo} size='small' color='primary' sx={{ fontSize: 10, height: 18 }} />}
+                              </Box>
+                              <Typography variant='caption' color='text.secondary'>{(c as any).ruta?.nombre || 'Sin ruta'}</Typography>
+                            </Box>
+                          ))}
+                        </Box>
+                      )}
+                    </Grid>
+                    <Grid item xs={6} md={2}>
+                      <Typography variant='caption' color='text.secondary' display='block' sx={{ mb: 0.5 }}>Desde</Typography>
+                      <TextField fullWidth size='small' type='date' value={filtroAnalisisDesde} onChange={e => setFiltroAnalisisDesde(e.target.value)} InputLabelProps={{ shrink: true }} />
+                    </Grid>
+                    <Grid item xs={6} md={2}>
+                      <Typography variant='caption' color='text.secondary' display='block' sx={{ mb: 0.5 }}>Hasta</Typography>
+                      <TextField fullWidth size='small' type='date' value={filtroAnalisisHasta} onChange={e => setFiltroAnalisisHasta(e.target.value)} InputLabelProps={{ shrink: true }} />
+                    </Grid>
+                    <Grid item xs={12} md={2}>
+                      <Button fullWidth variant='contained' size='small' startIcon={<SearchIcon />}
+                        onClick={() => { if (clienteDetalle) cargarAnalisisCliente(clienteDetalle.id, filtroAnalisisDesde, filtroAnalisisHasta) }}
+                        disabled={!clienteDetalle || loadingClienteDetalle}>
+                        Aplicar filtros
+                      </Button>
+                    </Grid>
+                    {analisisCliente && (
+                      <Grid item xs={12} md={2}>
+                        <Button fullWidth variant='outlined' size='small' startIcon={<DownloadIcon />}
+                          onClick={() => {
+                            const rows = [['Fecha','Folio','Tipo','Operador','Ruta','Litros','Total','Formas de Pago','Productos']]
+                            analisisCliente.pedidos.forEach((p: any) => {
+                              rows.push([
+                                new Date(p.fechaPedido).toLocaleDateString('es-MX'),
+                                p.numeroPedido || '',
+                                p.tipoServicio === 'pipas' ? 'Pipa' : 'Cilindros',
+                                p.repartidor || '',
+                                p.ruta || '',
+                                p.litros > 0 ? p.litros.toString() : '',
+                                p.ventaTotal.toString(),
+                                p.pagos.map((pg: any) => `${pg.metodo}: $${pg.monto}`).join(' / '),
+                                p.productos.map((pr: any) => `${pr.cantidad}x ${pr.nombre}`).join(' / ')
+                              ])
+                            })
+                            const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n')
+                            const a = document.createElement('a')
+                            a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent('\uFEFF' + csv)
+                            a.download = `historial_${analisisCliente.cliente?.nombre || 'cliente'}_${new Date().toLocaleDateString('es-MX').replace(/\//g,'-')}.csv`
+                            a.click()
+                          }}>
+                          Descargar CSV
+                        </Button>
+                      </Grid>
                     )}
-                  </Box>
+                  </Grid>
                 </CardContent>
               </Card>
 
-              {/* Ficha del cliente */}
-              {loadingClienteDetalle && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                  <CircularProgress />
-                </Box>
-              )}
+              {/* Loading */}
+              {loadingClienteDetalle && <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>}
 
-              {clienteDetalle && !loadingClienteDetalle && (
-                <Grid container spacing={3}>
-                  {/* Columna izquierda: info del cliente */}
-                  <Grid item xs={12} md={4}>
-                    <Card>
-                      <CardContent>
-                        {/* Avatar + nombre */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                          <Box sx={{
-                            width: 52, height: 52, borderRadius: '50%',
-                            bgcolor: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                          }}>
-                            <Typography variant='h6' fontWeight='bold' color='white'>
-                              {clienteDetalle.nombre.charAt(0)}
-                            </Typography>
+              {/* Análisis del cliente */}
+              {analisisCliente && !loadingClienteDetalle && (
+                <Box>
+                  {/* Header del cliente */}
+                  <Card sx={{ mb: 3, background: 'linear-gradient(135deg, #4a3728 0%, #6b4f3a 100%)' }}>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <Box sx={{ width: 52, height: 52, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Typography variant='h5' fontWeight='bold' color='white'>{analisisCliente.cliente?.nombre?.charAt(0)}</Typography>
                           </Box>
                           <Box>
-                            <Typography variant='subtitle1' fontWeight='bold' lineHeight={1.2}>
-                              {clienteDetalle.nombre} {clienteDetalle.apellidoPaterno || ''} {clienteDetalle.apellidoMaterno || ''}
+                            <Typography variant='h6' fontWeight='bold' color='white'>
+                              {analisisCliente.cliente?.nombre} {analisisCliente.cliente?.apellidoPaterno || ''} {analisisCliente.cliente?.apellidoMaterno || ''}
                             </Typography>
-                            <Chip
-                              label={clienteDetalle.estadoCliente || 'activo'}
-                              size='small'
-                              color={clienteDetalle.estadoCliente === 'activo' ? 'success' : 'default'}
-                              sx={{ mt: 0.5, fontSize: 11 }}
-                            />
-                          </Box>
-                        </Box>
-
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Typography variant='caption' color='text.secondary'>Ruta</Typography>
-                            <Typography variant='caption' fontWeight='bold'>{clienteDetalle.ruta?.nombre || '—'}</Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Typography variant='caption' color='text.secondary'>Teléfono</Typography>
-                            <Typography variant='caption' fontWeight='bold'>{clienteDetalle.telefono || '—'}</Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Typography variant='caption' color='text.secondary'>Municipio</Typography>
-                            <Typography variant='caption' fontWeight='bold'>{clienteDetalle.municipio || '—'}</Typography>
-                          </Box>
-                        </Box>
-
-                        {/* Crédito */}
-                        {(clienteDetalle.limiteCredito > 0 || clienteDetalle.saldoActual > 0) && (
-                          <Box sx={{ mt: 2, p: 1.5, bgcolor: clienteDetalle.saldoActual > 0 ? 'error.50' : 'success.50', borderRadius: 1 }}>
-                            <Typography variant='caption' color='text.secondary' display='block'>Crédito</Typography>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
-                              <Typography variant='caption'>Límite: <strong>${clienteDetalle.limiteCredito.toLocaleString()}</strong></Typography>
-                              <Typography variant='caption' color={clienteDetalle.saldoActual > 0 ? 'error.main' : 'text.secondary'}>
-                                Deuda: <strong>${clienteDetalle.saldoActual.toLocaleString()}</strong>
-                              </Typography>
+                            <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
+                              {analisisCliente.cliente?.ruta?.nombre && <Chip label={analisisCliente.cliente.ruta.nombre} size='small' sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', fontSize: 11 }} />}
+                              {analisisCliente.cliente?.esGrupo && <Chip label={`Grupo · ${analisisCliente.cliente?.miembros?.length + 1} domicilios`} size='small' color='warning' sx={{ fontSize: 11 }} />}
+                              {analisisCliente.cliente?.nombreGrupo && !analisisCliente.cliente?.esGrupo && <Chip label={`Grupo: ${analisisCliente.cliente.nombreGrupo}`} size='small' color='warning' sx={{ fontSize: 11 }} />}
                             </Box>
                           </Box>
+                        </Box>
+                        {(analisisCliente.cliente?.saldoActual > 0) && (
+                          <Box sx={{ bgcolor: 'rgba(255,100,100,0.3)', borderRadius: 1, px: 2, py: 1, textAlign: 'right' }}>
+                            <Typography variant='caption' color='rgba(255,255,255,0.8)' display='block'>Deuda actual</Typography>
+                            <Typography variant='h6' fontWeight='bold' color='white'>${analisisCliente.cliente.saldoActual.toLocaleString('es-MX')}</Typography>
+                          </Box>
                         )}
-                      </CardContent>
-                    </Card>
-                  </Grid>
+                      </Box>
+                    </CardContent>
+                  </Card>
 
-                  {/* Columna derecha: KPIs + historial */}
-                  <Grid item xs={12} md={8}>
-                    {historialClienteDetalle && (
-                      <>
-                        {/* KPIs de compras */}
-                        <Grid container spacing={2} sx={{ mb: 2 }}>
-                          <Grid item xs={6} sm={3}>
-                            <Card sx={{ bgcolor: 'primary.50', textAlign: 'center' }}>
-                              <CardContent sx={{ py: 1.5, pb: '12px !important' }}>
-                                <Typography variant='caption' color='text.secondary' display='block'>Total comprado</Typography>
-                                <Typography variant='h6' fontWeight='bold' color='primary'>
-                                  ${historialClienteDetalle.totalHistorico.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
-                                </Typography>
-                              </CardContent>
-                            </Card>
-                          </Grid>
-                          <Grid item xs={6} sm={3}>
-                            <Card sx={{ textAlign: 'center' }}>
-                              <CardContent sx={{ py: 1.5, pb: '12px !important' }}>
-                                <Typography variant='caption' color='text.secondary' display='block'>Visitas</Typography>
-                                <Typography variant='h6' fontWeight='bold'>
-                                  {historialClienteDetalle.pedidos?.length || 0}
-                                </Typography>
-                              </CardContent>
-                            </Card>
-                          </Grid>
-                          <Grid item xs={6} sm={3}>
-                            <Card sx={{ textAlign: 'center' }}>
-                              <CardContent sx={{ py: 1.5, pb: '12px !important' }}>
-                                <Typography variant='caption' color='text.secondary' display='block'>Ticket promedio</Typography>
-                                <Typography variant='h6' fontWeight='bold'>
-                                  ${historialClienteDetalle.ticketPromedio.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
-                                </Typography>
-                              </CardContent>
-                            </Card>
-                          </Grid>
-                          <Grid item xs={6} sm={3}>
-                            <Card sx={{ textAlign: 'center' }}>
-                              <CardContent sx={{ py: 1.5, pb: '12px !important' }}>
-                                <Typography variant='caption' color='text.secondary' display='block'>Frecuencia</Typography>
-                                <Typography variant='h6' fontWeight='bold'>
-                                  {historialClienteDetalle.frecuenciaDias ? `c/${historialClienteDetalle.frecuenciaDias}d` : '—'}
-                                </Typography>
-                              </CardContent>
-                            </Card>
-                          </Grid>
-                        </Grid>
-
-                        {/* Historial completo de visitas */}
-                        <Card>
-                          <CardContent>
-                            <Typography variant='subtitle2' fontWeight='bold' sx={{ mb: 1.5 }}>
-                              Historial completo — {historialClienteDetalle.pedidos?.length || 0} visitas
-                            </Typography>
-                            {historialClienteDetalle.pedidos?.length === 0 ? (
-                              <Typography variant='body2' color='text.secondary'>Sin pedidos registrados</Typography>
-                            ) : (
-                              <TableContainer sx={{ maxHeight: 400 }}>
-                                <Table size='small' stickyHeader>
-                                  <TableHead>
-                                    <TableRow>
-                                      <TableCell>Fecha</TableCell>
-                                      <TableCell>Folio</TableCell>
-                                      <TableCell>Tipo</TableCell>
-                                      <TableCell align='right'>Total</TableCell>
-                                    </TableRow>
-                                  </TableHead>
-                                  <TableBody>
-                                    {historialClienteDetalle.pedidos.map((p: any) => (
-                                      <TableRow key={p.id} hover>
-                                        <TableCell>
-                                          <Typography variant='caption'>
-                                            {getFechaDisplay(p.fechaPedido, p.numeroPedido, p.horaPedido)}
-                                          </Typography>
-                                        </TableCell>
-                                        <TableCell>
-                                          <Typography variant='caption' color='text.secondary'>{p.numeroPedido || '—'}</Typography>
-                                        </TableCell>
-                                        <TableCell>
-                                          <Chip
-                                            label={p.tipoServicio === 'pipas' ? 'PIPA' : 'CIL'}
-                                            size='small'
-                                            sx={{
-                                              fontSize: 10, height: 18,
-                                              bgcolor: p.tipoServicio === 'pipas' ? 'primary.light' : 'warning.light',
-                                              color: p.tipoServicio === 'pipas' ? 'primary.dark' : 'warning.dark'
-                                            }}
-                                          />
-                                        </TableCell>
-                                        <TableCell align='right'>
-                                          <Typography variant='caption' fontWeight='bold' color='primary'>
-                                            ${parseFloat(p.ventaTotal).toLocaleString('es-MX', { maximumFractionDigits: 0 })}
-                                          </Typography>
-                                        </TableCell>
-                                      </TableRow>
-                                    ))}
-                                  </TableBody>
-                                </Table>
-                              </TableContainer>
-                            )}
+                  {/* KPIs */}
+                  <Grid container spacing={2} sx={{ mb: 3 }}>
+                    {[
+                      { label: 'Total comprado', value: `$${(analisisCliente.kpis?.totalHistorico || 0).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`, color: 'primary.main' },
+                      { label: 'Visitas', value: analisisCliente.kpis?.totalVisitas || 0, color: 'text.primary' },
+                      { label: 'Ticket promedio', value: `$${(analisisCliente.kpis?.ticketPromedio || 0).toLocaleString('es-MX')}`, color: 'text.primary' },
+                      { label: 'Frecuencia', value: analisisCliente.kpis?.frecuenciaDias ? `c/${analisisCliente.kpis.frecuenciaDias}d` : '—', color: 'text.primary' },
+                      { label: 'Litros totales', value: analisisCliente.kpis?.litrosTotales > 0 ? `${analisisCliente.kpis.litrosTotales.toLocaleString()} L` : '—', color: 'info.main' },
+                    ].map(kpi => (
+                      <Grid item xs={6} sm={4} md={2.4} key={kpi.label}>
+                        <Card sx={{ textAlign: 'center', height: '100%' }}>
+                          <CardContent sx={{ py: 1.5, pb: '12px !important' }}>
+                            <Typography variant='caption' color='text.secondary' display='block'>{kpi.label}</Typography>
+                            <Typography variant='h6' fontWeight='bold' color={kpi.color} sx={{ fontSize: '1rem' }}>{kpi.value}</Typography>
                           </CardContent>
                         </Card>
-                      </>
-                    )}
+                      </Grid>
+                    ))}
                   </Grid>
-                </Grid>
+
+                  <Grid container spacing={3} sx={{ mb: 3 }}>
+                    {/* Formas de pago */}
+                    <Grid item xs={12} md={5}>
+                      <Card sx={{ height: '100%' }}>
+                        <CardContent>
+                          <Typography variant='subtitle2' fontWeight='bold' sx={{ mb: 2 }}>Formas de pago</Typography>
+                          {analisisCliente.formasPago?.length === 0 ? (
+                            <Typography variant='body2' color='text.secondary'>Sin datos</Typography>
+                          ) : (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                              {analisisCliente.formasPago?.map((fp: any) => {
+                                const total = analisisCliente.formasPago.reduce((s: number, f: any) => s + f.monto, 0)
+                                const pct = total > 0 ? Math.round((fp.monto / total) * 100) : 0
+                                const color = fp.nombre.toLowerCase().includes('efectivo') ? '#2e7d32'
+                                  : fp.nombre.toLowerCase().includes('transfer') ? '#1565c0'
+                                  : fp.nombre.toLowerCase().includes('tarjeta') ? '#6a1b9a'
+                                  : fp.nombre.toLowerCase().includes('crédito') ? '#e65100'
+                                  : '#546e7a'
+                                return (
+                                  <Box key={fp.nombre}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                      <Typography variant='caption' fontWeight='bold'>{fp.nombre}</Typography>
+                                      <Box sx={{ display: 'flex', gap: 1 }}>
+                                        <Typography variant='caption' color='text.secondary'>{pct}%</Typography>
+                                        <Typography variant='caption' fontWeight='bold'>${fp.monto.toLocaleString('es-MX', { maximumFractionDigits: 0 })}</Typography>
+                                      </Box>
+                                    </Box>
+                                    <Box sx={{ height: 6, bgcolor: 'action.hover', borderRadius: 3, overflow: 'hidden' }}>
+                                      <Box sx={{ height: '100%', width: `${pct}%`, bgcolor: color, borderRadius: 3, transition: 'width 0.5s' }} />
+                                    </Box>
+                                  </Box>
+                                )
+                              })}
+                            </Box>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+                    {/* Productos */}
+                    <Grid item xs={12} md={7}>
+                      <Card sx={{ height: '100%' }}>
+                        <CardContent>
+                          <Typography variant='subtitle2' fontWeight='bold' sx={{ mb: 2 }}>Productos comprados</Typography>
+                          {analisisCliente.productos?.length === 0 ? (
+                            <Typography variant='body2' color='text.secondary'>Sin datos</Typography>
+                          ) : (
+                            <TableContainer>
+                              <Table size='small'>
+                                <TableHead>
+                                  <TableRow>
+                                    <TableCell>Producto</TableCell>
+                                    <TableCell align='center'>Piezas</TableCell>
+                                    <TableCell align='right'>Total</TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {analisisCliente.productos?.map((pr: any) => (
+                                    <TableRow key={pr.nombre} hover>
+                                      <TableCell><Typography variant='caption' fontWeight='bold'>{pr.nombre}</Typography></TableCell>
+                                      <TableCell align='center'><Typography variant='caption'>{pr.cantidad}</Typography></TableCell>
+                                      <TableCell align='right'><Typography variant='caption' color='primary' fontWeight='bold'>${pr.total.toLocaleString('es-MX', { maximumFractionDigits: 0 })}</Typography></TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </TableContainer>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  </Grid>
+
+                  {/* Historial de visitas */}
+                  <Card>
+                    <CardContent>
+                      <Typography variant='subtitle2' fontWeight='bold' sx={{ mb: 1.5 }}>
+                        Historial de visitas — {analisisCliente.pedidos?.length} pedidos
+                        {(filtroAnalisisDesde || filtroAnalisisHasta) && <Chip label='Filtrado por fecha' size='small' sx={{ ml: 1 }} />}
+                      </Typography>
+                      <TableContainer sx={{ maxHeight: 400 }}>
+                        <Table size='small' stickyHeader>
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Fecha</TableCell>
+                              <TableCell>Folio</TableCell>
+                              <TableCell>Tipo</TableCell>
+                              <TableCell>Operador</TableCell>
+                              <TableCell>Detalle</TableCell>
+                              <TableCell>Forma de pago</TableCell>
+                              <TableCell align='right'>Total</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {analisisCliente.pedidos?.map((p: any) => (
+                              <TableRow key={p.id} hover>
+                                <TableCell><Typography variant='caption'>{new Date(p.fechaPedido).toLocaleDateString('es-MX')}</Typography></TableCell>
+                                <TableCell><Typography variant='caption' color='text.secondary'>{p.numeroPedido || '—'}</Typography></TableCell>
+                                <TableCell>
+                                  <Chip label={p.tipoServicio === 'pipas' ? 'PIPA' : 'CIL'} size='small'
+                                    sx={{ fontSize: 10, height: 18, bgcolor: p.tipoServicio === 'pipas' ? 'primary.light' : 'warning.light', color: p.tipoServicio === 'pipas' ? 'primary.dark' : 'warning.dark' }} />
+                                </TableCell>
+                                <TableCell><Typography variant='caption'>{p.repartidor || '—'}</Typography></TableCell>
+                                <TableCell>
+                                  <Typography variant='caption'>
+                                    {p.tipoServicio === 'pipas' && p.litros > 0 ? `${p.litros} L` : p.productos?.map((pr: any) => `${pr.cantidad}x ${pr.nombre}`).join(', ')}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant='caption' color='text.secondary'>
+                                    {p.pagos?.map((pg: any) => pg.metodo).join(' + ') || '—'}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell align='right'>
+                                  <Typography variant='caption' fontWeight='bold' color='primary'>${p.ventaTotal.toLocaleString('es-MX', { maximumFractionDigits: 0 })}</Typography>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </CardContent>
+                  </Card>
+                </Box>
               )}
 
               {/* Estado vacío */}
               {!clienteDetalle && !loadingClienteDetalle && (
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8, gap: 2 }}>
                   <SearchIcon sx={{ fontSize: 60, color: 'text.disabled' }} />
-                  <Typography variant='body1' color='text.secondary'>
-                    Escribe el nombre de un cliente para ver su análisis detallado
-                  </Typography>
+                  <Typography variant='body1' color='text.secondary'>Escribe el nombre de un cliente para ver su análisis detallado</Typography>
                 </Box>
               )}
             </Box>
           )}
-        </Box>
-      )}
 
 
       {/* Modal Crear/Editar Producto */}
