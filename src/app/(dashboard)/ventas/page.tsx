@@ -630,9 +630,9 @@ export default function VentasPage() {
       
       // Si no hay rutas con el filtro activa, intentar sin filtro
       if (todasLasRutas.length === 0) {
-        todasLasRutas = await rutasAPI.getAll({}):', todasLasRutas.length)
+        todasLasRutas = await rutasAPI.getAll({})
         // Filtrar solo las activas en el frontend
-        todasLasRutas = todasLasRutas.filter(r => r.activa === true):', todasLasRutas.length)))
+        todasLasRutas = todasLasRutas.filter(r => r.activa === true)
       }
       
       let rutasFiltradas = todasLasRutas
@@ -649,9 +649,9 @@ export default function VentasPage() {
         // Si hay rutas con sede asignada, usarlas
         // Si no hay rutas con sede, mostrar todas (las rutas pueden no tener sede asignada aún)
         if (rutasConSede.length > 0) {
-          rutasFiltradas = rutasConSede)
+          rutasFiltradas = rutasConSede
         } else {
-          console.warn(`⚠️ No se encontraron rutas con sedeId ${sedeId}. Mostrando todas las rutas activas.`)))
+          console.warn(`⚠️ No se encontraron rutas con sedeId ${sedeId}. Mostrando todas las rutas activas.`)
           // Mantener todas las rutas si no hay ninguna con esa sede
         }
       }
@@ -662,13 +662,13 @@ export default function VentasPage() {
           ruta.repartidores?.some((rep: any) => rep.id === usuario.id)
         )
         if (rutasDelUsuario.length > 0) {
-          rutasFiltradas = rutasDelUsuario)
+          rutasFiltradas = rutasDelUsuario
         } else {
           rutasFiltradas = []
         }
       }
       
-      setRutas(rutasFiltradas)))
+      setRutas(rutasFiltradas)
     } catch (err: any) {
       console.error('Error loading rutas:', err)
       setRutas([])
