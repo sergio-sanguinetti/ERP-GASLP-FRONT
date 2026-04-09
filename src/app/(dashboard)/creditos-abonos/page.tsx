@@ -1634,7 +1634,7 @@ export default function CreditosAbonosPage() {
         <Box>
           {/* Banner Total por Cobrar (Credito + SBC pendiente) */}
           {(() => {
-            const sbcPendiente = (pedidosSBC || []).filter((p: any) => !p.estadoSbc || p.estadoSbc === 'pendiente' || p.estadoSbc === 'confirmado_oficina')
+            const sbcPendiente = (pedidosSBC || []).filter((p: any) => !p.estadoSbc || p.estadoSbc === 'pendiente')
             const montoSbcPend = sbcPendiente.reduce((s: number, p: any) => s + (Number(p.monto) || 0), 0)
             const totalPorCobrar = (resumenCredito.carteraTotal || 0) + montoSbcPend
             return (
