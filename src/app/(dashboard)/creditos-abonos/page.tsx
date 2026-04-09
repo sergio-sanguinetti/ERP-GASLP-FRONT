@@ -285,6 +285,11 @@ export default function CreditosAbonosPage() {
   const [fechaDesdeDashboard, setFechaDesdeDashboard] = useState<string>('')
   const [fechaHastaDashboard, setFechaHastaDashboard] = useState<string>('')
 
+  // Filtro por período compartido entre Control de Pagos y Pagos SBC
+  const [periodoFiltro, setPeriodoFiltro] = useState<'mes-actual' | 'mes-pasado' | 'personalizado'>('mes-actual')
+  const [fechaDesdePeriodo, setFechaDesdePeriodo] = useState<string>('')
+  const [fechaHastaPeriodo, setFechaHastaPeriodo] = useState<string>('')
+
   // Paginación client-side: Pagos Pendientes e Historial de Pagos
   const [pagePagosPendientes, setPagePagosPendientes] = useState(0)
   const [rowsPerPagePagosPendientes, setRowsPerPagePagosPendientes] = useState(10)
@@ -297,6 +302,56 @@ export default function CreditosAbonosPage() {
   const [principalSel, setPrincipalSel] = useState<Record<number, string>>({})
   const [pageDuplicados, setPageDuplicados] = useState(0)
   const [rowsPerPageDuplicados, setRowsPerPageDuplicados] = useState(10)
+
+  // Rango de fechas derivado del período seleccionado
+  const rangoPeriodo = useMemo(() => {
+    const now = new Date()
+    if (periodoFiltro === 'mes-actual') {
+      const desde = new Date(now.getFullYear(), now.getMonth(), 1)
+      const hasta = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+      return { desde, hasta }
+    }
+    if (periodoFiltro === 'mes-pasado') {
+      const desde = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const hasta = new Date(now.getFullYear(), now.getMonth(), 1)
+      return { desde, hasta }
+    }
+    const desde = fechaDesdePeriodo ? new Date(fechaDesdePeriodo + 'T00:00:00') : new Date(0)
+    const hasta = fechaHastaPeriodo ? new Date(fechaHastaPeriodo + 'T23:59:59.999') : new Date(8640000000000000)
+    return { desde, hasta }
+  }, [periodoFiltro, fechaDesdePeriodo, fechaHastaPeriodo])
+
+  const enPeriodo = (fechaStr?: string | null) => {
+    if (!fechaStr) return false
+    const d = new Date(fechaStr)
+    if (isNaN(d.getTime())) return false
+    return d >= rangoPeriodo.desde && d < rangoPeriodo.hasta
+  }
+
+  // KPIs SBC filtrados por período
+  const kpisSbcFiltrado = useMemo(() => {
+    const data = (pedidosSBC || []).filter((p: any) => enPeriodo(p.fechaPedido))
+    const pendientes = data.filter((p: any) => !p.estadoSbc || p.estadoSbc === 'pendiente')
+    const confOficina = data.filter((p: any) => p.estadoSbc === 'confirmado_oficina')
+    const confSanLuis = data.filter((p: any) => p.estadoSbc === 'confirmado_sanluis')
+    const ahora = new Date()
+    const urgentes = pendientes.filter((p: any) => {
+      if (!p.fechaPedido) return false
+      const dias = (ahora.getTime() - new Date(p.fechaPedido).getTime()) / 86400000
+      return dias >= 3
+    })
+    return {
+      totalPendiente: pendientes.reduce((s: number, p: any) => s + (p.monto || 0), 0),
+      totalPendienteCount: pendientes.length,
+      totalConfOficina: confOficina.reduce((s: number, p: any) => s + (p.monto || 0), 0),
+      totalConfSanLuis: confSanLuis.reduce((s: number, p: any) => s + (p.monto || 0), 0),
+      transferencia: data.filter((p: any) => p.metodoPago === 'TRANSFERENCIA' && (!p.estadoSbc || p.estadoSbc === 'pendiente')).length,
+      cheque: data.filter((p: any) => p.metodoPago === 'CHEQUE' && (!p.estadoSbc || p.estadoSbc === 'pendiente')).length,
+      deposito: data.filter((p: any) => p.metodoPago === 'DEPOSITO' && (!p.estadoSbc || p.estadoSbc === 'pendiente')).length,
+      urgentes: urgentes.length,
+      montoUrgentes: urgentes.reduce((s: number, p: any) => s + (p.monto || 0), 0),
+    }
+  }, [pedidosSBC, rangoPeriodo])
 
 
   const fetchSbc = async (path: string, options: RequestInit = {}) => {
@@ -2286,12 +2341,48 @@ export default function CreditosAbonosPage() {
       {/* Vista de Pagos Pendientes de Autorización */}
       {vistaActual === 'pagos-pendientes' && (
         <Box>
+          {/* Filtro por período */}
+          <Card sx={{ mb: 2, bgcolor: '#fafafa' }}>
+            <CardContent sx={{ pb: '12px !important' }}>
+              <Grid container spacing={1.5} alignItems='center'>
+                <Grid item xs={12} sm={3}>
+                  <FormControl fullWidth size='small'>
+                    <InputLabel>Período</InputLabel>
+                    <Select value={periodoFiltro} label='Período' onChange={e => setPeriodoFiltro(e.target.value as any)}>
+                      <MenuItem value='mes-actual'>Este mes</MenuItem>
+                      <MenuItem value='mes-pasado'>Mes pasado</MenuItem>
+                      <MenuItem value='personalizado'>Personalizado</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                {periodoFiltro === 'personalizado' && (
+                  <>
+                    <Grid item xs={6} sm={3}>
+                      <TextField fullWidth size='small' type='date' label='Desde' InputLabelProps={{ shrink: true }}
+                        value={fechaDesdePeriodo} onChange={e => setFechaDesdePeriodo(e.target.value)} />
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                      <TextField fullWidth size='small' type='date' label='Hasta' InputLabelProps={{ shrink: true }}
+                        value={fechaHastaPeriodo} onChange={e => setFechaHastaPeriodo(e.target.value)} />
+                    </Grid>
+                  </>
+                )}
+                <Grid item xs={12} sm='auto' sx={{ ml: 'auto' }}>
+                  <Typography variant='caption' color='text.secondary'>
+                    Mostrando: {rangoPeriodo.desde.toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })} — {new Date(rangoPeriodo.hasta.getTime() - 1).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+
           {/* KPIs con monto */}
           <Grid container spacing={2} sx={{ mb: 2 }}>
             {(() => {
-              const enRevision = pagosPendientesAutorizacion.filter(p => ['en_revision','pendiente',undefined,null,''].includes(p.pagoCompleto?.estado as any))
-              const autorizados = pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'autorizado')
-              const rechazados = pagosPendientesAutorizacion.filter(p => p.pagoCompleto?.estado === 'rechazado')
+              const pagosEnPeriodo = pagosPendientesAutorizacion.filter(p => enPeriodo(p.pagoCompleto?.fechaPago))
+              const enRevision = pagosEnPeriodo.filter(p => ['en_revision','pendiente',undefined,null,''].includes(p.pagoCompleto?.estado as any))
+              const autorizados = pagosEnPeriodo.filter(p => p.pagoCompleto?.estado === 'autorizado')
+              const rechazados = pagosEnPeriodo.filter(p => p.pagoCompleto?.estado === 'rechazado')
               const kpis = [
                 { label: 'En Revisión', count: enRevision.length, monto: enRevision.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'info.main', val: 'en_revision', desc: 'Esperando autorización' },
                 { label: 'Autorizados', count: autorizados.length, monto: autorizados.reduce((s,p)=>s+(p.montoPagado||0),0), color: 'success.main', val: 'autorizado', desc: 'Confirmados' },
@@ -2367,6 +2458,7 @@ export default function CreditosAbonosPage() {
                 </TableHead>
                 <TableBody>
                   {pagosPendientesFiltrados
+                    .filter(p => enPeriodo(p.pagoCompleto?.fechaPago))
                     .filter(p => filtroEstadoPagos === 'todos' ? true :
                       filtroEstadoPagos === 'pendiente' ? (!p.pagoCompleto?.estado || p.pagoCompleto?.estado === 'pendiente') :
                       p.pagoCompleto?.estado === filtroEstadoPagos)
@@ -2920,6 +3012,41 @@ export default function CreditosAbonosPage() {
 
       {vistaActual === 'pagos-sbc' && (
         <Box>
+          {/* Filtro por período */}
+          <Card sx={{ mb: 2, bgcolor: '#fafafa' }}>
+            <CardContent sx={{ pb: '12px !important' }}>
+              <Grid container spacing={1.5} alignItems='center'>
+                <Grid item xs={12} sm={3}>
+                  <FormControl fullWidth size='small'>
+                    <InputLabel>Período</InputLabel>
+                    <Select value={periodoFiltro} label='Período' onChange={e => setPeriodoFiltro(e.target.value as any)}>
+                      <MenuItem value='mes-actual'>Este mes</MenuItem>
+                      <MenuItem value='mes-pasado'>Mes pasado</MenuItem>
+                      <MenuItem value='personalizado'>Personalizado</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                {periodoFiltro === 'personalizado' && (
+                  <>
+                    <Grid item xs={6} sm={3}>
+                      <TextField fullWidth size='small' type='date' label='Desde' InputLabelProps={{ shrink: true }}
+                        value={fechaDesdePeriodo} onChange={e => setFechaDesdePeriodo(e.target.value)} />
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                      <TextField fullWidth size='small' type='date' label='Hasta' InputLabelProps={{ shrink: true }}
+                        value={fechaHastaPeriodo} onChange={e => setFechaHastaPeriodo(e.target.value)} />
+                    </Grid>
+                  </>
+                )}
+                <Grid item xs={12} sm='auto' sx={{ ml: 'auto' }}>
+                  <Typography variant='caption' color='text.secondary'>
+                    Mostrando: {rangoPeriodo.desde.toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })} — {new Date(rangoPeriodo.hasta.getTime() - 1).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+
           {/* Mini Dashboard KPIs */}
           <Grid container spacing={2} sx={{ mb: 3 }}>
             <Grid item xs={6} sm={3}>
@@ -2927,9 +3054,9 @@ export default function CreditosAbonosPage() {
                 <CardContent sx={{ pb: '12px !important' }}>
                   <Typography variant='caption' color='warning.dark' fontWeight='bold'>PENDIENTE</Typography>
                   <Typography variant='h5' fontWeight='bold' color='warning.dark'>
-                    ${kpisSbc.totalPendiente.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    ${kpisSbcFiltrado.totalPendiente.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </Typography>
-                  <Typography variant='caption' color='warning.dark'>{kpisSbc.totalPendienteCount} pagos</Typography>
+                  <Typography variant='caption' color='warning.dark'>{kpisSbcFiltrado.totalPendienteCount} pagos</Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -2938,7 +3065,7 @@ export default function CreditosAbonosPage() {
                 <CardContent sx={{ pb: '12px !important' }}>
                   <Typography variant='caption' color='info.dark' fontWeight='bold'>EN REVISIÓN</Typography>
                   <Typography variant='h5' fontWeight='bold' color='info.dark'>
-                    ${kpisSbc.totalConfOficina.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    ${kpisSbcFiltrado.totalConfOficina.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </Typography>
                   <Typography variant='caption' color='info.dark'>Revisado por sucursal</Typography>
                 </CardContent>
@@ -2949,7 +3076,7 @@ export default function CreditosAbonosPage() {
                 <CardContent sx={{ pb: '12px !important' }}>
                   <Typography variant='caption' color='success.dark' fontWeight='bold'>AUTORIZADO</Typography>
                   <Typography variant='h5' fontWeight='bold' color='success.dark'>
-                    ${kpisSbc.totalConfSanLuis.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    ${kpisSbcFiltrado.totalConfSanLuis.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </Typography>
                   <Typography variant='caption' color='success.dark'>Pago verificado</Typography>
                 </CardContent>
@@ -2960,15 +3087,15 @@ export default function CreditosAbonosPage() {
                 <CardContent sx={{ pb: '12px !important' }}>
                   <Typography variant='caption' color='text.secondary' fontWeight='bold'>PENDIENTES POR TIPO</Typography>
                   <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
-                    <Chip label={`Transf. ${kpisSbc.transferencia}`} size='small' onClick={() => setFiltroMetodoPagoSbc(filtroMetodoPagoSbc === 'TRANSFERENCIA' ? '' : 'TRANSFERENCIA')} sx={{ bgcolor: filtroMetodoPagoSbc === 'TRANSFERENCIA' ? '#0d47a1' : '#1565c0', color: 'white', fontWeight: 'bold', cursor: 'pointer', outline: filtroMetodoPagoSbc === 'TRANSFERENCIA' ? '2px solid #90caf9' : 'none' }} />
-                    <Chip label={`Cheque ${kpisSbc.cheque}`} size='small' onClick={() => setFiltroMetodoPagoSbc(filtroMetodoPagoSbc === 'CHEQUE' ? '' : 'CHEQUE')} sx={{ bgcolor: filtroMetodoPagoSbc === 'CHEQUE' ? '#bf360c' : '#e65100', color: 'white', fontWeight: 'bold', cursor: 'pointer', outline: filtroMetodoPagoSbc === 'CHEQUE' ? '2px solid #ffcc80' : 'none' }} />
-                    <Chip label={`Depós. ${kpisSbc.deposito}`} size='small' onClick={() => setFiltroMetodoPagoSbc(filtroMetodoPagoSbc === 'DEPOSITO' ? '' : 'DEPOSITO')} sx={{ bgcolor: filtroMetodoPagoSbc === 'DEPOSITO' ? '#263238' : '#37474f', color: 'white', fontWeight: 'bold', cursor: 'pointer', outline: filtroMetodoPagoSbc === 'DEPOSITO' ? '2px solid #b0bec5' : 'none' }} />
+                    <Chip label={`Transf. ${kpisSbcFiltrado.transferencia}`} size='small' onClick={() => setFiltroMetodoPagoSbc(filtroMetodoPagoSbc === 'TRANSFERENCIA' ? '' : 'TRANSFERENCIA')} sx={{ bgcolor: filtroMetodoPagoSbc === 'TRANSFERENCIA' ? '#0d47a1' : '#1565c0', color: 'white', fontWeight: 'bold', cursor: 'pointer', outline: filtroMetodoPagoSbc === 'TRANSFERENCIA' ? '2px solid #90caf9' : 'none' }} />
+                    <Chip label={`Cheque ${kpisSbcFiltrado.cheque}`} size='small' onClick={() => setFiltroMetodoPagoSbc(filtroMetodoPagoSbc === 'CHEQUE' ? '' : 'CHEQUE')} sx={{ bgcolor: filtroMetodoPagoSbc === 'CHEQUE' ? '#bf360c' : '#e65100', color: 'white', fontWeight: 'bold', cursor: 'pointer', outline: filtroMetodoPagoSbc === 'CHEQUE' ? '2px solid #ffcc80' : 'none' }} />
+                    <Chip label={`Depós. ${kpisSbcFiltrado.deposito}`} size='small' onClick={() => setFiltroMetodoPagoSbc(filtroMetodoPagoSbc === 'DEPOSITO' ? '' : 'DEPOSITO')} sx={{ bgcolor: filtroMetodoPagoSbc === 'DEPOSITO' ? '#263238' : '#37474f', color: 'white', fontWeight: 'bold', cursor: 'pointer', outline: filtroMetodoPagoSbc === 'DEPOSITO' ? '2px solid #b0bec5' : 'none' }} />
                   </Box>
                   {filtroMetodoPagoSbc && <Typography variant='caption' color='text.secondary' sx={{ mt: 0.5, display: 'block' }}>Filtrando por {filtroMetodoPagoSbc.toLowerCase()} — <span style={{cursor:'pointer',textDecoration:'underline'}} onClick={() => setFiltroMetodoPagoSbc('')}>limpiar</span></Typography>}
                 </CardContent>
               </Card>
             </Grid>
-            {kpisSbc.urgentes > 0 && (
+            {kpisSbcFiltrado.urgentes > 0 && (
               <Grid item xs={12}>
                 <Card sx={{ bgcolor: '#fff3e0', border: '1px solid #ffb74d', cursor: 'pointer' }}
                   onClick={() => setFiltroEstadoSbc('pendiente')}>
@@ -2976,10 +3103,10 @@ export default function CreditosAbonosPage() {
                     <WarningIcon sx={{ color: 'error.main', fontSize: 28 }} />
                     <Box sx={{ flex: 1 }}>
                       <Typography variant='body2' fontWeight='bold' color='error.main'>
-                        {kpisSbc.urgentes} PAGO{kpisSbc.urgentes > 1 ? 'S' : ''} CON MÁS DE 3 DÍAS SIN CONFIRMAR
+                        {kpisSbcFiltrado.urgentes} PAGO{kpisSbcFiltrado.urgentes > 1 ? 'S' : ''} CON MÁS DE 3 DÍAS SIN CONFIRMAR
                       </Typography>
                       <Typography variant='caption' color='error.dark'>
-                        ${kpisSbc.montoUrgentes.toLocaleString('es-MX', { minimumFractionDigits: 0 })} en riesgo — requieren atención inmediata
+                        ${kpisSbcFiltrado.montoUrgentes.toLocaleString('es-MX', { minimumFractionDigits: 0 })} en riesgo — requieren atención inmediata
                       </Typography>
                     </Box>
                   </CardContent>
@@ -3046,6 +3173,7 @@ export default function CreditosAbonosPage() {
           {(() => {
             const ahora = new Date()
             const filtrados = pedidosSBC.filter(p => {
+              if (!enPeriodo(p.fechaPedido)) return false
               const estadoOk = filtroEstadoSbc === 'todos' ? true
                 : filtroEstadoSbc === 'pendiente' ? (!p.estadoSbc || p.estadoSbc === 'pendiente')
                 : p.estadoSbc === filtroEstadoSbc
