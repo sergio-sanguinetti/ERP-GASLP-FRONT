@@ -632,6 +632,7 @@ export default function CreditosAbonosPage() {
     cargarRutas().then((rutasData) => {
       if (rutasData && rutasData.length > 0) {
         cargarDatos(rutasData)
+        cargarPedidosSBC()
       } else {
         setClientesCredito([])
         setTotalClientes(0)
