@@ -2199,8 +2199,13 @@ export default function CreditosAbonosPage() {
                           <TableRow key={nota.id}>
                             <TableCell>
                               <Typography variant='subtitle2' fontWeight='bold'>
-                                {nota.numeroNota}
+                                {(nota as any).pedido?.numeroPedido || (nota as any).numeroPedido || nota.numeroNota}
                               </Typography>
+                              {((nota as any).pedido?.numeroPedido || (nota as any).numeroPedido) && (
+                                <Typography variant='caption' color='text.secondary' sx={{ fontSize: 10, display: 'block' }}>
+                                  {nota.numeroNota}
+                                </Typography>
+                              )}
                             </TableCell>
                             {(clienteSeleccionado as any)._esGrupo && (
                               <TableCell>
