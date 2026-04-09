@@ -818,7 +818,7 @@ export default function CreditosAbonosPage() {
         return {
           id: p.id,
           cliente: p.cliente ? `${p.cliente.nombre} ${p.cliente.apellidoPaterno} ${p.cliente.apellidoMaterno}` : 'N/A',
-          nota: p.notaCredito?.numeroNota || 'Abono general',
+          nota: (p.notaCredito as any)?.pedido?.numeroPedido || p.notaCredito?.numeroNota || 'Abono general',
           ruta: p.cliente?.ruta?.nombre || 'Sin ruta',
           montoPagado: p.montoTotal,
           formasPago: p.formasPago?.map(fp => ({
