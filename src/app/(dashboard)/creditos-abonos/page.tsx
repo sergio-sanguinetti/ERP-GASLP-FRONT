@@ -1176,7 +1176,7 @@ export default function CreditosAbonosPage() {
                 const estadoReal = saldo <= 0 ? 'pagada' : 'vigente'
                 const estadoLabel = estadoReal === 'pagada' ? 'Pagada' : 'Pendiente'
                 const domCol = (clienteSeleccionado as any)._esGrupo ? `<td style="font-size:10px;color:#666">${(n as any)._origenNombre || '—'}</td>` : ''
-                return `<tr><td><strong>${n.numeroNota||''}</strong></td>${domCol}<td>${formatearFecha(n.fechaVenta)}</td><td>$${(n.importe??0).toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td>$${saldo.toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td class="estado-${estadoReal}">${estadoLabel}</td></tr>`
+                const folioMostrar = (n as any).pedido?.numeroPedido || (n as any).numeroPedido || n.numeroNota || ''; return `<tr><td><strong>${folioMostrar}</strong></td>${domCol}<td>${formatearFecha(n.fechaVenta)}</td><td>$${(n.importe??0).toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td>$${saldo.toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td class="estado-${estadoReal}">${estadoLabel}</td></tr>`
               }).join('')}
               <tr class="total-row"><td colspan="${(clienteSeleccionado as any)._esGrupo ? 4 : 3}">TOTAL PENDIENTE</td><td>$${totalPendiente.toLocaleString('es-MX',{minimumFractionDigits:2})}</td><td></td></tr>
             </tbody>
