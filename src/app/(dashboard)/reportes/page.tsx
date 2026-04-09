@@ -5,11 +5,12 @@ import {
   reporteExportAPI,
   sedesAPI,
   usuariosAPI,
+  authAPI,
   type Sede
 } from '@/lib/api'
 import {
   Box, Typography, Card, CardContent, Grid, Button, Alert,
-  FormControl, InputLabel, Select, MenuItem,
+  FormControl, InputLabel, Select, MenuItem, Chip,
   TextField, CircularProgress
 } from '@mui/material'
 import {
@@ -235,6 +236,8 @@ export default function ReportesPage() {
     clienteNombre: ''
   })
   const [sedes, setSedes] = useState<Sede[]>([])
+  const [esSuperAdmin, setEsSuperAdmin] = useState(false)
+  const [sedeNombre, setSedeNombre] = useState('')
   const [operadores, setOperadores] = useState<any[]>([])
   const [clientesBusqueda, setClientesBusqueda] = useState<any[]>([])
   const debounceCliente = React.useRef<NodeJS.Timeout | null>(null)
@@ -243,7 +246,27 @@ export default function ReportesPage() {
   const [success, setSuccess] = useState<string | null>(null)
 
   useEffect(() => {
-    sedesAPI.getAll().then(setSedes).catch(() => {})
+    sedesAPI.getAll().then(async (sedesData) => {
+      setSedes(sedesData)
+      // Obtener perfil del usuario para saber su sede y rol
+      try {
+        const perfil = await authAPI.getProfile()
+        const esSuper = perfil.rol === 'superAdministrador'
+        setEsSuperAdmin(esSuper)
+        if (!esSuper && perfil.sede) {
+          // Buscar el ID de la sede del usuario
+          const found = sedesData.find((s: any) =>
+            s.id === perfil.sede ||
+            s.nombre === perfil.sede ||
+            s.nombre?.trim() === perfil.sede?.trim()
+          )
+          if (found) {
+            setFiltros(prev => ({ ...prev, sedeId: found.id }))
+            setSedeNombre(found.nombre?.trim() || found.nombre)
+          }
+        }
+      } catch {}
+    }).catch(() => {})
     usuariosAPI.getAll().then((data: any) => {
       const users = Array.isArray(data) ? data : (data.usuarios || [])
       const reps = users.filter((u: any) => u.rol === 'repartidor' || u.rol === 'pipas' || u.rol === 'cilindros')
@@ -394,13 +417,19 @@ export default function ReportesPage() {
                 InputLabelProps={{ shrink: true }} />
             </Grid>
             <Grid item xs={6} md={3}>
-              <FormControl fullWidth size='small'>
-                <InputLabel>Sede</InputLabel>
-                <Select value={filtros.sedeId} label='Sede' onChange={e => setFiltros(p => ({ ...p, sedeId: e.target.value }))}>
-                  <MenuItem value=''>Todas</MenuItem>
-                  {sedes.map(s => <MenuItem key={s.id} value={s.id}>{s.nombre}</MenuItem>)}
-                </Select>
-              </FormControl>
+              {esSuperAdmin ? (
+                <FormControl fullWidth size='small'>
+                  <InputLabel>Sede</InputLabel>
+                  <Select value={filtros.sedeId} label='Sede' onChange={e => setFiltros(p => ({ ...p, sedeId: e.target.value }))}>
+                    <MenuItem value=''>Todas</MenuItem>
+                    {sedes.map(s => <MenuItem key={s.id} value={s.id}>{s.nombre}</MenuItem>)}
+                  </Select>
+                </FormControl>
+              ) : (
+                <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+                  <Chip label={sedeNombre || 'Mi sede'} color='primary' size='small' variant='outlined' />
+                </Box>
+              )}
             </Grid>
             <Grid item xs={6} md={3}>
               <FormControl fullWidth size='small'>
