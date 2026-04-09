@@ -1631,6 +1631,50 @@ export default function CreditosAbonosPage() {
       {/* Dashboard Principal */}
       {vistaActual === 'dashboard' && (
         <Box>
+          {/* Banner Total por Cobrar (Credito + SBC pendiente) */}
+          {(() => {
+            const sbcPendiente = (pedidosSBC || []).filter((p: any) => !p.estadoSbc || p.estadoSbc === 'pendiente' || p.estadoSbc === 'confirmado_oficina')
+            const montoSbcPend = sbcPendiente.reduce((s: number, p: any) => s + (Number(p.monto) || 0), 0)
+            const totalPorCobrar = (resumenCredito.carteraTotal || 0) + montoSbcPend
+            return (
+              <Card sx={{ mb: 3, bgcolor: '#fff8e1', border: '2px solid', borderColor: 'warning.main' }}>
+                <CardContent sx={{ py: 2 }}>
+                  <Grid container spacing={2} alignItems='center'>
+                    <Grid item xs={12} md={5}>
+                      <Typography variant='caption' color='warning.dark' fontWeight='bold' textTransform='uppercase'>
+                        Total por Cobrar (Crédito + SBC sin confirmar)
+                      </Typography>
+                      <Typography variant='h3' fontWeight='bold' color='warning.dark' sx={{ my: 0.3 }}>
+                        ${totalPorCobrar.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Typography>
+                      <Typography variant='caption' color='text.secondary'>
+                        Este número debe coincidir con el archivo de control de oficina
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6} md={3.5}>
+                      <Box sx={{ pl: 2, borderLeft: '3px solid', borderLeftColor: 'primary.main' }}>
+                        <Typography variant='caption' color='text.secondary' fontWeight='bold'>CRÉDITO PURO</Typography>
+                        <Typography variant='h5' fontWeight='bold' color='primary.main'>
+                          ${(resumenCredito.carteraTotal || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Typography>
+                        <Typography variant='caption' color='text.disabled'>{resumenCredito.notasPendientes} notas pendientes</Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={6} md={3.5}>
+                      <Box sx={{ pl: 2, borderLeft: '3px solid', borderLeftColor: 'info.main' }}>
+                        <Typography variant='caption' color='text.secondary' fontWeight='bold'>SBC PENDIENTE</Typography>
+                        <Typography variant='h5' fontWeight='bold' color='info.main'>
+                          ${montoSbcPend.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Typography>
+                        <Typography variant='caption' color='text.disabled'>{sbcPendiente.length} transferencias/depósitos</Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+            )
+          })()}
+
           {/* Fila 1 — 4 KPIs */}
           <Grid container spacing={2} sx={{ mb: 3 }}>
             <Grid item xs={12} sm={6} md={3}>
