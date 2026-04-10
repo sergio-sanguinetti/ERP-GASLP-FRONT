@@ -3544,3 +3544,151 @@ export const reporteExportAPI = {
   formasPago: (p: any) => reporteExportAPI._fetch('formas-pago', p),
   rendimientoOperador: (p: any) => reporteExportAPI._fetch('rendimiento-operador', p),
 }
+
+// ==========================================================================
+// Corte de Oficina (cobros de crédito en efectivo/tarjeta registrados en web)
+// ==========================================================================
+
+export interface PagoOficinaDisponible {
+  id: string
+  fechaPago: string
+  horaPago?: string
+  clienteNombre: string
+  folioNota: string
+  formaPago: 'efectivo' | 'tarjeta'
+  formaPagoNombre: string
+  monto: number
+  totalEfectivo?: number
+  totalTarjeta?: number
+  usuarioRegistro: string
+  estado: string
+  referencia?: string | null
+  observaciones?: string | null
+}
+
+export interface PagosDisponiblesResponse {
+  pagos: PagoOficinaDisponible[]
+  totales: {
+    total: number
+    efectivo: number
+    tarjeta: number
+    countEfectivo: number
+    countTarjeta: number
+    count: number
+  }
+}
+
+export interface CorteOficina {
+  id: string
+  creadoPorId: string
+  creadoPorNombre: string
+  fechaDesde: string
+  fechaHasta: string
+  totalEfectivo: number
+  totalTarjeta: number
+  totalGeneral: number
+  depositoPlanta: number
+  folioDepPlanta?: string | null
+  depositoCajero: number
+  folioDepCajero?: string | null
+  monedasExtra: number
+  efectivoExtra: number
+  diferencia: number
+  estado: 'pendiente' | 'validado'
+  observaciones?: string | null
+  sedeId?: string | null
+  cerradoEn?: string | null
+  createdAt: string
+  updatedAt: string
+  _count?: { pagos: number }
+  pagos?: CorteOficinaPagoSnapshot[]
+}
+
+export interface CorteOficinaPagoSnapshot {
+  id: string
+  corteId: string
+  pagoId: string
+  monto: number
+  formaPago: string
+  formaPagoNombre?: string | null
+  usuarioRegistro: string
+  clienteNombre?: string | null
+  folioNota?: string | null
+  referencia?: string | null
+  fechaPago: string
+}
+
+export interface CrearCorteOficinaRequest {
+  fechaDesde: string
+  fechaHasta: string
+  pagoIds: string[]
+  depositoPlanta?: number
+  folioDepPlanta?: string | null
+  depositoCajero?: number
+  folioDepCajero?: string | null
+  monedasExtra?: number
+  efectivoExtra?: number
+  observaciones?: string | null
+  sedeId?: string | null
+  creadoPorNombre?: string
+}
+
+export const cortesOficinaAPI = {
+  getPagosDisponibles: async (desde: string, hasta: string): Promise<PagosDisponiblesResponse> => {
+    const url = `/cortes-oficina/pagos-disponibles?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`
+    const response = await fetchWithAuth(url)
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error(err.message || 'Error al obtener pagos disponibles')
+    }
+    return response.json()
+  },
+  create: async (data: CrearCorteOficinaRequest): Promise<CorteOficina> => {
+    const response = await fetchWithAuth('/cortes-oficina', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error(err.message || 'Error al crear corte')
+    }
+    return response.json()
+  },
+  list: async (filtros?: { estado?: string; desde?: string; hasta?: string }): Promise<CorteOficina[]> => {
+    const params = new URLSearchParams()
+    if (filtros?.estado) params.append('estado', filtros.estado)
+    if (filtros?.desde) params.append('desde', filtros.desde)
+    if (filtros?.hasta) params.append('hasta', filtros.hasta)
+    const url = `/cortes-oficina${params.toString() ? '?' + params.toString() : ''}`
+    const response = await fetchWithAuth(url)
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error(err.message || 'Error al listar cortes')
+    }
+    return response.json()
+  },
+  get: async (id: string): Promise<CorteOficina> => {
+    const response = await fetchWithAuth(`/cortes-oficina/${id}`)
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error(err.message || 'Corte no encontrado')
+    }
+    return response.json()
+  },
+  cerrar: async (id: string): Promise<CorteOficina> => {
+    const response = await fetchWithAuth(`/cortes-oficina/${id}/cerrar`, { method: 'PUT' })
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error(err.message || 'Error al cerrar corte')
+    }
+    return response.json()
+  },
+  reabrir: async (id: string): Promise<CorteOficina> => {
+    const response = await fetchWithAuth(`/cortes-oficina/${id}/reabrir`, { method: 'PUT' })
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error(err.message || 'Error al reabrir corte')
+    }
+    return response.json()
+  },
+}

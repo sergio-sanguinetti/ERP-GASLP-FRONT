@@ -6,7 +6,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, FormControl, InputLabel, Select, MenuItem, Paper, Alert,
-  Divider, CircularProgress, Snackbar, LinearProgress
+  Divider, CircularProgress, Snackbar, LinearProgress, Tabs, Tab
 } from '@mui/material'
 import {
   ArrowBack, CheckCircle, Edit, Print, Add, Visibility, Close,
@@ -14,6 +14,7 @@ import {
 } from '@mui/icons-material'
 import { ventasAPI, sedesAPI, authAPI, usuariosAPI } from '@/lib/api'
 import type { Sede } from '@/lib/api'
+import CorteOficinaComponent from '@/components/CorteOficina'
 
 // ======================== TYPES ========================
 
@@ -1488,6 +1489,8 @@ export default function CorteCajaPage() {
   const [sedeId, setSedeId] = useState<string | null>(null)
   const [sedeSeleccionada, setSedeSeleccionada] = useState<string | null>(null)
   const [esSuperAdmin, setEsSuperAdmin] = useState(false)
+  const [rolUsuario, setRolUsuario] = useState<string>('')
+  const [modulo, setModulo] = useState<'repartidores' | 'oficina'>('repartidores')
 
   const showSnack = (message: string, severity: 'success' | 'error' = 'success') => setSnackbar({ open: true, message, severity })
 
@@ -1519,6 +1522,11 @@ export default function CorteCajaPage() {
         setSedes(sedesData)
         const esSuper = user.rol === 'superAdministrador'
         setEsSuperAdmin(esSuper)
+        setRolUsuario(user.rol || '')
+        // Si el usuario es solo de oficina/planta, default al módulo de oficina
+        if (['oficina', 'planta'].includes(user.rol || '')) {
+          setModulo('oficina')
+        }
         if (user.sede) {
           const found = sedesData.find((s: Sede) => s.id === user.sede || s.nombre === user.sede || s.nombre?.toUpperCase() === user.sede?.toUpperCase())
           const id = found?.id || null
@@ -1555,6 +1563,19 @@ export default function CorteCajaPage() {
   return (
     <CorteCajaErrorBoundary>
     <Box sx={{ p: { xs: 2, sm: 3 } }}>
+      {/* Tabs de módulo: solo cuando el usuario tiene acceso a ambos */}
+      {(['administrador', 'superAdministrador'].includes(rolUsuario)) && (
+        <Tabs value={modulo} onChange={(_, v) => setModulo(v)} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
+          <Tab value="repartidores" label="🚛 Cortes de Repartidores" />
+          <Tab value="oficina" label="🏢 Corte de Oficina" />
+        </Tabs>
+      )}
+
+      {/* Módulo de oficina (cobros de crédito en efectivo/tarjeta) */}
+      {modulo === 'oficina' && <CorteOficinaComponent />}
+
+      {/* Módulo de repartidores (vista original) */}
+      {modulo === 'repartidores' && (<>
       {vista !== 'dashboard' && (
         <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
           <Button variant="outlined" size="small" onClick={() => setVista('dashboard')}>📊 Dashboard</Button>
@@ -1645,6 +1666,7 @@ export default function CorteCajaPage() {
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar(p => ({ ...p, open: false }))} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
         <Alert severity={snackbar.severity} onClose={() => setSnackbar(p => ({ ...p, open: false }))}>{snackbar.message}</Alert>
       </Snackbar>
+      </>)}
     </Box>
     </CorteCajaErrorBoundary>
   )
