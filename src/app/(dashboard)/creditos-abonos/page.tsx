@@ -1451,7 +1451,15 @@ export default function CreditosAbonosPage() {
     return clientesCredito
       .filter(cliente => {
         if ((cliente.saldoActual ?? 0) <= 0 && filtros.deuda !== 'sin-deuda') return false
-        const cumpleNombre = !filtros.nombre || cliente.nombre.toLowerCase().includes(filtros.nombre.toLowerCase())
+        const qNombre = (filtros.nombre || '').toLowerCase().trim()
+        const cumpleNombre = !qNombre || (
+          cliente.nombre.toLowerCase().includes(qNombre) ||
+          (cliente.notasPendientes ?? []).some((n: any) => {
+            const numNota = (n.numeroNota || '').toString().toLowerCase()
+            const numPed = (n.pedido && n.pedido.numeroPedido || '').toString().toLowerCase()
+            return numNota.includes(qNombre) || numPed.includes(qNombre)
+          })
+        )
         const cumpleChofer = !filtroChofer || (cliente.ruta || '').toLowerCase().includes(filtroChofer.toLowerCase())
         const cumpleRuta = !filtros.ruta || cliente.ruta === filtros.ruta
         // Estado dinámico: calcular desde notas del cliente
@@ -1905,7 +1913,7 @@ export default function CreditosAbonosPage() {
             <CardContent sx={{ pb: '12px !important' }}>
               <Grid container spacing={1.5} alignItems='center'>
                 <Grid item xs={12} sm={6} md={3}>
-                  <TextField fullWidth size='small' placeholder='Buscar por nombre...'
+                  <TextField fullWidth size='small' placeholder='Buscar nombre, nota o folio...'
                     value={filtros.nombre}
                     onChange={(e) => manejarCambioFiltros('nombre', e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { setPageClientes(0); cargarDatos(undefined, { pageClientes: 0 }) } }}
