@@ -1,0 +1,52 @@
+// ============================================================
+// AGREGAR AL FINAL DE /root/mi-app/prisma/schema.prisma
+// ============================================================
+
+model CorteOficina {
+  id              String    @id @default(uuid())
+  creadoPorId     String    @map("creado_por_id")
+  creadoPorNombre String    @map("creado_por_nombre") @db.VarChar(255)
+  fechaDesde      DateTime  @map("fecha_desde")
+  fechaHasta      DateTime  @map("fecha_hasta")
+  totalEfectivo   Float     @default(0) @map("total_efectivo")
+  totalTarjeta    Float     @default(0) @map("total_tarjeta")
+  totalGeneral    Float     @default(0) @map("total_general")
+  depositoPlanta  Float     @default(0) @map("deposito_planta")
+  folioDepPlanta  String?   @map("folio_dep_planta") @db.VarChar(100)
+  depositoCajero  Float     @default(0) @map("deposito_cajero")
+  folioDepCajero  String?   @map("folio_dep_cajero") @db.VarChar(100)
+  monedasExtra    Float     @default(0) @map("monedas_extra")
+  efectivoExtra   Float     @default(0) @map("efectivo_extra")
+  diferencia      Float     @default(0)
+  estado          String    @default("pendiente") @db.VarChar(20)
+  observaciones   String?   @db.VarChar(1000)
+  sedeId          String?   @map("sede_id")
+  cerradoEn       DateTime? @map("cerrado_en")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  pagos           CorteOficinaPago[]
+
+  @@index([creadoPorId])
+  @@index([fechaDesde, fechaHasta])
+  @@index([estado])
+  @@map("cortes_oficina")
+}
+
+model CorteOficinaPago {
+  id              String       @id @default(uuid())
+  corteId         String       @map("corte_id")
+  corte           CorteOficina @relation(fields: [corteId], references: [id], onDelete: Cascade)
+  pagoId          String       @unique @map("pago_id")
+  monto           Float
+  formaPago       String       @map("forma_pago") @db.VarChar(50)
+  formaPagoNombre String?      @map("forma_pago_nombre") @db.VarChar(100)
+  usuarioRegistro String       @map("usuario_registro") @db.VarChar(255)
+  clienteNombre   String?      @map("cliente_nombre") @db.VarChar(500)
+  folioNota       String?      @map("folio_nota") @db.VarChar(100)
+  referencia      String?      @db.VarChar(255)
+  fechaPago       DateTime     @map("fecha_pago")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  @@index([corteId], map: "cortes_oficina_pagos_corte_id_fkey")
+  @@map("cortes_oficina_pagos")
+}
