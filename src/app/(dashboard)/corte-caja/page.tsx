@@ -1563,8 +1563,8 @@ export default function CorteCajaPage() {
   return (
     <CorteCajaErrorBoundary>
     <Box sx={{ p: { xs: 2, sm: 3 } }}>
-      {/* Tabs de módulo: solo cuando el usuario tiene acceso a ambos */}
-      {(['administrador', 'superAdministrador'].includes(rolUsuario)) && (
+      {/* Tabs de módulo: visibles para todos los roles que entran al web (no repartidor) */}
+      {(['oficina', 'planta', 'administrador', 'superAdministrador'].includes(rolUsuario)) && (
         <Tabs value={modulo} onChange={(_, v) => setModulo(v)} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
           <Tab value="repartidores" label="🚛 Cortes de Repartidores" />
           <Tab value="oficina" label="🏢 Corte de Oficina" />

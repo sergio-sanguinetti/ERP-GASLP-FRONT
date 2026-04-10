@@ -14,14 +14,14 @@ const TIPOS_FORMA_PAGO = ['efectivo', 'tarjeta'];
 async function _getNombresUsuariosOficina() {
   const usuarios = await prisma.usuario.findMany({
     where: { rol: { in: ROLES_OFICINA } },
-    select: { nombres: true, apellidoPaterno: true, correo: true }
+    select: { nombres: true, apellidoPaterno: true, email: true }
   });
   const nombres = new Set();
   for (const u of usuarios) {
     const completo = `${u.nombres || ''} ${u.apellidoPaterno || ''}`.trim();
     if (completo) nombres.add(completo);
     if (u.nombres) nombres.add(u.nombres.trim());
-    if (u.correo) nombres.add(u.correo);
+    if (u.email) nombres.add(u.email);
   }
   return Array.from(nombres);
 }

@@ -22,7 +22,6 @@ exports.createCorte = async (req, res) => {
     const creadoPorNombre = req.body.creadoPorNombre
       || [usuario.nombres, usuario.apellidoPaterno].filter(Boolean).join(' ').trim()
       || usuario.email
-      || usuario.correo
       || 'Oficina';
 
     const data = {
