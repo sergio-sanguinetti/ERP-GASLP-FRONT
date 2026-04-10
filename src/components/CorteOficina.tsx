@@ -213,7 +213,7 @@ export default function CorteOficinaComponent() {
   }, [historial, filtroEstado])
 
   return (
-    <Box>
+    <Box className="notranslate" translate="no" sx={{ }}>
       {/* Tabs */}
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
         <Tab value="crear" label="📝 Crear Corte" />
@@ -342,22 +342,22 @@ export default function CorteOficinaComponent() {
                 <Typography variant="h6" gutterBottom>Depósitos del efectivo</Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
-                    <TextField label="Depósito en planta ($)" type="number" value={depPlanta} onChange={e => setDepPlanta(e.target.value)} fullWidth size="small" inputProps={{ min: 0, step: 0.01 }} />
+                    <TextField label="Depósito en planta ($)" value={depPlanta} onChange={e => setDepPlanta(e.target.value.replace(/[^0-9.]/g, ""))} fullWidth size="small" inputProps={{ inputMode: "decimal", pattern: "[0-9.]*" }} />
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <TextField label="Folio depósito planta" value={folioPlanta} onChange={e => setFolioPlanta(e.target.value)} fullWidth size="small" />
                   </Grid>
                   <Grid item xs={12} sm={6}>
-                    <TextField label="Depósito en cajero ($)" type="number" value={depCajero} onChange={e => setDepCajero(e.target.value)} fullWidth size="small" inputProps={{ min: 0, step: 0.01 }} />
+                    <TextField label="Depósito en cajero ($)" value={depCajero} onChange={e => setDepCajero(e.target.value.replace(/[^0-9.]/g, ""))} fullWidth size="small" inputProps={{ inputMode: "decimal", pattern: "[0-9.]*" }} />
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <TextField label="Folio depósito cajero" value={folioCajero} onChange={e => setFolioCajero(e.target.value)} fullWidth size="small" />
                   </Grid>
                   <Grid item xs={12} sm={6}>
-                    <TextField label="Monedas/sueltos ($)" type="number" value={monedasExtra} onChange={e => setMonedasExtra(e.target.value)} fullWidth size="small" inputProps={{ min: 0, step: 0.01 }} helperText="Dinero adicional sin depositar" />
+                    <TextField label="Monedas/sueltos ($)" value={monedasExtra} onChange={e => setMonedasExtra(e.target.value.replace(/[^0-9.]/g, ""))} fullWidth size="small" inputProps={{ inputMode: "decimal", pattern: "[0-9.]*" }} helperText="Dinero adicional sin depositar" />
                   </Grid>
                   <Grid item xs={12} sm={6}>
-                    <TextField label="Otro efectivo ($)" type="number" value={efectivoExtra} onChange={e => setEfectivoExtra(e.target.value)} fullWidth size="small" inputProps={{ min: 0, step: 0.01 }} helperText="Otros conceptos" />
+                    <TextField label="Otro efectivo ($)" value={efectivoExtra} onChange={e => setEfectivoExtra(e.target.value.replace(/[^0-9.]/g, ""))} fullWidth size="small" inputProps={{ inputMode: "decimal", pattern: "[0-9.]*" }} helperText="Otros conceptos" />
                   </Grid>
                 </Grid>
 
