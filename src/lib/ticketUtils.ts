@@ -319,8 +319,21 @@ export function generarHtmlTicketAbono(data: AbonoTicketData, config: Configurac
 
   const clientName = [cliente.nombre, cliente.apellidoPaterno, cliente.apellidoMaterno]
     .filter(Boolean).join(' ').trim() || 'Cliente'
-  const clientAddress = [cliente.calle, cliente.numeroExterior, cliente.colonia]
-    .filter(x => x && x !== 'Por definir' && x !== 'Por definir S/N').join(', ')
+
+  // Dirección: solo mostrar si hay calle real o colonia real (no solo el número suelto)
+  const calleLimpia = (cliente.calle || '').trim()
+  const numLimpio = (cliente.numeroExterior || '').trim()
+  const coloniaLimpia = (cliente.colonia || '').trim()
+  const esBasura = (s: string) => !s || /^(por definir|s\/n|sin|n\/a|-)$/i.test(s)
+  const tieneCalle = !esBasura(calleLimpia)
+  const tieneColonia = !esBasura(coloniaLimpia)
+  let clientAddress = ''
+  if (tieneCalle || tieneColonia) {
+    const partes: string[] = []
+    if (tieneCalle) partes.push(calleLimpia + (numLimpio && !esBasura(numLimpio) ? ' ' + numLimpio : ''))
+    if (tieneColonia) partes.push(coloniaLimpia)
+    clientAddress = partes.join(', ')
+  }
 
   // Fecha/hora
   let fechaStr = ''

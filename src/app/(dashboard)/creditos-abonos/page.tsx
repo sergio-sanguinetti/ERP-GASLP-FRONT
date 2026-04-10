@@ -533,6 +533,20 @@ export default function CreditosAbonosPage() {
     }
   }
 
+  // Si la nota no trae el pedido anidado, busca el folio real del pedido
+  const enriquecerNotaConPedido = async (nota: any): Promise<any> => {
+    if (!nota) return nota
+    if (nota.pedido?.numeroPedido) return nota
+    const pedidoId = nota.pedidoId || nota.pedido_id
+    if (!pedidoId) return nota
+    try {
+      const pedido: any = await pedidosAPI.getById(pedidoId)
+      return { ...nota, pedido: { numeroPedido: pedido?.numeroPedido } }
+    } catch {
+      return nota
+    }
+  }
+
   // Construye el HTML del ticket de abono a partir de datos heterogéneos (recién creado o existente)
   const construirTicketAbonoHTML = (pago: any, cliente: any, nota: any, config: ConfiguracionTicket): string => {
     // Mapear formas de pago al formato que espera el ticket
@@ -593,7 +607,8 @@ export default function CreditosAbonosPage() {
       setHtmlTicketAbono('')
       const pago: any = await creditosAbonosAPI.getPagoById(pagoId)
       const cliente = pago?.cliente || null
-      const nota = pago?.notaCredito || null
+      const notaCruda = pago?.notaCredito || null
+      const nota = await enriquecerNotaConPedido(notaCruda)
       const config = await cargarConfigTicket()
       const html = construirTicketAbonoHTML(pago, cliente, nota, config)
       setFolioTicketAbono(`AB-${(pago?.id || '').slice(-8).toUpperCase()}`)
@@ -1423,8 +1438,9 @@ export default function CreditosAbonosPage() {
             metodo: fp.metodo,
           })),
         }
+        const notaEnriquecida = await enriquecerNotaConPedido(notaSnapshot)
         const config = await cargarConfigTicket()
-        const html = construirTicketAbonoHTML(pagoParaTicket, clienteSnapshot, notaSnapshot, config)
+        const html = construirTicketAbonoHTML(pagoParaTicket, clienteSnapshot, notaEnriquecida, config)
         setFolioTicketAbono(`AB-${(pagoCreado?.id || '').slice(-8).toUpperCase() || 'NUEVO'}`)
         setHtmlTicketAbono(html)
         setTicketAbonoAbierto(true)
