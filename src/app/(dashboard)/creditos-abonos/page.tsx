@@ -23,7 +23,7 @@ import {
   type Pedido,
   type ConfiguracionTicket
 } from '@/lib/api'
-import { generarHtmlTicketVenta } from '@/lib/ticketUtils'
+import { generarHtmlTicketVenta, generarHtmlTicketAbono, type AbonoTicketData } from '@/lib/ticketUtils'
 import { 
   Box, 
   Typography, 
@@ -239,6 +239,11 @@ export default function CreditosAbonosPage() {
   const [pedidoTicketSbc, setPedidoTicketSbc] = useState<Pedido | null>(null)
   const [htmlTicketSbc, setHtmlTicketSbc] = useState('')
   const [loadingTicketSbc, setLoadingTicketSbc] = useState(false)
+  // Modal ticket de abono (crédito)
+  const [ticketAbonoAbierto, setTicketAbonoAbierto] = useState(false)
+  const [htmlTicketAbono, setHtmlTicketAbono] = useState('')
+  const [loadingTicketAbono, setLoadingTicketAbono] = useState(false)
+  const [folioTicketAbono, setFolioTicketAbono] = useState('')
   const [kpisSbc, setKpisSbc] = useState({ totalPendiente: 0, totalPendienteCount: 0, totalConfOficina: 0, totalConfSanLuis: 0, transferencia: 0, cheque: 0, deposito: 0, urgentes: 0, montoUrgentes: 0 })
   const [rutas, setRutas] = useState<Ruta[]>([])
   const [formasPagoDisponibles, setFormasPagoDisponibles] = useState<FormaPago[]>([])
@@ -518,6 +523,87 @@ export default function CreditosAbonosPage() {
       setHtmlTicketSbc(generarHtmlTicketVenta(pedido, config))
     } catch (e: any) { setError('Error al cargar ticket: ' + e.message) }
     finally { setLoadingTicketSbc(false) }
+  }
+
+  // ===== Ticket de Abono =====
+  const cargarConfigTicket = async (): Promise<ConfiguracionTicket> => {
+    try { return await configuracionTicketsAPI.get('venta') }
+    catch {
+      return { id: '', tipoTicket: 'venta', nombreEmpresa: 'GAS PROVIDENCIA', razonSocial: '*El Gas que Rinde lo que Cuesta*', direccion: 'DOLORES HIDALGO, GTO.', telefono: '468 686 3030', email: '', sitioWeb: '', rfc: 'ERPGASLP001XXX', logo: '', mostrarLogo: false, tamañoLogo: 'mediano', redesSociales: {}, mostrarRedesSociales: false, textos: { encabezado: '', piePagina: '', mostrarMensaje: false }, diseño: { mostrarFecha: true, mostrarHora: true, mostrarCajero: true, mostrarCliente: true, colorPrincipal: '#1976d2', alineacion: 'centro' }, urlQR: '', activo: true, fechaCreacion: '', fechaModificacion: '' }
+    }
+  }
+
+  // Construye el HTML del ticket de abono a partir de datos heterogéneos (recién creado o existente)
+  const construirTicketAbonoHTML = (pago: any, cliente: any, nota: any, config: ConfiguracionTicket): string => {
+    // Mapear formas de pago al formato que espera el ticket
+    let formasPagoTicket: any[] = []
+    if (Array.isArray(pago.formasPago) && pago.formasPago.length > 0) {
+      formasPagoTicket = pago.formasPago.map((fp: any) => {
+        // Caso A: viene del backend ya enriquecido
+        if (fp.formaPago?.nombre) {
+          return { monto: fp.monto, referencia: fp.referencia, banco: fp.banco, formaPago: fp.formaPago }
+        }
+        // Caso B: formato local del frontend (metodo + formaPagoId)
+        const metodoInfo = formasPagoDisponibles.find(f => f.id === fp.formaPagoId) || formasPagoDisponibles.find(f => f.tipo === fp.metodo || f.tipo === fp.tipo)
+        return {
+          monto: fp.monto,
+          referencia: fp.referencia,
+          banco: fp.banco,
+          formaPago: { nombre: metodoInfo?.nombre || fp.metodo || fp.tipo || 'Pago', tipo: metodoInfo?.tipo || fp.metodo || fp.tipo }
+        }
+      })
+    }
+
+    const data: AbonoTicketData = {
+      pago: {
+        id: pago.id,
+        montoTotal: Number(pago.montoTotal ?? 0),
+        tipo: pago.tipo,
+        fechaPago: pago.fechaPago || pago.fechaCreacion || new Date().toISOString(),
+        horaPago: pago.horaPago,
+        observaciones: pago.observaciones,
+        usuarioRegistro: pago.usuarioRegistro,
+        estado: pago.estado,
+        formasPago: formasPagoTicket,
+      },
+      cliente: {
+        nombre: cliente?.nombre || '',
+        apellidoPaterno: cliente?.apellidoPaterno || '',
+        apellidoMaterno: cliente?.apellidoMaterno || '',
+        calle: cliente?.calle || '',
+        numeroExterior: cliente?.numeroExterior || '',
+        colonia: cliente?.colonia || '',
+      },
+      nota: nota ? {
+        numeroNota: nota.numeroNota,
+        importe: Number(nota.importe ?? 0),
+        saldoPendiente: Number(nota.saldoPendiente ?? nota.importe ?? 0),
+        fechaVenta: nota.fechaVenta,
+        pedido: nota.pedido ? { numeroPedido: nota.pedido.numeroPedido } : undefined,
+      } : undefined,
+    }
+    return generarHtmlTicketAbono(data, config)
+  }
+
+  // Reimprimir ticket desde la tabla de pagos (Control de Pagos, etc.)
+  const abrirTicketAbono = async (pagoId: string) => {
+    try {
+      setLoadingTicketAbono(true)
+      setTicketAbonoAbierto(true)
+      setHtmlTicketAbono('')
+      const pago: any = await creditosAbonosAPI.getPagoById(pagoId)
+      const cliente = pago?.cliente || null
+      const nota = pago?.notaCredito || null
+      const config = await cargarConfigTicket()
+      const html = construirTicketAbonoHTML(pago, cliente, nota, config)
+      setFolioTicketAbono(`AB-${(pago?.id || '').slice(-8).toUpperCase()}`)
+      setHtmlTicketAbono(html)
+    } catch (e: any) {
+      setError('Error al cargar ticket de abono: ' + (e.message || ''))
+      setTicketAbonoAbierto(false)
+    } finally {
+      setLoadingTicketAbono(false)
+    }
   }
 
   const abrirModalSbc = (pago: any, accion: 'oficina' | 'sanluis' | 'rechazar' | 'reactivar') => {
@@ -1303,7 +1389,11 @@ export default function CreditosAbonosPage() {
         ? `${usuario.nombres || ''} ${usuario.apellidoPaterno || ''}`.trim() || usuario.correo
         : ''
 
-      await creditosAbonosAPI.createPago({
+      // Snapshot de cliente y nota ANTES de cerrar el diálogo (cerrarDialogo limpia estos estados)
+      const clienteSnapshot = clienteSeleccionado
+      const notaSnapshot = notaSeleccionada
+
+      const pagoCreado: any = await creditosAbonosAPI.createPago({
         clienteId: clienteSeleccionado.id,
         notaCreditoId: notaSeleccionada?.id,
         montoTotal: montoTotalPago,
@@ -1312,6 +1402,35 @@ export default function CreditosAbonosPage() {
         usuarioRegistro: nombreUsuarioRegistro,
         formasPago: formasPagoData
       })
+
+      // Construir y abrir el ticket de abono automáticamente
+      try {
+        const pagoParaTicket = {
+          ...pagoCreado,
+          id: pagoCreado?.id || `TMP-${Date.now()}`,
+          montoTotal: montoTotalPago,
+          tipo: notaSnapshot ? 'nota_especifica' : 'abono_general',
+          fechaPago: pagoCreado?.fechaPago || new Date().toISOString(),
+          observaciones: observacionesPago,
+          usuarioRegistro: nombreUsuarioRegistro,
+          estado: pagoCreado?.estado || 'en_revision',
+          // Usar las formas de pago locales porque el backend no las devuelve enriquecidas
+          formasPago: formasPago.map(fp => ({
+            monto: fp.monto,
+            referencia: fp.referencia,
+            banco: fp.banco,
+            formaPagoId: fp.formaPagoId,
+            metodo: fp.metodo,
+          })),
+        }
+        const config = await cargarConfigTicket()
+        const html = construirTicketAbonoHTML(pagoParaTicket, clienteSnapshot, notaSnapshot, config)
+        setFolioTicketAbono(`AB-${(pagoCreado?.id || '').slice(-8).toUpperCase() || 'NUEVO'}`)
+        setHtmlTicketAbono(html)
+        setTicketAbonoAbierto(true)
+      } catch (e) {
+        console.error('Error generando ticket de abono', e)
+      }
 
       await cargarDatos()
       cerrarDialogo()
@@ -2571,6 +2690,16 @@ export default function CreditosAbonosPage() {
                               <ReceiptIcon sx={{ fontSize: 15 }} />
                             </IconButton>
                           </Tooltip>
+                          {/* Botón reimprimir recibo de abono */}
+                          <Tooltip title='Reimprimir recibo de abono'>
+                            <IconButton size='small' sx={{ color: 'primary.main' }} onClick={() => {
+                              const pagoId = pago.pagoCompleto?.id || pago.id || pago.pagoId
+                              if (pagoId) abrirTicketAbono(pagoId)
+                              else setError('No se pudo identificar el pago')
+                            }}>
+                              <PrintIcon sx={{ fontSize: 15 }} />
+                            </IconButton>
+                          </Tooltip>
                         </Box>
                       </TableCell>
                       <TableCell>
@@ -3589,6 +3718,32 @@ export default function CreditosAbonosPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => { setTicketSbcAbierto(false); setPedidoTicketSbc(null); setHtmlTicketSbc('') }}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal ticket de ABONO — se abre automáticamente al registrar un pago y también para reimprimir */}
+      <Dialog open={ticketAbonoAbierto} onClose={() => { setTicketAbonoAbierto(false); setHtmlTicketAbono(''); setFolioTicketAbono('') }} maxWidth='sm' fullWidth>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Recibo de Abono {folioTicketAbono ? `— ${folioTicketAbono}` : ''}</span>
+          <Button size='small' variant='contained' color='primary' disabled={!htmlTicketAbono} onClick={() => {
+            if (htmlTicketAbono) {
+              const w = window.open('', '_blank', 'width=400,height=600')
+              if (w) { w.document.write(htmlTicketAbono); w.document.close(); setTimeout(() => { try { w.print() } catch {} }, 500) }
+            }
+          }}>🖨️ Imprimir</Button>
+        </DialogTitle>
+        <DialogContent>
+          {loadingTicketAbono ? <LinearProgress /> : htmlTicketAbono ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+              <iframe title='Ticket de Abono' srcDoc={htmlTicketAbono}
+                style={{ width: '310px', minHeight: '500px', border: '1px solid #e0e0e0', borderRadius: 4, background: '#fff' }} />
+            </Box>
+          ) : (
+            <Alert severity='info'>Generando ticket...</Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setTicketAbonoAbierto(false); setHtmlTicketAbono(''); setFolioTicketAbono('') }}>Cerrar</Button>
         </DialogActions>
       </Dialog>
 

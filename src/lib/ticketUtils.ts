@@ -274,3 +274,193 @@ export function generarHtmlTicketVenta(pedido: any, config: ConfiguracionTicket)
     <div style="text-align:center;font-size:8px;font-weight:700;margin-top:2px;">Atencion a fugas y pedidos</div>
   </body></html>`
 }
+
+// ===========================================================================
+// TICKET DE ABONO — Comprobante de pago a crédito registrado en oficina
+// ===========================================================================
+
+export interface AbonoTicketData {
+  pago: {
+    id: string
+    montoTotal: number
+    tipo?: 'nota_especifica' | 'abono_general'
+    fechaPago?: string
+    horaPago?: string
+    observaciones?: string
+    usuarioRegistro?: string
+    estado?: string
+    formasPago?: Array<{
+      monto: number
+      referencia?: string
+      banco?: string
+      formaPago?: { nombre?: string; tipo?: string }
+    }>
+  }
+  cliente: {
+    nombre?: string
+    apellidoPaterno?: string
+    apellidoMaterno?: string
+    calle?: string
+    numeroExterior?: string
+    colonia?: string
+  }
+  nota?: {
+    numeroNota?: string
+    importe?: number
+    saldoPendiente?: number
+    fechaVenta?: string
+    pedido?: { numeroPedido?: string }
+  }
+}
+
+export function generarHtmlTicketAbono(data: AbonoTicketData, config: ConfiguracionTicket): string {
+  const { pago, cliente, nota } = data
+  const monto = Number(pago.montoTotal ?? 0)
+
+  const clientName = [cliente.nombre, cliente.apellidoPaterno, cliente.apellidoMaterno]
+    .filter(Boolean).join(' ').trim() || 'Cliente'
+  const clientAddress = [cliente.calle, cliente.numeroExterior, cliente.colonia]
+    .filter(x => x && x !== 'Por definir' && x !== 'Por definir S/N').join(', ')
+
+  // Fecha/hora
+  let fechaStr = ''
+  try {
+    const f = pago.fechaPago ? new Date(pago.fechaPago) : new Date()
+    fechaStr = f.toLocaleString('es-MX', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+      timeZone: 'America/Mexico_City'
+    })
+  } catch {
+    fechaStr = new Date().toLocaleString('es-MX')
+  }
+
+  // Folio del abono (usa id truncado o el propio)
+  const folioAbono = `AB-${(pago.id || '').slice(-8).toUpperCase()}`
+
+  // Identificar referencia de la nota
+  const folioReferencia = nota?.pedido?.numeroPedido || nota?.numeroNota || ''
+  const esAbonoGeneral = pago.tipo === 'abono_general' || !nota
+
+  // Información de saldo (informativa)
+  let saldoHTML = ''
+  if (!esAbonoGeneral && nota) {
+    const importeNota = Number(nota.importe ?? 0)
+    const saldoAnterior = Number(nota.saldoPendiente ?? nota.importe ?? 0)
+    const saldoNuevo = Math.max(0, saldoAnterior - monto)
+    saldoHTML = `
+      <table class="info" width="100%" style="margin-top:3px;">
+        <tr><td>Importe nota:</td><td style="text-align:right;">$${importeNota.toFixed(2)}</td></tr>
+        <tr><td>Saldo anterior:</td><td style="text-align:right;">$${saldoAnterior.toFixed(2)}</td></tr>
+        <tr><td><b>Abono:</b></td><td style="text-align:right;"><b>-$${monto.toFixed(2)}</b></td></tr>
+        <tr><td>Saldo restante:</td><td style="text-align:right;">$${saldoNuevo.toFixed(2)}</td></tr>
+      </table>`
+  }
+
+  // Formas de pago
+  let paymentHTML = ''
+  if (pago.formasPago && pago.formasPago.length > 0) {
+    paymentHTML = pago.formasPago.map((fp: any) => {
+      const nombre = (fp.formaPago?.nombre || fp.formaPago?.tipo || 'Pago').toString().toUpperCase()
+      const folioStr = fp.referencia ? ` (${fp.referencia})` : ''
+      const bancoStr = fp.banco ? ` - ${fp.banco}` : ''
+      return `<tr><td colspan="2">${nombre}${folioStr}${bancoStr}:</td><td style="text-align:right;">$${Number(fp.monto ?? 0).toFixed(2)}</td></tr>`
+    }).join('')
+  } else {
+    paymentHTML = `<tr><td colspan="2">PAGO:</td><td style="text-align:right;">$${monto.toFixed(2)}</td></tr>`
+  }
+
+  // Company info (igual que ticket de venta)
+  const companyInfo = {
+    name: config.nombreEmpresa ?? 'GAS PROVIDENCIA',
+    address: config.direccion ?? '',
+    city: config.razonSocial ?? '*El Gas que Rinde lo que Cuesta*',
+    phone: config.telefono ?? '468 686 3030',
+    rfc: config.rfc ?? 'ERPGASLP001XXX',
+    logo: config.logo,
+    mostrarLogo: config.mostrarLogo ?? true,
+    redesSociales: (config as any).redesSociales ?? {},
+    textos: config.textos ?? {},
+  }
+
+  return `<!DOCTYPE html>
+  <html><head><meta charset="UTF-8">
+  <style>
+    @media print { @page { size: 80mm auto; margin: 0; } body { margin: 0; } }
+    body { font-family: Arial, Helvetica, sans-serif; max-width: 80mm; width: 80mm; margin: 0 auto; padding: 2px 4px; font-size: 13px; color: #000; line-height: 1.3; box-sizing: border-box; }
+    * { box-sizing: border-box; }
+    b, strong { font-weight: 700; }
+    .header { text-align: center; margin-bottom: 0; padding: 0; }
+    .zone { font-size: 10px; margin: 1px 0; font-weight: 600; }
+    .slogan { font-size: 11px; font-style: italic; font-weight: 700; }
+    .tel { font-size: 11px; font-weight: 700; }
+    .rfc { font-size: 11px; font-weight: 700; }
+    .dbl { border-top: 3px solid #000; margin: 4px 0; }
+    .dash { border-top: 1px dashed #000; margin: 3px 0; }
+    .title { text-align: center; font-size: 16px; font-weight: 700; margin: 3px 0; }
+    .folio { text-align: center; font-size: 12px; font-weight: 700; }
+    .info td { font-size: 12px; font-weight: 700; padding: 1px 0; }
+    .info td:last-child { text-align: right; }
+    .section { text-align: center; font-weight: 700; font-size: 12px; border-top: 2px solid #000; border-bottom: 1px solid #000; padding: 3px; margin: 3px 0; }
+    .total-row td { font-size: 16px; font-weight: 700; padding-top: 3px; }
+    .payment td { font-size: 12px; font-weight: 700; padding: 2px 0; }
+    .operator { font-size: 12px; font-weight: 700; }
+    .footer { text-align: center; font-size: 10px; margin-top: 8px; font-weight: 600; }
+  </style></head><body>
+    <div class="header">
+      ${companyInfo.mostrarLogo && companyInfo.logo ? `<img src="${companyInfo.logo}" style="width:100px;height:auto;display:block;margin:0 auto;" />` : ''}
+      ${companyInfo.address ? `<div class="zone">📍 ${companyInfo.address}</div>` : ''}
+      <div class="slogan">${companyInfo.city}</div>
+      <div class="tel">Tel: ${companyInfo.phone}</div>
+      <div class="rfc">RFC: ${companyInfo.rfc}</div>
+    </div>
+
+    <div class="dbl"></div>
+    <div class="title">RECIBO DE ABONO</div>
+    <div class="folio">Folio: ${folioAbono}</div>
+    <div class="dash"></div>
+
+    <table class="info" width="100%">
+      <tr><td>Fecha:</td><td>${fechaStr}</td></tr>
+      <tr><td>Cliente:</td><td>${clientName.substring(0, 28)}</td></tr>
+      ${clientAddress ? `<tr><td>Dir:</td><td>${clientAddress.substring(0, 30)}</td></tr>` : ''}
+      ${folioReferencia ? `<tr><td>Ref. nota:</td><td>${folioReferencia}</td></tr>` : ''}
+      ${esAbonoGeneral ? `<tr><td colspan="2" style="text-align:center;font-style:italic;padding-top:3px;">Abono general a cuenta</td></tr>` : ''}
+    </table>
+
+    ${saldoHTML}
+
+    <div class="dash"></div>
+    <table width="100%">
+      <tr class="total-row"><td colspan="2"><b>TOTAL ABONADO:</b></td><td style="text-align:right;"><b>$${monto.toFixed(2)}</b></td></tr>
+    </table>
+    <div class="dash"></div>
+
+    <div class="section">FORMA DE PAGO</div>
+    <table class="payment" width="100%">
+      ${paymentHTML}
+    </table>
+
+    <div class="dbl"></div>
+
+    <table width="100%">
+      <tr>
+        <td class="operator">Registró:</td>
+        <td class="operator" style="text-align:right;">${(pago.usuarioRegistro || 'Oficina').substring(0, 22)}</td>
+      </tr>
+    </table>
+
+    ${pago.observaciones ? `<div style="font-size:10px;margin-top:4px;padding:3px;border:1px dashed #000;"><b>Obs:</b> ${pago.observaciones}</div>` : ''}
+
+    <div class="footer">
+      <div style="font-style:italic;">Gracias por su pago!</div>
+      <div style="margin-top:3px;font-size:9px;">Conserve este comprobante</div>
+    </div>
+
+    <div style="text-align:center;font-size:8px;font-weight:700;margin-top:6px;">
+      ${companyInfo.redesSociales?.facebook ? `FB: /${companyInfo.redesSociales.facebook}` : ''}
+      ${companyInfo.redesSociales?.facebook && companyInfo.redesSociales?.instagram ? ' | ' : ''}
+      ${companyInfo.redesSociales?.instagram ? `IG: @${companyInfo.redesSociales.instagram}` : ''}
+    </div>
+  </body></html>`
+}
