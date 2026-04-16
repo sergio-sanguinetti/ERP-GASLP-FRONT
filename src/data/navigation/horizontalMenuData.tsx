@@ -6,7 +6,7 @@ const horizontalMenuData = (role?: string): HorizontalMenuDataType[] => {
   const seeExtra = ['superAdministrador', 'administrador', 'oficina', 'planta'].includes(role || '')
   
   // Roles que ven caja
-  const seeCaja = role !== 'oficina'
+  const seeCaja = true
 
   // Roles que ven configuración
   const seeConfigAdmin = ['superAdministrador', 'administrador'].includes(role || '')
