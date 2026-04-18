@@ -178,6 +178,7 @@ interface PagoPendienteAutorizacion {
 export default function CreditosAbonosPage() {
   const [vistaActual, setVistaActual] = useState<'dashboard' | 'clientes' | 'pagos-pendientes' | 'pagos-sbc'>('dashboard')
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteCredito | null>(null)
+  const [filtroNotaCliente, setFiltroNotaCliente] = useState('')
   const refFichaCliente = useRef<HTMLDivElement | null>(null)
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
   const [tipoDialogo, setTipoDialogo] = useState<'modificar-limite' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono'>('modificar-limite')
@@ -813,8 +814,13 @@ export default function CreditosAbonosPage() {
       if (sedeId) {
         filtrosAPI.sedeId = sedeId
       }
-      if (filtros.nombre) {
-        filtrosAPI.nombre = filtros.nombre
+      // Búsqueda multi-palabra: si el usuario teclea varias palabras (ej. "restaurante permachan"),
+      // el backend con LIKE %texto completo% no encuentra nada. Mejor traer todos y filtrar en frontend.
+      // Solo se manda al backend cuando es una sola palabra simple para aprovechar el filtrado server-side.
+      const _nombreTrim = (filtros.nombre || '').trim()
+      const _esBusquedaSimple = _nombreTrim.length > 0 && !/\s/.test(_nombreTrim)
+      if (_esBusquedaSimple) {
+        filtrosAPI.nombre = _nombreTrim
       }
       if (filtros.ruta) {
         const rutaEncontrada = listaRutas.find(r => r.nombre === filtros.ruta)
@@ -883,8 +889,10 @@ export default function CreditosAbonosPage() {
         creditosAbonosAPI.getResumenCartera(Object.keys(resumenFiltros).length > 0 ? resumenFiltros : undefined),
         creditosAbonosAPI.getClientesCredito({
           ...filtrosAPI,
-          page: pageC + 1,
-          pageSize: rppClientes
+          // Cuando hay búsqueda multi-palabra (no se mandó al backend), traemos un set grande
+          // y filtramos en frontend. Cuando es búsqueda simple o sin búsqueda, paginación normal.
+          page: (_nombreTrim && !_esBusquedaSimple) ? 1 : pageC + 1,
+          pageSize: (_nombreTrim && !_esBusquedaSimple) ? 500 : rppClientes
         }),
         creditosAbonosAPI.getAllPagos(pagosPendientesFiltros),
         creditosAbonosAPI.getAllPagos(Object.keys(historialFiltros).length > 0 ? historialFiltros : undefined)
@@ -1095,6 +1103,8 @@ export default function CreditosAbonosPage() {
         el.scrollIntoView({ behavior: 'smooth', block: 'start' })
       })
     }
+    // Limpiar filtro de notas al cambiar de cliente
+    setFiltroNotaCliente('')
   }, [clienteSeleccionado, vistaActual])
 
   const abrirDialogo = (tipo: 'modificar-limite' | 'bloquear' | 'estado-cuenta' | 'registrar-pago' | 'registrar-abono', cliente?: ClienteCredito, nota?: NotaCredito) => {
@@ -1586,15 +1596,24 @@ export default function CreditosAbonosPage() {
     return clientesCredito
       .filter(cliente => {
         if ((cliente.saldoActual ?? 0) <= 0 && filtros.deuda !== 'sin-deuda') return false
+        // Búsqueda multi-palabra: cada palabra debe encontrarse en alguno de los campos del cliente
+        // o de sus notas pendientes. Ej. "restaurante permachan" encuentra "Permachan Restaurante SA",
+        // "rosty mr" encuentra "Mr Crunchy ROOSTY", "2668" encuentra el folio del pedido.
         const qNombre = (filtros.nombre || '').toLowerCase().trim()
-        const cumpleNombre = !qNombre || (
-          cliente.nombre.toLowerCase().includes(qNombre) ||
-          (cliente.notasPendientes ?? []).some((n: any) => {
+        const palabras = qNombre.split(/\s+/).filter(Boolean)
+        const cumpleNombre = palabras.length === 0 || palabras.every(palabra => {
+          const enNombre = (cliente.nombre || '').toLowerCase().includes(palabra)
+          const enDireccion = (cliente.direccion || '').toLowerCase().includes(palabra)
+          const enRuta = (cliente.ruta || '').toLowerCase().includes(palabra)
+          const enTelefono = (cliente.telefono || '').toLowerCase().includes(palabra)
+          const enNotas = (cliente.notasPendientes ?? []).some((n: any) => {
             const numNota = (n.numeroNota || '').toString().toLowerCase()
-            const numPed = (n.pedido && n.pedido.numeroPedido || '').toString().toLowerCase()
-            return numNota.includes(qNombre) || numPed.includes(qNombre)
+            const numPed = (n.pedido?.numeroPedido || n.numeroPedido || '').toString().toLowerCase()
+            const origen = (n._origenNombre || '').toLowerCase()
+            return numNota.includes(palabra) || numPed.includes(palabra) || origen.includes(palabra)
           })
-        )
+          return enNombre || enDireccion || enRuta || enTelefono || enNotas
+        })
         const cumpleChofer = !filtroChofer || (cliente.ruta || '').toLowerCase().includes(filtroChofer.toLowerCase())
         const cumpleRuta = !filtros.ruta || cliente.ruta === filtros.ruta
         // Estado dinámico: calcular desde notas del cliente
@@ -2048,7 +2067,7 @@ export default function CreditosAbonosPage() {
             <CardContent sx={{ pb: '12px !important' }}>
               <Grid container spacing={1.5} alignItems='center'>
                 <Grid item xs={12} sm={6} md={3}>
-                  <TextField fullWidth size='small' placeholder='Buscar nombre, nota o folio...'
+                  <TextField fullWidth size='small' placeholder='Buscar nombre, dirección, nota o folio (multi-palabra)...'
                     value={filtros.nombre}
                     onChange={(e) => manejarCambioFiltros('nombre', e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { setPageClientes(0); cargarDatos(undefined, { pageClientes: 0 }) } }}
@@ -2362,9 +2381,41 @@ export default function CreditosAbonosPage() {
                 </Grid>
 
                 {/* Tabla de Notas Pendientes */}
-                <Typography variant='h6' gutterBottom>
-                  Notas Pendientes
-                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 1, mb: 1 }}>
+                  <Typography variant='h6'>
+                    Notas Pendientes
+                    {filtroNotaCliente.trim() && (
+                      <Typography component='span' variant='caption' color='text.secondary' sx={{ ml: 1 }}>
+                        ({(clienteSeleccionado.notasPendientes ?? []).filter((n: any) => {
+                          const q = filtroNotaCliente.toLowerCase().trim()
+                          const numNota = (n.numeroNota || '').toString().toLowerCase()
+                          const numPed = (n.pedido?.numeroPedido || n.numeroPedido || '').toString().toLowerCase()
+                          const origen = (n._origenNombre || '').toLowerCase()
+                          return numNota.includes(q) || numPed.includes(q) || origen.includes(q)
+                        }).length} de {(clienteSeleccionado.notasPendientes ?? []).length})
+                      </Typography>
+                    )}
+                  </Typography>
+                  {(clienteSeleccionado.notasPendientes ?? []).length > 5 && (
+                    <TextField
+                      size='small'
+                      placeholder='Buscar por folio o nota...'
+                      value={filtroNotaCliente}
+                      onChange={(e) => setFiltroNotaCliente(e.target.value)}
+                      sx={{ width: { xs: '100%', sm: 280 } }}
+                      InputProps={{
+                        startAdornment: <InputAdornment position='start'><SearchIcon fontSize='small' /></InputAdornment>,
+                        endAdornment: filtroNotaCliente ? (
+                          <InputAdornment position='end'>
+                            <IconButton size='small' onClick={() => setFiltroNotaCliente('')}>
+                              <CloseIcon fontSize='small' />
+                            </IconButton>
+                          </InputAdornment>
+                        ) : null
+                      }}
+                    />
+                  )}
+                </Box>
                 
                 {(clienteSeleccionado.notasPendientes ?? []).length > 0 ? (
                   <TableContainer component={Paper} variant='outlined'>
@@ -2383,7 +2434,14 @@ export default function CreditosAbonosPage() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {(clienteSeleccionado.notasPendientes ?? []).map((nota) => (
+                        {(clienteSeleccionado.notasPendientes ?? []).filter((n: any) => {
+                          const q = filtroNotaCliente.toLowerCase().trim()
+                          if (!q) return true
+                          const numNota = (n.numeroNota || '').toString().toLowerCase()
+                          const numPed = (n.pedido?.numeroPedido || n.numeroPedido || '').toString().toLowerCase()
+                          const origen = (n._origenNombre || '').toLowerCase()
+                          return numNota.includes(q) || numPed.includes(q) || origen.includes(q)
+                        }).map((nota) => (
                           <TableRow key={nota.id}>
                             <TableCell>
                               <Typography variant='subtitle2' fontWeight='bold'>
