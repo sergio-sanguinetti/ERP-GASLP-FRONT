@@ -1411,7 +1411,7 @@ export default function CreditosAbonosPage() {
       }))
 
       const nombreUsuarioRegistro = usuario
-        ? `${usuario.nombres || ''} ${usuario.apellidoPaterno || ''}`.trim() || usuario.correo
+        ? `${usuario.nombres || ''} ${usuario.apellidoPaterno || ''}`.trim() || (usuario as any).email || (usuario as any).correo || ''
         : ''
 
       // Snapshot de cliente y nota ANTES de cerrar el diálogo (cerrarDialogo limpia estos estados)
