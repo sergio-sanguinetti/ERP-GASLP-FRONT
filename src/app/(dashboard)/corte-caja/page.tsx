@@ -1562,7 +1562,7 @@ export default function CorteCajaPage() {
 
   return (
     <CorteCajaErrorBoundary>
-    <Box sx={{ p: { xs: 2, sm: 3 } }}>
+    <Box translate="no" className="notranslate" sx={{ p: { xs: 2, sm: 3 } }}>
       {/* Tabs de módulo: visibles para todos los roles que entran al web (no repartidor) */}
       {(['oficina', 'planta', 'administrador', 'superAdministrador'].includes(rolUsuario)) && (
         <Tabs value={modulo} onChange={(_, v) => setModulo(v)} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
