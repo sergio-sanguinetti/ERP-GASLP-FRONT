@@ -903,11 +903,12 @@ export default function CreditosAbonosPage() {
       setTotalClientes(clientesResp.total)
       
       // Convertir pagos pendientes al formato esperado
-      // Obtener nombres de usuarios únicos
-      const usuariosIds = [...new Set(pagos.map(p => p.usuarioRegistro).filter(Boolean))]
+      // Obtener nombres de usuarios únicos — solo buscar los que son UUID válidos
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      const usuariosIds = [...new Set(pagos.map(p => p.usuarioRegistro).filter(id => id && uuidRegex.test(id)))]
       const usuariosMap = new Map<string, Usuario>()
       
-      // Cargar información de usuarios en paralelo
+      // Cargar información de usuarios en paralelo (solo UUIDs, los nombres string se usan directo)
       await Promise.all(
         usuariosIds.map(async (userId) => {
           try {
@@ -949,7 +950,6 @@ export default function CreditosAbonosPage() {
       setHistorialPagos(historial)
 
       // Resolver IDs de usuario a nombres para historial de pagos (Registrado por / Autorizado por)
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       const idsHistorial = new Set<string>()
       historial.forEach((p: PagoAPI) => {
         if (p.usuarioRegistro && uuidRegex.test(p.usuarioRegistro)) idsHistorial.add(p.usuarioRegistro)
