@@ -455,9 +455,9 @@ export default function ReportesPage() {
 
       const data = await reporte.fetcher(params)
       const items = Array.isArray(data) ? data : (data.detalle || [])
-      const count = items.length || (data.resumen ? 1 : 0)
+      const count = items.length || (data.resumen ? 1 : 0) || ((data.pipas?.length || 0) + (data.cilindros?.length || 0))
 
-      if (count === 0 && !data.resumen) {
+      if (count === 0 && !data.resumen && !data.pipas && !data.cilindros) {
         setError(`No hay datos para "${reporte.titulo}" con los filtros seleccionados.`)
         return
       }
