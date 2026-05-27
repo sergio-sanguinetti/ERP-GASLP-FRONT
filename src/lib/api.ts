@@ -3543,6 +3543,8 @@ export const reporteExportAPI = {
   deudaGlobal: (p: any) => reporteExportAPI._fetch('deuda-global', p),
   formasPago: (p: any) => reporteExportAPI._fetch('formas-pago', p),
   rendimientoOperador: (p: any) => reporteExportAPI._fetch('rendimiento-operador', p),
+  ventasReales: (p: any) => reporteExportAPI._fetch('ventas-reales', p),
+  carburacionDetalle: (p: any) => reporteExportAPI._fetch('carburacion-detalle', p),
 }
 
 // ==========================================================================

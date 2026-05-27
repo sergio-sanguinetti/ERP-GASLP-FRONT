@@ -224,6 +224,73 @@ function genRendimientoOperador(data: any[], filtros: Filtros) {
   return wb
 }
 
+// ============ REPORTES NUEVOS ============
+
+function genVentasReales(data: any, filtros: Filtros) {
+  const wb = XLSX.utils.book_new()
+  const { pipas, cilindros } = data
+
+  // Hoja PIPAS
+  const hPipas = ['Operador', 'Litros', 'Importe', 'Precio Promedio', 'Servicios']
+  const rPipas = pipas.map((d: any) => [d.operador, d.litros, d.importe, d.precioPromedio, d.servicios])
+  const totPipas = ['TOTALES', pipas.reduce((s: number, d: any) => s + d.litros, 0), pipas.reduce((s: number, d: any) => s + d.importe, 0), '', pipas.reduce((s: number, d: any) => s + d.servicios, 0)]
+  const tL = totPipas[1] as number; const tI = totPipas[2] as number
+  totPipas[3] = tL > 0 ? tI / tL : 0
+  const wsP = XLSX.utils.aoa_to_sheet([[], [], [], hPipas, ...rPipas, [], totPipas])
+  addTitleRow(wsP, 'VENTAS REALES PIPAS (SIN CARBURACIÓN)', filtros, hPipas.length)
+  autoWidth(wsP)
+  XLSX.utils.book_append_sheet(wb, wsP, 'Pipas')
+
+  // Hoja CILINDROS
+  const hCil = ['Operador', 'Kilos', 'Importe', 'Precio Promedio/Kg', 'Servicios']
+  const rCil = cilindros.map((d: any) => [d.operador, d.kilos, d.importe, d.precioPromedio, d.servicios])
+  const totCil = ['TOTALES', cilindros.reduce((s: number, d: any) => s + d.kilos, 0), cilindros.reduce((s: number, d: any) => s + d.importe, 0), '', cilindros.reduce((s: number, d: any) => s + d.servicios, 0)]
+  const tK = totCil[1] as number; const tIC = totCil[2] as number
+  totCil[3] = tK > 0 ? tIC / tK : 0
+  const wsC = XLSX.utils.aoa_to_sheet([[], [], [], hCil, ...rCil, [], totCil])
+  addTitleRow(wsC, 'VENTAS REALES CILINDROS (SIN CARBURACIÓN)', filtros, hCil.length)
+  autoWidth(wsC)
+  XLSX.utils.book_append_sheet(wb, wsC, 'Cilindros')
+
+  return wb
+}
+
+function genCarburacionDetalle(data: any[], filtros: Filtros) {
+  const wb = XLSX.utils.book_new()
+  const headers = ['Fecha', 'Folio', 'Estación', 'Operador', 'Litros', 'Total', 'Precio/L']
+  const rows = data.map((d: any) => [d.fecha, d.folio, d.estacion, d.operador, d.litros, d.total, d.precioPorLitro])
+
+  // Resumen por estación
+  const porEstacion: Record<string, { litros: number, total: number, cargas: number }> = {}
+  data.forEach((d: any) => {
+    if (!porEstacion[d.estacion]) porEstacion[d.estacion] = { litros: 0, total: 0, cargas: 0 }
+    porEstacion[d.estacion].litros += d.litros
+    porEstacion[d.estacion].total += d.total
+    porEstacion[d.estacion].cargas++
+  })
+
+  const hResumen = ['Estación', 'Cargas', 'Litros', 'Total', 'Precio Promedio']
+  const rResumen = Object.entries(porEstacion).map(([est, v]) => [est, v.cargas, v.litros, v.total, v.litros > 0 ? v.total / v.litros : 0])
+  const totRes = ['TOTALES', data.length, data.reduce((s: number, d: any) => s + d.litros, 0), data.reduce((s: number, d: any) => s + d.total, 0), '']
+  const tLR = totRes[2] as number; const tTR = totRes[3] as number
+  totRes[4] = tLR > 0 ? tTR / tLR : 0
+  const wsR = XLSX.utils.aoa_to_sheet([[], [], [], hResumen, ...rResumen, [], totRes])
+  addTitleRow(wsR, 'RESUMEN CARBURACIÓN', filtros, hResumen.length)
+  autoWidth(wsR)
+  XLSX.utils.book_append_sheet(wb, wsR, 'Resumen')
+
+  // Detalle
+  const totLitros = data.reduce((s: number, d: any) => s + d.litros, 0)
+  const totVenta = data.reduce((s: number, d: any) => s + d.total, 0)
+  const totals = ['TOTALES', '', '', '', totLitros, totVenta, totLitros > 0 ? totVenta / totLitros : 0]
+  const wsD = XLSX.utils.aoa_to_sheet([[], [], [], headers, ...rows, [], totals])
+  addTitleRow(wsD, 'DETALLE CARGAS CARBURACIÓN', filtros, headers.length)
+  autoWidth(wsD)
+  XLSX.utils.book_append_sheet(wb, wsD, 'Detalle')
+
+  return wb
+}
+
 // ============ COMPONENTE PRINCIPAL ============
 
 export default function ReportesPage() {
@@ -353,6 +420,24 @@ export default function ReportesPage() {
       color: '#795548',
       fetcher: (f) => reporteExportAPI.rendimientoOperador(f),
       generator: genRendimientoOperador
+    },
+    {
+      id: 'ventas-reales',
+      titulo: 'Ventas Reales (Sin Carburación)',
+      descripcion: 'Resumen de ventas por operador excluyendo carburación. Pipas (litros) y Cilindros (kilos) con precio promedio.',
+      icon: <AssessmentIcon />,
+      color: '#663300',
+      fetcher: (f) => reporteExportAPI.ventasReales(f),
+      generator: genVentasReales
+    },
+    {
+      id: 'carburacion-detalle',
+      titulo: 'Cargas de Carburación',
+      descripcion: 'Detalle de cargas a estaciones de carburación (Planta Dolores y La Lova). Quién cargó, cuánto y cuándo.',
+      icon: <GasIcon />,
+      color: '#e65100',
+      fetcher: (f) => reporteExportAPI.carburacionDetalle(f),
+      generator: genCarburacionDetalle
     }
   ]
 
