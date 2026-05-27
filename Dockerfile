@@ -16,7 +16,7 @@ ENV BACKEND_API_URL=http://express_api:3001/api
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Build icons primero (postinstall script)
-RUN npm run build:icons 2>/dev/null || true
+RUN npx tsx src/assets/iconify-icons/bundle-icons-css.ts 2>/dev/null || touch src/assets/iconify-icons/generated-icons.css
 # Build Next.js
 RUN npm run build
 
